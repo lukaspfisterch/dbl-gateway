@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dbl-gateway"
+version = "0.2.1"
+description = "DBL Gateway"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.110.0",
+  "uvicorn>=0.27.0",
+  "httpx>=0.27.0",
+]
+
+[project.scripts]
+dbl-gateway = "dbl_gateway.app:main"
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+]
+oidc = [
+  "python-jose[cryptography]>=3.3.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = [
+  "ignore:.*on_event is deprecated.*:DeprecationWarning",
+]

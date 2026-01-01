@@ -1,0 +1,46 @@
+# Local workflow
+inventory.md
+agents.md
+
+# OS / editor
+Thumbs.db
+.DS_Store
+.idea/
+.vscode/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env/
+.env.*
+
+# Tooling
+.python-version
+.tool-versions
+
+# Build / tooling
+.pytest_cache/
+.cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+coverage.xml
+htmlcov/
+.hypothesis/
+dist/
+build/
+*.egg-info/
+
+# Data
+# Local data
+data/
+*.sqlite
+*.db
