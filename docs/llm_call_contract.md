@@ -1,5 +1,8 @@
 # LLM Call Contract
 
+Status: planned. The gateway does not currently expose `/llm/call`.
+Use `/ingress/intent` with embedded execution instead.
+
 ## Purpose and non-goals
 - Purpose: define the authoritative LLM call intake, governance decision, and event ordering for the gateway domainrunner.
 - Non-goals: define model execution providers, tool execution, or any UI behavior.

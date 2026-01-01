@@ -2,21 +2,23 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
-from .wire_contract import StackFingerprint
 
-
-class EventSummary(TypedDict):
+class EventRecord(TypedDict):
     index: int
     kind: str
+    lane: str
+    actor: str
+    intent_type: str
+    stream_id: str
     correlation_id: str
     payload: dict[str, Any]
-    canon_len: int
     digest: str
+    canon_len: int
 
 
-class StreamSnapshot(TypedDict):
-    interface_version: int
-    v_digest: str
+class Snapshot(TypedDict):
     length: int
-    stack_fingerprint: StackFingerprint
-    events: list[EventSummary]
+    offset: int
+    limit: int
+    v_digest: str
+    events: list[EventRecord]

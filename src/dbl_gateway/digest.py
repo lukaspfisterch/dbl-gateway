@@ -1,61 +1,31 @@
 from __future__ import annotations
 
-import hashlib
-import json
-import struct
-from typing import Any, Mapping
+from typing import Any
+
+from dbl_core import DblEvent, DblEventKind
+from dbl_core.events.canonical import canonicalize_value, digest_bytes, json_dumps
+
+__all__ = ["event_digest", "v_digest"]
 
 
-def sanitize_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+def event_digest(kind: str, correlation_id: str, payload: dict[str, Any]) -> tuple[str, int]:
+    event_kind = DblEventKind(kind)
+    event_payload = _strip_obs(payload)
+    event = DblEvent(event_kind=event_kind, correlation_id=correlation_id, data=event_payload)
+    canonical_json = event.to_json(include_observational=False)
+    return event.digest(), len(canonical_json)
+
+
+def v_digest(indexed: list[tuple[int, str]]) -> str:
+    items = [{"index": idx, "digest": digest} for idx, digest in indexed]
+    canonical = canonicalize_value(items)
+    canonical_json = json_dumps(canonical)
+    return digest_bytes(canonical_json)
+
+
+def _strip_obs(payload: dict[str, Any]) -> dict[str, Any]:
+    if "_obs" not in payload:
+        return payload
     sanitized = dict(payload)
     sanitized.pop("_obs", None)
     return sanitized
-
-
-def canonical_bytes(value: Any) -> bytes:
-    try:
-        text = json.dumps(
-            value,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=True,
-            allow_nan=False,
-        )
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"non-canonical payload: {exc}") from exc
-    return text.encode("utf-8")
-
-
-def event_digest(kind: str, correlation_id: str, payload: Mapping[str, Any]) -> tuple[str, int]:
-    payload_det = sanitize_payload(payload)
-    event_data = {
-        "kind": kind,
-        "deterministic_fields": {
-            "correlation_id": correlation_id,
-            "payload": payload_det,
-        },
-    }
-    canon = canonical_bytes(event_data)
-    digest_bytes = hashlib.sha256(canon).digest()
-    digest_ref = f"sha256:{digest_bytes.hex()}"
-    return digest_ref, len(canon)
-
-
-def digest_ref_to_bytes(digest_ref: str) -> bytes:
-    if ":" not in digest_ref:
-        raise ValueError("digest-ref must be sha256:<64 hex>")
-    algo, hex_value = digest_ref.split(":", 1)
-    if algo != "sha256" or len(hex_value) != 64:
-        raise ValueError("digest-ref must be sha256:<64 hex>")
-    try:
-        return bytes.fromhex(hex_value)
-    except ValueError as exc:
-        raise ValueError("digest-ref must be sha256:<64 hex>") from exc
-
-
-def v_digest(indexed_digests: list[tuple[int, str]]) -> str:
-    hasher = hashlib.sha256()
-    for idx, digest_ref in indexed_digests:
-        hasher.update(struct.pack(">Q", idx))
-        hasher.update(digest_ref_to_bytes(digest_ref))
-    return f"sha256:{hasher.hexdigest()}"

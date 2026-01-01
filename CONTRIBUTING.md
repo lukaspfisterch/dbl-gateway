@@ -41,3 +41,5 @@ Minor releases (`x.y.0`) are for:
 - New invariants or enforced guarantees
 
 Breaking changes require a major version bump.
+
+This document defines contribution constraints, not contribution encouragement.

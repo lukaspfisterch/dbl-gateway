@@ -4,8 +4,6 @@ from typing import Protocol
 
 from ..models import EventRecord, Snapshot
 
-# Deprecated: moved to dbl_gateway.ports.store_port
-
 
 class StorePort(Protocol):
     def append(
