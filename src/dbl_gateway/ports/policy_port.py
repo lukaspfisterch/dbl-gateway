@@ -9,7 +9,7 @@ class DecisionResult:
     decision: str
     reason_codes: list[str]
     policy_id: str | None = None
-    policy_version: int | None = None
+    policy_version: str | None = None
     gate_event: object | None = None
 
 

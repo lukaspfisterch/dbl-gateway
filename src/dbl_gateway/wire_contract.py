@@ -29,7 +29,7 @@ class DecisionPayload(TypedDict, total=False):
     resolved_model_id: str
     provider: str
     policy_id: str
-    policy_version: int
+    policy_version: str
     _obs: dict[str, Any]
 
 

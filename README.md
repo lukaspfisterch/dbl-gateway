@@ -1,4 +1,4 @@
-# DBL Gateway 0.3.3
+# DBL Gateway
 
 Authoritative DBL and KL gateway. This service is the single writer for append-only trails,
 applies policy via dbl-policy, and executes via kl-kernel-logic. UI and boundary services
@@ -29,6 +29,59 @@ Run with uvicorn:
 ```powershell
 $env:DBL_GATEWAY_DB=".\data\trail.sqlite"
 py -3.11 -m uvicorn dbl_gateway.app:app --host 127.0.0.1 --port 8010
+```
+
+## Local API docs (OpenAPI)
+
+When the gateway is running, the interactive API docs are available at:
+- Swagger UI: `http://127.0.0.1:8010/docs`
+- OpenAPI JSON: `http://127.0.0.1:8010/openapi.json`
+
+Quick verification:
+- Health: `http://127.0.0.1:8010/healthz`
+- Capabilities: `http://127.0.0.1:8010/capabilities`
+- Snapshot (first page): `http://127.0.0.1:8010/snapshot?offset=0&limit=50&stream_id=default`
+
+## Quick probes (PowerShell)
+
+Health:
+```powershell
+curl -s "http://127.0.0.1:8010/healthz"
+```
+
+Capabilities:
+```powershell
+curl -s "http://127.0.0.1:8010/capabilities"
+```
+
+Snapshot (page through the trail):
+```powershell
+curl -s "http://127.0.0.1:8010/snapshot?offset=0&limit=50&stream_id=default"
+curl -s "http://127.0.0.1:8010/snapshot?offset=50&limit=50&stream_id=default"
+```
+
+Tail (SSE stream):
+```powershell
+curl -N "http://127.0.0.1:8010/tail?since=0&stream_id=default"
+```
+
+Emit an INTENT (example):
+```powershell
+$body = @{
+  interface_version = 1
+  correlation_id = [guid]::NewGuid().ToString()
+  payload = @{
+    stream_id = "default"
+    lane = "ui"
+    actor = "dev"
+    intent_type = "ui.ping"
+    payload = @{ text = "hello" }
+  }
+} | ConvertTo-Json -Depth 8
+
+curl -s -X POST "http://127.0.0.1:8010/ingress/intent" `
+  -H "content-type: application/json" `
+  -d $body
 ```
 
 ## Endpoints

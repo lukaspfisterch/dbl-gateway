@@ -445,7 +445,7 @@ def _decision_payload(
     if decision.policy_id:
         payload["policy_id"] = decision.policy_id
     if decision.policy_version is not None:
-        payload["policy_version"] = decision.policy_version
+        payload["policy_version"] = str(decision.policy_version)
     _attach_obs_trace_id(payload, trace_id)
     return payload
 

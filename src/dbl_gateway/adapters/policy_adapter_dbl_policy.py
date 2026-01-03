@@ -22,7 +22,7 @@ class DblPolicyAdapter(PolicyPort):
         policy = self.policy or _load_policy()
         decision = policy.evaluate(context)
         gate_event = decision_to_dbl_event(decision, authoritative_input["correlation_id"])
-        policy_version = _policy_version_as_int(decision.policy_version.value)
+        policy_version = _policy_version_as_str(decision.policy_version.value)
         return DecisionResult(
             decision=decision.outcome.value,
             reason_codes=[decision.reason_code],
@@ -83,15 +83,13 @@ def _tenant_id_type() -> type:
     return tenant_type
 
 
-def _policy_version_as_int(value: object) -> int:
+def _policy_version_as_str(value: object) -> str:
     try:
         if isinstance(value, str):
             text = value.strip()
             if text == "":
                 raise ValueError("empty")
-            if "." in text:
-                text = text.split(".", 1)[0]
-            return int(text)
-        return int(value)
+            return text
+        return str(value)
     except (TypeError, ValueError) as exc:
-        raise RuntimeError("policy_version must be int") from exc
+        raise RuntimeError("policy_version must be str") from exc

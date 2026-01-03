@@ -402,6 +402,31 @@ def test_decision_payload_contains_policy_identity(tmp_path: Path, monkeypatch: 
         assert "policy_version" in payload
 
 
+def test_all_emitted_events_have_digest_label_prefix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    app = create_app()
+    with TestClient(app) as client:
+        client.post("/ingress/intent", json=_intent_envelope("hello"))
+        snap = client.get("/snapshot").json()
+        for event in snap["events"]:
+            digest = event.get("digest")
+            assert isinstance(digest, str)
+            assert digest.startswith("sha256:")
+
+
+def test_decision_policy_version_is_string(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    app = create_app()
+    with TestClient(app) as client:
+        client.post("/ingress/intent", json=_intent_envelope("hello"))
+        snap = client.get("/snapshot").json()
+        decision = [event for event in snap["events"] if event["kind"] == "DECISION"][-1]
+        payload = decision["payload"]
+        assert isinstance(payload.get("policy_version"), str)
+
+
 def test_status_surface_projects_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
     app = create_app()

@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ..digest import event_digest, v_digest
+from ..digest import v_digest
+from ..event_builder import make_event
 
 from ..models import EventRecord, Snapshot
 
@@ -71,7 +72,15 @@ class SQLiteStore:
         correlation_id: str,
         payload: dict[str, object],
     ) -> EventRecord:
-        digest_ref, canon_len = event_digest(kind, correlation_id, payload)
+        event = make_event(
+            kind=kind,
+            lane=lane,
+            actor=actor,
+            intent_type=intent_type,
+            stream_id=stream_id,
+            correlation_id=correlation_id,
+            payload=payload,
+        )
         payload_json = json.dumps(
             payload,
             ensure_ascii=True,
@@ -105,8 +114,8 @@ class SQLiteStore:
                     stream_id,
                     correlation_id,
                     payload_json,
-                    digest_ref,
-                    canon_len,
+                    event["digest"],
+                    event["canon_len"],
                     created_at,
                 ),
             )
@@ -114,18 +123,8 @@ class SQLiteStore:
             row = cur.fetchone()
             idx = int(row[0]) if row else 0
         index = max(0, idx - 1)
-        return {
-            "index": index,
-            "kind": kind,
-            "lane": lane,
-            "actor": actor,
-            "intent_type": intent_type,
-            "stream_id": stream_id,
-            "correlation_id": correlation_id,
-            "payload": payload,
-            "digest": digest_ref,
-            "canon_len": canon_len,
-        }
+        event["index"] = index
+        return event
 
     def snapshot(
         self,
