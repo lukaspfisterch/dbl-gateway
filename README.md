@@ -31,6 +31,29 @@ $env:DBL_GATEWAY_DB=".\data\trail.sqlite"
 py -3.11 -m uvicorn dbl_gateway.app:app --host 127.0.0.1 --port 8010
 ```
 
+## Quick start with OpenAI (development)
+
+To execute chat intents via OpenAI, set an API key in the environment.
+
+PowerShell (Windows):
+```powershell
+$env:OPENAI_API_KEY="sk-..."
+dbl-gateway serve --db .\data\trail.sqlite --host 127.0.0.1 --port 8010
+```
+
+Bash (macOS / Linux):
+```bash
+export OPENAI_API_KEY="sk-..."
+dbl-gateway serve --db ./data/trail.sqlite --host 127.0.0.1 --port 8010
+```
+
+Notes:
+- The key is used for execution only.
+- INTENT admission, DECISION generation, and canonicalization are provider-independent.
+- The key is not persisted and is not written to the trail.
+- Execution failures (missing or invalid key) are recorded as observational EXECUTION events.
+- DECISION events remain authoritative regardless of execution outcome.
+
 ## Local API docs (OpenAPI)
 
 When the gateway is running, the interactive API docs are available at:
