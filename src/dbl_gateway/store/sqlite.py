@@ -185,6 +185,7 @@ class SQLiteStore:
                     "payload": payload,
                     "digest": str(row[8]),
                     "canon_len": int(row[9]),
+                    "is_authoritative": str(row[1]) == "DECISION",
                 }
             )
         return events

@@ -19,6 +19,7 @@ def make_event(
     digest_ref, canon_len = event_digest(kind, correlation_id, payload)
     if not digest_ref.startswith("sha256:"):
         digest_ref = f"sha256:{digest_ref}"
+    is_authoritative = kind == "DECISION"
     return {
         "index": -1,
         "kind": kind,
@@ -30,4 +31,5 @@ def make_event(
         "payload": payload,
         "digest": digest_ref,
         "canon_len": canon_len,
+        "is_authoritative": is_authoritative,
     }

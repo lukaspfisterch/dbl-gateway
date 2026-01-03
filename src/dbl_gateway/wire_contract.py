@@ -55,6 +55,7 @@ class EventRecord(TypedDict):
     payload: dict[str, Any]
     digest: str
     canon_len: int
+    is_authoritative: bool
 
 
 class SnapshotResponse(TypedDict):
