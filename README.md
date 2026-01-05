@@ -13,7 +13,7 @@ This release stabilizes the 0.3.x stackline and does not introduce new wire cont
 
 This gateway is an attempt to make the use of AI admissible within a DBL-based architecture.
 
-The goal is not to explain or justify AI behavior, but to ensure that any AI-assisted actionis preceded by an explicit INTENT, governed by a DECISION, and recorded in an append-only trail.
+The goal is not to explain or justify AI behavior, but to ensure that any AI-assisted action is preceded by an explicit INTENT, governed by a DECISION, and recorded in an append-only trail.
 
 This allows AI components to be used as execution backends while preserving determinism, auditability, and decision primacy.
 
@@ -147,3 +147,4 @@ The gateway is the only component that performs governance and execution.
 Boundary and UI clients must not import dbl-core or dbl-policy.
 
 Canonicalization and digests follow dbl-core.
+
