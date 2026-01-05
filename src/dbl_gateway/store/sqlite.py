@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ..digest import v_digest
+from ..digest import v_digest, v_digest_step
 from ..event_builder import make_event
 
 from ..models import EventRecord, Snapshot
@@ -53,6 +53,16 @@ class SQLiteStore:
             self._conn.execute(
                 "CREATE INDEX IF NOT EXISTS events_correlation_id ON events(correlation_id)"
             )
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS v_state (
+                    id TEXT PRIMARY KEY,
+                    v_digest TEXT NOT NULL,
+                    last_index INTEGER NOT NULL
+                )
+                """
+            )
+            self._ensure_v_state()
     
     def _ensure_column(self, table: str, column: str, ddl: str) -> None:
         cols = self._conn.execute(f"PRAGMA table_info({table})").fetchall()
@@ -122,7 +132,13 @@ class SQLiteStore:
             cur = self._conn.execute("SELECT idx FROM events WHERE rowid = last_insert_rowid()")
             row = cur.fetchone()
             idx = int(row[0]) if row else 0
-        index = max(0, idx - 1)
+            index = max(0, idx - 1)
+            prev_digest, _prev_index = self._get_v_state()
+            next_digest = v_digest_step(prev_digest, index, event["digest"])
+            self._conn.execute(
+                "UPDATE v_state SET v_digest = ?, last_index = ? WHERE id = ?",
+                (next_digest, index, "current"),
+            )
         event["index"] = index
         return event
 
@@ -134,9 +150,15 @@ class SQLiteStore:
         stream_id: str | None = None,
         lane: str | None = None,
     ) -> Snapshot:
-        events = self._fetch_events(limit=limit, offset=offset, stream_id=stream_id, lane=lane)
-        length = self._count_events()
-        v_digest_value = self._v_digest_all()
+        self._conn.execute("BEGIN")
+        try:
+            events = self._fetch_events(limit=limit, offset=offset, stream_id=stream_id, lane=lane)
+            length = self._count_events()
+            v_digest_value, _ = self._get_v_state()
+            self._conn.execute("COMMIT")
+        except Exception:
+            self._conn.execute("ROLLBACK")
+            raise
         return {
             "length": length,
             "offset": offset,
@@ -194,7 +216,28 @@ class SQLiteStore:
         row = self._conn.execute("SELECT COUNT(*) FROM events").fetchone()
         return int(row[0]) if row else 0
 
-    def _v_digest_all(self) -> str:
+    def _ensure_v_state(self) -> None:
+        row = self._conn.execute("SELECT v_digest, last_index FROM v_state WHERE id = ?", ("current",)).fetchone()
+        if row:
+            return
+        rows = self._conn.execute("SELECT idx, digest FROM events ORDER BY idx ASC").fetchall()
+        indexed = [(max(0, int(idx) - 1), str(digest)) for idx, digest in rows]
+        digest = v_digest(indexed)
+        last_index = indexed[-1][0] if indexed else -1
+        self._conn.execute(
+            "INSERT INTO v_state (id, v_digest, last_index) VALUES (?, ?, ?)",
+            ("current", digest, last_index),
+        )
+
+    def _get_v_state(self) -> tuple[str, int]:
+        row = self._conn.execute(
+            "SELECT v_digest, last_index FROM v_state WHERE id = ?", ("current",)
+        ).fetchone()
+        if not row:
+            return v_digest([]), -1
+        return str(row[0]), int(row[1])
+
+    def recompute_v_digest(self) -> str:
         rows = self._conn.execute("SELECT idx, digest FROM events ORDER BY idx ASC").fetchall()
         indexed = [(max(0, int(idx) - 1), str(digest)) for idx, digest in rows]
         return v_digest(indexed)

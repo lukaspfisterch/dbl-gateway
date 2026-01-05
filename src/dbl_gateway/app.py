@@ -17,7 +17,7 @@ from dbl_core.events.trace_digest import trace_digest
 
 from .admission import admit_and_shape_intent, AdmissionFailure
 from .capabilities import CapabilitiesResponse, get_capabilities, resolve_model, resolve_provider
-from .adapters.execution_adapter_kl import KlExecutionAdapter, schedule_execution
+from .adapters.execution_adapter_kl import KlExecutionAdapter
 from .adapters.policy_adapter_dbl_policy import DblPolicyAdapter, _load_policy
 from .ports.execution_port import ExecutionResult
 from .ports.policy_port import DecisionResult
@@ -57,10 +57,13 @@ def create_app() -> FastAPI:
         app.state.store = create_store()
         app.state.policy = DblPolicyAdapter(policy=policy)
         app.state.execution = KlExecutionAdapter()
+        app.state.work_queue = asyncio.Queue(maxsize=_work_queue_max())
+        app.state.worker_task = asyncio.create_task(_work_queue_loop(app))
         app.state.start_time = time.monotonic()
         try:
             yield
         finally:
+            app.state.worker_task.cancel()
             app.state.store.close()
 
     app = FastAPI(title="DBL Gateway", lifespan=lifespan)
@@ -157,7 +160,13 @@ def create_app() -> FastAPI:
             payload=authoritative["payload"],
         )
 
-        schedule_execution(_process_intent(app, intent_event, envelope["correlation_id"], trace_id))
+        try:
+            app.state.work_queue.put_nowait((intent_event, envelope["correlation_id"], trace_id))
+        except asyncio.QueueFull:
+            return JSONResponse(
+                status_code=503,
+                content={"accepted": False, "reason_code": "queue.full", "detail": "work queue full"},
+            )
 
         return JSONResponse(
             status_code=202,
@@ -336,10 +345,22 @@ async def _process_intent(
         requested_model = ""
         if isinstance(authoritative.get("payload"), Mapping):
             requested_model = str(authoritative["payload"].get("requested_model_id", "") or "")
-        resolved_model, _reason = resolve_model(requested_model)
-        provider, _provider_reason = (
-            resolve_provider(resolved_model) if resolved_model else (None, "model.unavailable")
-        )
+        resolved_model = None
+        provider = None
+        resolution_reason = None
+        try:
+            resolved_model, _reason = resolve_model(requested_model)
+            if resolved_model is None or _reason:
+                resolution_reason = _reason or "model.unavailable"
+            else:
+                provider, _provider_reason = resolve_provider(resolved_model)
+                if provider is None or _provider_reason:
+                    resolution_reason = _provider_reason or "provider.unavailable"
+                    resolved_model = None
+                    provider = None
+        except Exception as exc:
+            _LOGGER.exception("model resolution failed: %s", exc)
+            resolution_reason = "resolution.error"
 
         app.state.store.append(
             kind="DECISION",
@@ -354,6 +375,7 @@ async def _process_intent(
                 requested_model_id=requested_model or None,
                 resolved_model_id=resolved_model or None,
                 provider=provider,
+                resolution_reason=resolution_reason,
             ),
         )
         decision_emitted = True
@@ -431,6 +453,7 @@ def _decision_payload(
     requested_model_id: str | None,
     resolved_model_id: str | None,
     provider: str | None,
+    resolution_reason: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "decision": decision.decision,
@@ -447,6 +470,12 @@ def _decision_payload(
     if decision.policy_version is not None:
         payload["policy_version"] = str(decision.policy_version)
     _attach_obs_trace_id(payload, trace_id)
+    if resolution_reason:
+        obs = payload.get("_obs")
+        if not isinstance(obs, dict):
+            obs = {}
+            payload["_obs"] = obs
+        obs["resolution_reason"] = resolution_reason
     return payload
 
 
@@ -519,6 +548,28 @@ def _get_gateway_mode() -> str:
     import os
 
     return os.getenv("GATEWAY_MODE", "").strip().lower()
+
+
+def _work_queue_max() -> int:
+    import os
+
+    raw = os.getenv("DBL_GATEWAY_WORK_QUEUE_MAX", "").strip()
+    if raw:
+        try:
+            value = int(raw)
+            return max(1, value)
+        except ValueError:
+            return 100
+    return 100
+
+
+async def _work_queue_loop(app: FastAPI) -> None:
+    while True:
+        intent_event, correlation_id, trace_id = await app.state.work_queue.get()
+        try:
+            await _process_intent(app, intent_event, correlation_id, trace_id)
+        except Exception as exc:
+            _LOGGER.exception("worker task failed: %s", exc)
 
 
 def _audit_env() -> None:

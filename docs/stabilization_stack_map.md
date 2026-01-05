@@ -50,7 +50,7 @@ A snapshot is a transport view over V and must be self describing:
 - `stack_fingerprint`: object with producer build identity and pack digest references.
   policy_pack_digest is a digest-ref or "unknown".
   boundary_config_hash is an opaque string and may be "unknown".
-- `v_digest`: digest of the full V prefix known by the producer.
+- `v_digest`: rolling digest of the full V prefix known by the producer.
 - `length`: producer-known total length of V.
 - `events`: ordered list of event summaries.
 

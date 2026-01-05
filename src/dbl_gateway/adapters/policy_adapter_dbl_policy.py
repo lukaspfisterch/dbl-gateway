@@ -18,7 +18,10 @@ class DblPolicyAdapter(PolicyPort):
     policy: Policy | None = None
 
     def decide(self, authoritative_input: Mapping[str, Any]) -> DecisionResult:
-        context = _build_policy_context(authoritative_input)
+        try:
+            context = _build_policy_context(authoritative_input)
+        except ContextShapeError:
+            return DecisionResult(decision="DENY", reason_codes=["context.invalid_shape"])
         policy = self.policy or _load_policy()
         decision = policy.evaluate(context)
         gate_event = decision_to_dbl_event(decision, authoritative_input["correlation_id"])
@@ -41,6 +44,7 @@ def _build_policy_context(authoritative_input: Mapping[str, Any]) -> PolicyConte
             inputs_source = maybe_inputs
     if isinstance(inputs_source, Mapping):
         filtered = {key: inputs_source[key] for key in ALLOWED_CONTEXT_KEYS if key in inputs_source}
+        _assert_scalar_inputs(filtered)
     else:
         filtered = {}
     tenant = authoritative_input.get("tenant_id", "unknown")
@@ -50,6 +54,19 @@ def _build_policy_context(authoritative_input: Mapping[str, Any]) -> PolicyConte
     except Exception as exc:
         raise RuntimeError("invalid tenant_id") from exc
     return PolicyContext(tenant_id=tenant_value, inputs=filtered)
+
+
+class ContextShapeError(ValueError):
+    pass
+
+
+def _assert_scalar_inputs(inputs: Mapping[str, Any]) -> None:
+    for key, value in inputs.items():
+        if value is None:
+            continue
+        if isinstance(value, (str, int, float, bool)):
+            continue
+        raise ContextShapeError(f"context key {key} must be scalar")
 
 
 def _load_policy() -> Policy:

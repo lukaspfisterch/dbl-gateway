@@ -7,7 +7,7 @@ consume its snapshots and emit INTENT only.
 This release stabilizes the 0.3.x stackline and does not introduce new wire contracts.
 
 Compatible stack versions:
-- dbl-core==0.3.2
+- dbl-core==0.3.6
 - dbl-policy==0.2.2
 - dbl-main==0.3.1
 - kl-kernel-logic==0.5.0
@@ -117,6 +117,7 @@ Read:
 - GET `/capabilities`
 - GET `/healthz`
 
+## Git Hooks (Windows 11)The repository includes an enhanced pre-commit hook that enforces DBL boundaries and invariants.**Quick usage (PowerShell):**```powershell# Normal commitgit commit -m "your message"# Explain mode (detailed violations)$env:DBL_HOOK_EXPLAIN = "1"; git commit -m "msg"# List validation rules$env:DBL_HOOK_LIST_RULES = "1"; git commit -m "test"```See `docs/GIT_HOOKS.md` for full documentation.**Key rules enforced:**- BOUNDARY-001: No canonicalization logic in gateway- EVENT-001: Only INTENT, DECISION, EXECUTION, PROOF event kinds- POLICY-001: No observational data in PolicyContext
 ## Environment contract
 
 See `docs/env_contract.md`.

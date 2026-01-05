@@ -5,7 +5,7 @@ from typing import Any
 from dbl_core import DblEvent, DblEventKind
 from dbl_core.events.canonical import canonicalize_value, digest_bytes, json_dumps
 
-__all__ = ["event_digest", "v_digest"]
+__all__ = ["event_digest", "v_digest", "v_digest_step"]
 
 
 def event_digest(kind: str, correlation_id: str, payload: dict[str, Any]) -> tuple[str, int]:
@@ -20,10 +20,21 @@ def event_digest(kind: str, correlation_id: str, payload: dict[str, Any]) -> tup
 
 
 def v_digest(indexed: list[tuple[int, str]]) -> str:
-    items = [{"index": idx, "digest": digest} for idx, digest in indexed]
-    canonical = canonicalize_value(items)
+    current = _v_seed()
+    for idx, digest in indexed:
+        current = v_digest_step(current, idx, digest)
+    return current
+
+
+def v_digest_step(prev: str, idx: int, digest: str) -> str:
+    item = {"prev": prev, "index": idx, "digest": digest}
+    canonical = canonicalize_value(item)
     canonical_json = json_dumps(canonical)
     return digest_bytes(canonical_json)
+
+
+def _v_seed() -> str:
+    return "sha256:" + ("0" * 64)
 
 
 def _strip_obs(payload: dict[str, Any]) -> dict[str, Any]:

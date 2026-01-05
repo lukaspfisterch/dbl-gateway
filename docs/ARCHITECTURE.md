@@ -37,7 +37,7 @@ This document defines structure, boundaries, and invariants for DBL Gateway.
 - All external interaction is via versioned wire contracts.
 - Write envelopes include `interface_version` and unsupported versions are rejected.
 - /llm/call is a domain runner surface and is intentionally not a generic wire envelope.
-- `v_digest` is the digest of the full V prefix known to the producer.
+- `v_digest` is a rolling digest of the full V prefix known to the producer.
 - Paging parameters only affect the `events` window, not `v_digest`.
 - Snapshot responses must pass `validate_wire_snapshot` server-side.
 - Unsupported interface versions are rejected explicitly.

@@ -19,6 +19,7 @@ from dbl_core import normalize_trace
 import kl_kernel_logic
 from dbl_gateway.adapters.execution_adapter_kl import KlExecutionAdapter
 from dbl_gateway.providers import openai as openai_provider
+from dbl_gateway.store.sqlite import SQLiteStore
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -310,6 +311,48 @@ def test_policy_context_is_filtered(monkeypatch: pytest.MonkeyPatch) -> None:
     assert set(context.inputs.keys()) == {"principal_id", "capability"}
 
 
+def test_policy_context_rejects_nested_shapes() -> None:
+    authoritative = {
+        "stream_id": "default",
+        "lane": "user_chat",
+        "actor": "user",
+        "intent_type": "chat.message",
+        "correlation_id": "c-1",
+        "payload": {
+            "message": "hi",
+            "inputs": {
+                "principal_id": "user-1",
+                "extensions": {"secret": "nope"},
+            },
+        },
+    }
+    adapter = governance.DblPolicyAdapter()
+    decision = adapter.decide(authoritative)
+    assert decision.decision == "DENY"
+    assert decision.reason_codes == ["context.invalid_shape"]
+
+
+@pytest.mark.parametrize("bad_value", [[], {}, b"bytes"])
+def test_policy_context_rejects_non_scalar(bad_value) -> None:
+    authoritative = {
+        "stream_id": "default",
+        "lane": "user_chat",
+        "actor": "user",
+        "intent_type": "chat.message",
+        "correlation_id": "c-1",
+        "payload": {
+            "message": "hi",
+            "inputs": {
+                "principal_id": bad_value,
+            },
+        },
+    }
+    adapter = governance.DblPolicyAdapter()
+    decision = adapter.decide(authoritative)
+    assert decision.decision == "DENY"
+    assert decision.reason_codes == ["context.invalid_shape"]
+
+
 def test_digest_excludes_obs_fields() -> None:
     correlation_id = "c-obs"
     payload = {"a": 1, "b": {"x": "y"}}
@@ -493,7 +536,40 @@ def test_capabilities_response_shape(monkeypatch: pytest.MonkeyPatch) -> None:
         assert "display_name" in model
         assert "features" in model
         assert "limits" in model
-        assert "health" in model
+    assert "health" in model
+
+
+def test_v_state_init_and_restart(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "trail.sqlite"
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(db_path))
+    app = create_app()
+    with TestClient(app) as client:
+        client.post("/ingress/intent", json=_intent_envelope("one"))
+        client.post("/ingress/intent", json=_intent_envelope("two"))
+    store = SQLiteStore(db_path)
+    store._conn.execute("DELETE FROM v_state")  # simulate pre-v_state db
+    store._conn.commit()
+    store._ensure_v_state()
+    v_digest_before, last_index_before = store._get_v_state()
+    recomputed = store.recompute_v_digest()
+    assert v_digest_before == recomputed
+    assert last_index_before >= 1
+    store.close()
+
+
+def test_rolling_v_digest_matches_full_recompute(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "trail.sqlite"
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(db_path))
+    app = create_app()
+    with TestClient(app) as client:
+        client.post("/ingress/intent", json=_intent_envelope("one"))
+        client.post("/ingress/intent", json=_intent_envelope("two"))
+        client.post("/ingress/intent", json=_intent_envelope("three"))
+    store = SQLiteStore(db_path)
+    rolling, _ = store._get_v_state()
+    recomputed = store.recompute_v_digest()
+    assert rolling == recomputed
+    store.close()
 
 
 def test_tail_since_semantics(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
