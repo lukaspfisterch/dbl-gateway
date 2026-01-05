@@ -148,3 +148,6 @@ Boundary and UI clients must not import dbl-core or dbl-policy.
 
 Canonicalization and digests follow dbl-core.
 
+## Notes
+
+External configuration files are planned for the 0.4.x line. The 0.3.x line remains env-and-cli only.
