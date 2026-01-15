@@ -7,6 +7,9 @@ from typing import Any
 from pydantic import BaseModel
 
 
+from .wire_contract import INTERFACE_VERSION
+
+
 class CapabilitiesHealth(BaseModel):
     status: str
     checked_at: str
@@ -40,6 +43,7 @@ class CapabilitiesSurfaces(BaseModel):
     snapshot: bool
     events: bool
     ingress_intent: bool
+    capabilities: bool
 
 
 class CapabilitiesResponse(BaseModel):
@@ -63,13 +67,14 @@ def get_capabilities() -> dict[str, object]:
             providers.append({"id": "anthropic", "models": models})
 
     return {
-        "interface_version": 1,
+        "interface_version": INTERFACE_VERSION,
         "providers": providers,
         "surfaces": {
             "tail": True,
             "snapshot": True,
             "events": False,
             "ingress_intent": True,
+            "capabilities": True,
         },
     }
 

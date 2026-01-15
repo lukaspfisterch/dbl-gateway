@@ -19,6 +19,9 @@ class SQLiteStoreAdapter(StorePort):
         self,
         *,
         kind: str,
+        thread_id: str = "unknown",
+        turn_id: str = "unknown",
+        parent_turn_id: str | None = None,
         lane: str,
         actor: str,
         intent_type: str,
@@ -28,6 +31,9 @@ class SQLiteStoreAdapter(StorePort):
     ):
         return self._store.append(
             kind=kind,
+            thread_id=thread_id,
+            turn_id=turn_id,
+            parent_turn_id=parent_turn_id,
             lane=lane,
             actor=actor,
             intent_type=intent_type,

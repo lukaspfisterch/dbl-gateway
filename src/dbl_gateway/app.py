@@ -37,6 +37,7 @@ from .auth import (
 
 
 _LOGGER = logging.getLogger("dbl_gateway")
+DEFAULT_TAIL_BACKLOG = 20
 
 
 def _configure_logging() -> None:
@@ -152,6 +153,9 @@ def create_app() -> FastAPI:
         _attach_obs_trace_id(authoritative["payload"], trace_id)
         intent_event = app.state.store.append(
             kind="INTENT",
+            thread_id=intent_payload["thread_id"],
+            turn_id=intent_payload["turn_id"],
+            parent_turn_id=intent_payload.get("parent_turn_id"),
             lane=authoritative["lane"],
             actor=authoritative["actor"],
             intent_type=authoritative["intent_type"],
@@ -201,6 +205,7 @@ def create_app() -> FastAPI:
         request: Request,
         stream_id: str | None = Query(None),
         since: int = Query(-1, ge=-1),
+        backlog: int = Query(DEFAULT_TAIL_BACKLOG, ge=0),
         lanes: str | None = Query(None),
     ) -> StreamingResponse:
         actor = await _require_actor(request)
@@ -217,7 +222,15 @@ def create_app() -> FastAPI:
                 lane_filter = None
 
         async def event_stream():
-            cursor = max(since + 1, 0)
+            if since < 0:
+                # If since is not provided, emit backlog
+                snap = app.state.store.snapshot(limit=0, offset=0)
+                length = snap.get("length", 0)
+                head_index = length - 1
+                cursor = max(0, head_index - backlog + 1)
+            else:
+                cursor = since + 1
+
             while True:
                 if await request.is_disconnected():
                     break
@@ -300,6 +313,9 @@ def create_app() -> FastAPI:
         p["trace_digest"] = trace_digest_value
         event = app.state.store.append(
             kind="EXECUTION",
+            thread_id=body.get("thread_id", "unknown"),
+            turn_id=body.get("turn_id", "unknown"),
+            parent_turn_id=body.get("parent_turn_id"),
             lane=lane,
             actor=actor,
             intent_type=intent_type,
@@ -327,6 +343,9 @@ async def _process_intent(
             _LOGGER.exception("policy decision failed: %s", exc)
             app.state.store.append(
                 kind="DECISION",
+                thread_id=authoritative["thread_id"],
+                turn_id=authoritative["turn_id"],
+                parent_turn_id=authoritative.get("parent_turn_id"),
                 lane=authoritative["lane"],
                 actor="policy",
                 intent_type=authoritative["intent_type"],
@@ -364,6 +383,9 @@ async def _process_intent(
 
         app.state.store.append(
             kind="DECISION",
+            thread_id=authoritative["thread_id"],
+            turn_id=authoritative["turn_id"],
+            parent_turn_id=authoritative.get("parent_turn_id"),
             lane=authoritative["lane"],
             actor="policy",
             intent_type=authoritative["intent_type"],
@@ -418,6 +440,9 @@ async def _process_intent(
 
         app.state.store.append(
             kind="EXECUTION",
+            thread_id=intent_event["thread_id"],
+            turn_id=intent_event["turn_id"],
+            parent_turn_id=intent_event.get("parent_turn_id"),
             lane=intent_event["lane"],
             actor="executor",
             intent_type=intent_event["intent_type"],
@@ -431,6 +456,9 @@ async def _process_intent(
             return
         app.state.store.append(
             kind="DECISION",
+            thread_id=intent_event["thread_id"],
+            turn_id=intent_event["turn_id"],
+            parent_turn_id=intent_event.get("parent_turn_id"),
             lane=intent_event["lane"],
             actor="policy",
             intent_type=intent_event["intent_type"],
@@ -706,6 +734,9 @@ def _authoritative_from_event(intent_event: EventRecord, correlation_id: str) ->
     payload = intent_event.get("payload")
     return {
         "stream_id": intent_event.get("stream_id"),
+        "thread_id": intent_event.get("thread_id"),
+        "turn_id": intent_event.get("turn_id"),
+        "parent_turn_id": intent_event.get("parent_turn_id"),
         "lane": intent_event.get("lane"),
         "actor": intent_event.get("actor"),
         "intent_type": intent_event.get("intent_type"),

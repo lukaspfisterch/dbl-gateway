@@ -9,6 +9,9 @@ from .models import EventRecord
 def make_event(
     *,
     kind: str,
+    thread_id: str,
+    turn_id: str,
+    parent_turn_id: str | None,
     lane: str,
     actor: str,
     intent_type: str,
@@ -23,6 +26,9 @@ def make_event(
     return {
         "index": -1,
         "kind": kind,
+        "thread_id": thread_id,
+        "turn_id": turn_id,
+        "parent_turn_id": parent_turn_id,
         "lane": lane,
         "actor": actor,
         "intent_type": intent_type,

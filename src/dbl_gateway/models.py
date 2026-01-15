@@ -6,6 +6,9 @@ from typing import Any, TypedDict
 class EventRecord(TypedDict):
     index: int
     kind: str
+    thread_id: str
+    turn_id: str
+    parent_turn_id: str | None
     lane: str
     actor: str
     intent_type: str
