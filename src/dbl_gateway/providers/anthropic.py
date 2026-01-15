@@ -12,23 +12,46 @@ def execute(message: str, model_id: str) -> str:
     api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
         raise ProviderError("missing Anthropic credentials")
+    
+    # Use defensive default if model_id is empty or suspicious
+    if not model_id or not model_id.strip():
+        model_id = _default_model()
+    
     headers = {
         "x-api-key": api_key,
         "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
     }
+    
     payload: dict[str, Any] = {
         "model": model_id,
         "max_tokens": 256,
         "messages": [
             {"role": "user", "content": [{"type": "text", "text": message}]}
         ],
+        "temperature": 0.2,  # Defensive: reduce randomness for consistent behavior
     }
+    
     with httpx.Client(timeout=60.0) as client:
-        resp = client.post("https://api.anthropic.com/v1/messages", json=payload, headers=headers)
+        resp = client.post(
+            "https://api.anthropic.com/v1/messages",
+            json=payload,
+            headers=headers
+        )
         if resp.status_code >= 400:
             _raise_anthropic(resp)
         data = resp.json()
+    
     return _parse_text(data)
+
+
+def _default_model() -> str:
+    """Defensive default: use environment override or fall back to reliable model."""
+    raw = os.getenv("ANTHROPIC_DEFAULT_MODEL", "").strip()
+    if raw:
+        return raw
+    # claude-3-5-sonnet-20241022 is stable, fast, and cost-effective
+    return "claude-3-5-sonnet-20241022"
 
 
 def _parse_text(data: dict[str, Any]) -> str:
@@ -37,6 +60,8 @@ def _parse_text(data: dict[str, Any]) -> str:
         return ""
     parts: list[str] = []
     for entry in content:
+        if not isinstance(entry, dict):
+            continue
         if entry.get("type") == "text":
             text = entry.get("text")
             if isinstance(text, str):
