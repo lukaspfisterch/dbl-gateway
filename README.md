@@ -3,6 +3,7 @@
 ![Tests](https://github.com/lukaspfisterch/deterministic-ai-gateway/actions/workflows/tests.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License](https://img.shields.io/github/license/lukaspfisterch/deterministic-ai-gateway)
+[![PyPI version](https://img.shields.io/pypi/v/dbl-gateway.svg)](https://pypi.org/project/dbl-gateway/)
 
 This repository provides a **deterministic execution boundary for LLM calls**.
 
