@@ -10,6 +10,8 @@ DBL Gateway is a deterministic execution boundary for LLM calls.
 
 It enforces explicit intent, policy decisions, and execution as an auditable, replayable event stream.
 
+Part of the [Deterministic Boundary Layer](https://github.com/lukaspfisterch/deterministic-boundary-layer) architecture.
+
 This is **not**:
 - a RAG pipeline
 - a workflow engine
