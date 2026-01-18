@@ -28,7 +28,7 @@ Currently supported:
 - **Anthropic** (cloud)
 - **Ollama** (local or remote)
 
-Providers are discovered at runtime via capabilities introspection.
+Providers are currently configured via environment variables and exposed at runtime through capabilities introspection.
 
 ---
 
@@ -172,6 +172,7 @@ docker run --rm -p 8010:8010 \
 
 ```bash
 # OpenAI (comma-separated)
+OPENAI_API_KEY="sk-..."
 OPENAI_CHAT_MODEL_IDS="gpt-5.2,gpt-4.1,gpt-4o-mini"
 
 # Anthropic
