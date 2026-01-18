@@ -8,81 +8,43 @@ import httpx
 from .errors import ProviderError
 
 
-def execute(message: str, model_id: str) -> str:
-    api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-    if not api_key:
+def execute(*, model_id: str, messages: list[dict[str, str]], api_key: str | None = None, **_: Any) -> str:
+    key = (api_key or os.getenv("ANTHROPIC_API_KEY", "")).strip()
+    if not key:
         raise ProviderError("missing Anthropic credentials")
-    
-    # Use defensive default if model_id is empty or suspicious
-    if not model_id or not model_id.strip():
-        model_id = _default_model()
-    
-    headers = {
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-    }
-    
+
+    # Use last user content as primary input; include full messages for 3.0 API if needed later
+    last_user = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), None)
+    if not last_user:
+        raise ProviderError("no user message")
+
+    headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
     payload: dict[str, Any] = {
         "model": model_id,
         "max_tokens": 256,
-        "messages": [
-            {"role": "user", "content": [{"type": "text", "text": message}]}
-        ],
-        "temperature": 0.2,  # Defensive: reduce randomness for consistent behavior
+        "messages": [{"role": "user", "content": [{"type": "text", "text": last_user}]}],
+        "temperature": 0.2,
     }
-    
+
     with httpx.Client(timeout=60.0) as client:
-        resp = client.post(
-            "https://api.anthropic.com/v1/messages",
-            json=payload,
-            headers=headers
-        )
+        try:
+            resp = client.post("https://api.anthropic.com/v1/messages", json=payload, headers=headers)
+        except httpx.RequestError as exc:
+             raise ProviderError(f"connection error: {str(exc)}") from exc
+             
         if resp.status_code >= 400:
-            _raise_anthropic(resp)
+            try:
+                data = resp.json()
+            except Exception:
+                data = {}
+            msg = data.get("error", {}).get("message") or f"HTTP {resp.status_code}"
+            err = ProviderError(msg)
+            err.status_code = resp.status_code
+            err.code = data.get("error", {}).get("type")
+            raise err
+        
         data = resp.json()
-    
-    return _parse_text(data)
+        blocks = data.get("content", [])
+        text = "".join([b.get("text", "") for b in blocks if b.get("type") == "text"])
+        return str(text or "")
 
-
-def _default_model() -> str:
-    """Defensive default: use environment override or fall back to reliable model."""
-    raw = os.getenv("ANTHROPIC_DEFAULT_MODEL", "").strip()
-    if raw:
-        return raw
-    # claude-3-5-sonnet-20241022 is stable, fast, and cost-effective
-    return "claude-3-5-sonnet-20241022"
-
-
-def _parse_text(data: dict[str, Any]) -> str:
-    content = data.get("content", [])
-    if not isinstance(content, list):
-        return ""
-    parts: list[str] = []
-    for entry in content:
-        if not isinstance(entry, dict):
-            continue
-        if entry.get("type") == "text":
-            text = entry.get("text")
-            if isinstance(text, str):
-                parts.append(text)
-    return "\n".join(parts)
-
-
-def _raise_anthropic(resp: httpx.Response) -> None:
-    code = None
-    msg = None
-    try:
-        j = resp.json()
-        err = j.get("error") if isinstance(j, dict) else None
-        if isinstance(err, dict):
-            code = err.get("type")
-            msg = err.get("message")
-    except Exception:
-        pass
-    detail = msg or resp.text[:500]
-    raise ProviderError(
-        f"anthropic.messages failed: {detail}",
-        status_code=resp.status_code,
-        code=str(code) if code else None,
-    )

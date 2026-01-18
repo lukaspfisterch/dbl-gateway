@@ -8,38 +8,52 @@ import httpx
 from .errors import ProviderError
 
 
-def execute(
-    message: str | None = None,
-    model_id: str = "",
-    *,
-    messages: Sequence[Mapping[str, str]] | None = None,
-) -> str:
-    """
-    Execute a chat completion.
-    
-    Args:
-        message: Single user message (legacy interface)
-        model_id: Model to use
-        messages: Pre-assembled messages list (takes precedence over message)
-    """
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not api_key:
+def _base_url() -> str:
+    return os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+
+def execute(*, model_id: str, messages: list[dict[str, str]], api_key: str | None = None, **_: Any) -> str:
+    key = (api_key or os.getenv("OPENAI_API_KEY", "")).strip()
+    if not key:
         raise ProviderError("missing OpenAI credentials")
-    headers = {"Authorization": f"Bearer {api_key}"}
-    
-    # Use messages list if provided, otherwise build from single message
-    if messages is not None:
-        chat_messages = [dict(m) for m in messages]
-    elif message is not None:
-        chat_messages = [{"role": "user", "content": message}]
-    else:
-        raise ProviderError("either message or messages must be provided")
-    
-    if _use_responses(model_id):
-        # Responses API still needs single message for now
-        user_content = _extract_user_content(chat_messages)
-        return _execute_responses(user_content, model_id, headers)
-    return _execute_chat_messages(chat_messages, model_id, headers)
+
+    if not isinstance(messages, list) or not messages:
+        raise ProviderError("invalid messages")
+
+    payload: dict[str, Any] = {
+        "model": model_id,
+        "messages": messages,
+        "temperature": 0.2,
+        "max_tokens": 256,
+    }
+
+    headers = {"authorization": f"Bearer {key}", "content-type": "application/json"}
+    url = f"{_base_url()}/chat/completions"
+
+    with httpx.Client(timeout=60.0) as client:
+        try:
+            resp = client.post(url, json=payload, headers=headers)
+        except httpx.RequestError as exc:
+            raise ProviderError(f"connection error: {str(exc)}") from exc
+
+        if resp.status_code >= 400:
+            try:
+                data = resp.json()
+            except Exception:
+                data = {"error": {"message": resp.text}}
+            msg = data.get("error", {}).get("message") or f"HTTP {resp.status_code}"
+            err = ProviderError(msg)
+            err.status_code = resp.status_code
+            err.code = data.get("error", {}).get("code")
+            raise err
+
+        data = resp.json()
+        content = (
+            data.get("choices", [{}])[0]
+               .get("message", {})
+               .get("content", "")
+        )
+        return str(content or "")
 
 
 def _extract_user_content(messages: list[dict[str, str]]) -> str:

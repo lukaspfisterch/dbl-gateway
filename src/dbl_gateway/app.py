@@ -883,6 +883,15 @@ def _shape_payload(intent_type: str, payload: Mapping[str, Any]) -> dict[str, An
         declared_refs = payload.get("declared_refs")
         if isinstance(declared_refs, list) and declared_refs:
             shaped["declared_refs"] = declared_refs
+        
+        # Include declarative context params
+        ctx_mode = payload.get("context_mode")
+        if isinstance(ctx_mode, str):
+            shaped["context_mode"] = ctx_mode
+        ctx_n = payload.get("context_n")
+        if isinstance(ctx_n, int):
+            shaped["context_n"] = ctx_n
+            
         return shaped
     return dict(payload)
 

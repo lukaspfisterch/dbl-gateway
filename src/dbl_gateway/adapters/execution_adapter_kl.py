@@ -7,7 +7,7 @@ from typing import Any, Mapping, Sequence
 from dbl_core import normalize_trace
 
 from ..ports.execution_port import ExecutionPort, ExecutionResult
-from ..providers import anthropic, openai
+from ..providers import anthropic, openai, ollama
 from ..providers.errors import ProviderError
 from ..capabilities import resolve_model, resolve_provider
 
@@ -87,6 +87,8 @@ def _select_provider(name: str):
         return openai.execute
     if name == "anthropic":
         return anthropic.execute
+    if name == "ollama":
+        return ollama.execute
     raise RuntimeError("unsupported provider")
 
 

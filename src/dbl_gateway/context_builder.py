@@ -193,6 +193,110 @@ def _build_model_messages(
     return messages
 
 
+def _resolve_auto_context(events: list[EventRecord], n: int, config: ContextConfig) -> list[ResolvedRef]:
+    """
+    Deterministically expand context from thread events.
+    Strategy: First valid Turn (Intent+Exec) + Last N valid Turns.
+    """
+    # Group events by turn_id, preserving order relative to first appearance
+    turns: dict[str, list[EventRecord]] = {}
+    turn_order: list[str] = []
+    
+    for e in events:
+        t_id = e.get("turn_id")
+        if not t_id:
+            continue
+        if t_id not in turns:
+            turns[t_id] = []
+            turn_order.append(t_id)
+        turns[t_id].append(e)
+        
+    resolved: list[ResolvedRef] = []
+    
+    # Identify qualifying turns (those with at least INTENT and maybe EXECUTION)
+    # Actually we just want everything from the turn if it's relevant
+    
+    selected_turn_ids: set[str] = set()
+    
+    if turn_order:
+        # First turn
+        selected_turn_ids.add(turn_order[0])
+        
+        # Last N turns
+        last_n = turn_order[-n:] if n > 0 else []
+        for t in last_n:
+            selected_turn_ids.add(t)
+            
+    # Iterate all events, if they belong to selected turns, include them
+    # AND if they are allowed types
+    
+    for event in events:
+        t_id = event.get("turn_id")
+        if t_id not in selected_turn_ids:
+            continue
+            
+        kind = event.get("kind")
+        if kind == "INTENT":
+            admitted_for = "governance"
+        elif kind == "EXECUTION":
+            # Only include execution if allowed
+            if not config.allow_execution_refs_for_prompt:
+                continue
+            admitted_for = "execution_only"
+        else:
+            # Skip DECISION/other for prompt context usually
+            continue
+            
+        # Extract content
+        content = _extract_event_content_for_auto(event)
+        if not content:
+            continue
+            
+        resolved.append({
+            "ref_type": "event",
+            "ref_id": event.get("correlation_id") or t_id or "unknown",
+            "event_index": event.get("index", 0),
+            "event_digest": event.get("digest", ""),
+            "event_kind": kind,
+            "admitted_for": admitted_for,
+            "content": content,
+            "version": "1"
+        })
+        
+    return resolved
+
+
+def _extract_event_content_for_auto(event: EventRecord) -> str:
+    payload = event.get("payload")
+    if not isinstance(payload, dict):
+        return ""
+    kind = event.get("kind", "")
+    
+    if kind == "INTENT":
+        # payload.message or payload.payload.message
+        msg = payload.get("message")
+        if isinstance(msg, str) and msg.strip():
+            return msg.strip()
+        inner = payload.get("payload")
+        if isinstance(inner, dict):
+            m = inner.get("message")
+            if isinstance(m, str):
+                return m.strip()
+                
+    if kind == "EXECUTION":
+        # output_text or result
+        out = payload.get("output_text")
+        if isinstance(out, str):
+            return out.strip()
+        res = payload.get("result")
+        if isinstance(res, str):
+            return res.strip()
+        if isinstance(res, dict):
+             return str(res.get("text") or "").strip()
+             
+    return ""
+
+
 def _render_refs_block(resolved_refs: list[ResolvedRef]) -> str:
     """
     Render resolved refs as a deterministic system context block.
@@ -322,12 +426,50 @@ def build_context_with_refs(
     declared_refs = _extract_declared_refs(payload_obj)
     thread_id = identity["thread_id"]
     
-    # Resolve declared_refs against thread events
+    # Resolve declared_refs OR declarative context logic
     resolution: ResolutionResult | None = None
     resolved_refs: list[ResolvedRef] = []
     normative_input_digests: list[str] = []
+    transforms: list[NormalizationRecord] = []
     
-    if declared_refs:
+    # 1. Automatic Context Expansion (declarative mode)
+    # If explicit declared_refs AND context_mode are both present, explicit wins (or we could merge?)
+    # For now: if declared_refs is present, use it. If not, and context_mode is set, use auto.
+    auto_refs: list[ResolvedRef] = []
+    
+    if not declared_refs:
+        ctx_mode = payload_obj.get("context_mode")
+        # Default to "first_plus_last_n" if not specified but implicitly desired?
+        # User said: "Default, wenn payload.declared_refs fehlt: mode = payload.get... default first_plus_last_n"
+        if not ctx_mode:
+             ctx_mode = "first_plus_last_n"
+             
+        if ctx_mode == "first_plus_last_n":
+            n = payload_obj.get("context_n", 10)
+            if isinstance(n, int):
+                n = max(1, min(20, n)) # Clamp 1-20
+            else:
+                n = 10
+            
+            auto_refs = _resolve_auto_context(list(thread_events), n, cfg)
+            if auto_refs:
+                resolved_refs = auto_refs
+                # We don't have normative digests here easily without re-scanning, 
+                # but auto_refs contains them. 
+                # We need to populate normative_input_digests for the ResolutionResult equivalent
+                normative_input_digests = [
+                    r["event_digest"] for r in resolved_refs 
+                    if r.get("admitted_for") == "governance" and r.get("event_digest")
+                ]
+                
+                transforms.append({
+                    "op": "AUTO_DECLARE_REFS",
+                    "args": {"mode": ctx_mode, "n": n, "count": len(resolved_refs)},
+                    "result": "expanded"
+                })
+
+    # 2. Explicit Resolution (if no auto refs)
+    if declared_refs and not resolved_refs:
         resolution = resolve_declared_refs(
             declared_refs=declared_refs,
             thread_id=thread_id,
@@ -337,7 +479,10 @@ def build_context_with_refs(
         resolved_refs = list(resolution.resolved_refs)
         normative_input_digests = list(resolution.normative_input_digests)
     
-    # Build normalization record (materializes what boundary did)
+        # Also, check if we need to expand resolved_refs if some auto-mode was requested on TOP?
+        # Non-goal for now. Explicit > Implicit.
+
+    # 3. Create context model messages (system + user) including resolved refs(materializes what boundary did)
     normalization: NormalizationRecord = {
         "applied_rules": list(cfg.normalization_rules),
         "boundary_version": cfg.schema_version,
@@ -364,7 +509,13 @@ def build_context_with_refs(
     raw_model_messages = _build_model_messages(user_input, resolved_refs=resolved_refs or None)
     
     admitted_model_messages, boundary_meta = admit_model_messages(raw_model_messages)
-    transforms = _boundary_transforms(raw_model_messages, admitted_model_messages, boundary_meta)
+    
+    # Calculate boundary transforms and merge with earlier auto-context transforms
+    boundary_transforms = _boundary_transforms(raw_model_messages, admitted_model_messages, boundary_meta)
+    all_transforms = transforms + boundary_transforms
+    
+    # Update normalization record (mutable update before digest computation)
+    normalization["transformations"] = all_transforms
     
     assembled_context: AssembledContext = {
         "model_messages": admitted_model_messages,
@@ -380,5 +531,5 @@ def build_context_with_refs(
         context_digest=context_digest_value,
         config_digest=cfg.config_digest,
         boundary_meta=boundary_meta,
-        transforms=transforms,
+        transforms=all_transforms,
     )
