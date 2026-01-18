@@ -19,7 +19,7 @@ from .admission import admit_and_shape_intent, AdmissionFailure
 from .capabilities import CapabilitiesResponse, get_capabilities, resolve_model, resolve_provider
 from .adapters.execution_adapter_kl import KlExecutionAdapter
 from .adapters.policy_adapter_dbl_policy import DblPolicyAdapter, _load_policy
-from .context_builder import build_context
+from .context_builder import build_context_with_refs
 from .config import get_context_config
 from .decision_builder import build_normative_decision
 from .ports.execution_port import ExecutionResult
@@ -412,9 +412,14 @@ async def _process_intent(
     assembled_context: Mapping[str, Any] | None = None
     try:
         authoritative = _authoritative_from_event(intent_event, correlation_id)
-        context_artifacts = build_context(
+        
+        # Fetch thread events for ref resolution
+        thread_events = app.state.store.timeline(thread_id=thread_id)
+        
+        context_artifacts = build_context_with_refs(
             authoritative.get("payload"),
             intent_type=str(authoritative.get("intent_type") or ""),
+            thread_events=thread_events,
         )
         context_digest = context_artifacts.context_digest
         context_config_digest = context_artifacts.config_digest  # NEW: Extract config digest
