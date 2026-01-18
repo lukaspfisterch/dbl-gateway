@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Protocol
+from typing import Any, Mapping, Protocol, Sequence
 
 
 @dataclass(frozen=True)
@@ -15,5 +15,20 @@ class ExecutionResult:
 
 
 class ExecutionPort(Protocol):
-    async def run(self, intent_event: Mapping[str, Any]) -> ExecutionResult:
+    async def run(
+        self, 
+        intent_event: Mapping[str, Any],
+        *,
+        model_messages: Sequence[Mapping[str, str]] | None = None,
+    ) -> ExecutionResult:
+        """
+        Execute the intent.
+        
+        Args:
+            intent_event: The INTENT event record
+            model_messages: Optional pre-assembled messages from context builder.
+                           If provided, these are used instead of extracting from payload.
+                           This ensures declared_refs content flows into execution.
+        """
         ...
+

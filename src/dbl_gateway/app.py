@@ -514,7 +514,16 @@ async def _process_intent(
             return
 
         try:
-            result = await app.state.execution.run(intent_event)
+            # Pass model_messages from context builder to execution
+            # This ensures declared_refs content flows into the LLM prompt
+            model_messages = None
+            if assembled_context:
+                model_messages = assembled_context.get("model_messages")
+            
+            result = await app.state.execution.run(
+                intent_event,
+                model_messages=model_messages,
+            )
             payload = _execution_payload(
                 result,
                 trace_id,

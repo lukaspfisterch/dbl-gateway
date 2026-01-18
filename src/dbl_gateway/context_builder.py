@@ -361,7 +361,19 @@ def build_context_with_refs(
         },
     }
 
+    # DEBUG: Log what we're working with
+    import logging
+    _log = logging.getLogger("dbl_gateway.context")
+    _log.info(f"[CONTEXT DEBUG] declared_refs: {declared_refs}")
+    _log.info(f"[CONTEXT DEBUG] resolved_refs count: {len(resolved_refs)}")
+    for r in resolved_refs:
+        _log.info(f"[CONTEXT DEBUG] resolved ref: kind={r.get('event_kind')}, content_len={len(r.get('content', ''))}")
+
     raw_model_messages = _build_model_messages(user_input, resolved_refs=resolved_refs or None)
+    _log.info(f"[CONTEXT DEBUG] model_messages count: {len(raw_model_messages)}")
+    for m in raw_model_messages:
+        _log.info(f"[CONTEXT DEBUG] message role={m.get('role')}, content_len={len(m.get('content', ''))}")
+    
     admitted_model_messages, boundary_meta = admit_model_messages(raw_model_messages)
     transforms = _boundary_transforms(raw_model_messages, admitted_model_messages, boundary_meta)
     

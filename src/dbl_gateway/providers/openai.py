@@ -1,21 +1,53 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 import httpx
 
 from .errors import ProviderError
 
 
-def execute(message: str, model_id: str) -> str:
+def execute(
+    message: str | None = None,
+    model_id: str = "",
+    *,
+    messages: Sequence[Mapping[str, str]] | None = None,
+) -> str:
+    """
+    Execute a chat completion.
+    
+    Args:
+        message: Single user message (legacy interface)
+        model_id: Model to use
+        messages: Pre-assembled messages list (takes precedence over message)
+    """
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise ProviderError("missing OpenAI credentials")
     headers = {"Authorization": f"Bearer {api_key}"}
+    
+    # Use messages list if provided, otherwise build from single message
+    if messages is not None:
+        chat_messages = [dict(m) for m in messages]
+    elif message is not None:
+        chat_messages = [{"role": "user", "content": message}]
+    else:
+        raise ProviderError("either message or messages must be provided")
+    
     if _use_responses(model_id):
-        return _execute_responses(message, model_id, headers)
-    return _execute_chat(message, model_id, headers)
+        # Responses API still needs single message for now
+        user_content = _extract_user_content(chat_messages)
+        return _execute_responses(user_content, model_id, headers)
+    return _execute_chat_messages(chat_messages, model_id, headers)
+
+
+def _extract_user_content(messages: list[dict[str, str]]) -> str:
+    """Extract user content from messages list for legacy APIs."""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            return m.get("content", "")
+    return ""
 
 
 def _use_responses(model_id: str) -> bool:
@@ -49,12 +81,13 @@ def _execute_responses(message: str, model_id: str, headers: dict[str, str]) -> 
     return _parse_response_text(data)
 
 
-def _execute_chat(message: str, model_id: str, headers: dict[str, str]) -> str:
+def _execute_chat_messages(messages: list[dict[str, str]], model_id: str, headers: dict[str, str]) -> str:
+    """Execute chat completion with full messages list."""
     payload: dict[str, Any] = {
         "model": model_id,
-        "messages": [{"role": "user", "content": message}],
+        "messages": messages,
         "temperature": 0.2,
-        "max_tokens": 256,
+        "max_tokens": 1024,  # Increased for context scenarios
     }
     with httpx.Client(timeout=30.0) as client:
         resp = client.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)

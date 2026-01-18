@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from dbl_core import normalize_trace
 
@@ -14,7 +14,12 @@ from ..capabilities import resolve_model, resolve_provider
 
 @dataclass(frozen=True)
 class KlExecutionAdapter(ExecutionPort):
-    async def run(self, intent_event: Mapping[str, Any]) -> ExecutionResult:
+    async def run(
+        self, 
+        intent_event: Mapping[str, Any],
+        *,
+        model_messages: Sequence[Mapping[str, str]] | None = None,
+    ) -> ExecutionResult:
         payload = intent_event.get("payload")
         if not isinstance(payload, Mapping):
             return ExecutionResult(error={"message": "invalid payload"})
@@ -40,12 +45,20 @@ class KlExecutionAdapter(ExecutionPort):
                     "message": provider_reason or "model.unavailable",
                 },
             )
-        message = _extract_message(payload)
-        if message is None:
-            return ExecutionResult(provider=provider, model_id=resolved_model, error={"message": "input.invalid"})
+        
+        # Use model_messages if provided (from context builder with refs)
+        # Otherwise fall back to extracting single message from payload
+        if model_messages is not None:
+            messages = list(model_messages)
+        else:
+            message = _extract_message(payload)
+            if message is None:
+                return ExecutionResult(provider=provider, model_id=resolved_model, error={"message": "input.invalid"})
+            messages = [{"role": "user", "content": message}]
+        
         call = _select_provider(provider)
         try:
-            output_text, trace, trace_digest, error = await _call_kernel(message, resolved_model, provider, call)
+            output_text, trace, trace_digest, error = await _call_kernel(messages, resolved_model, provider, call)
             return ExecutionResult(
                 output_text=output_text,
                 provider=provider,
@@ -77,7 +90,7 @@ def _select_provider(name: str):
     raise RuntimeError("unsupported provider")
 
 
-def _run_kernel_sync(message: str, model_id: str, provider: str, provider_call):
+def _run_kernel_sync(messages: list[dict[str, str]], model_id: str, provider: str, provider_call):
     import kl_kernel_logic
 
     psi = kl_kernel_logic.PsiDefinition(
@@ -87,9 +100,10 @@ def _run_kernel_sync(message: str, model_id: str, provider: str, provider_call):
     )
     kernel = kl_kernel_logic.Kernel()
 
-    def _task(message: str, model_id: str) -> dict[str, object]:
+    def _task(messages: list[dict[str, str]], model_id: str) -> dict[str, object]:
         try:
-            return {"ok": True, "output": provider_call(message, model_id)}
+            # Pass messages list to provider
+            return {"ok": True, "output": provider_call(model_id=model_id, messages=messages)}
         except ProviderError as exc:
             return {
                 "ok": False,
@@ -104,7 +118,7 @@ def _run_kernel_sync(message: str, model_id: str, provider: str, provider_call):
         psi=psi,
         task=_task,
         metadata={"provider": provider, "model_id": model_id},
-        message=message,
+        messages=messages,
         model_id=model_id,
     )
     return trace
@@ -142,17 +156,17 @@ def _normalize_kernel_trace(trace, provider: str, model_id: str):
     return str(output or ""), trace_dict, trace_digest_value, None
 
 
-async def _call_kernel(message: str, model_id: str, provider: str, provider_call, *, offload: bool = True):
+async def _call_kernel(messages: list[dict[str, str]], model_id: str, provider: str, provider_call, *, offload: bool = True):
     if offload:
         trace = await asyncio.to_thread(
             _run_kernel_sync,
-            message,
+            messages,
             model_id,
             provider,
             provider_call,
         )
     else:
-        trace = _run_kernel_sync(message, model_id, provider, provider_call)
+        trace = _run_kernel_sync(messages, model_id, provider, provider_call)
     return _normalize_kernel_trace(trace, provider, model_id)
 
 
