@@ -161,14 +161,29 @@ docker run -p 8010:8010 \
 #### Required for execution
 | Variable | Description |
 |---|---|
-| DBL_GATEWAY_POLICY_MODULE | Policy module path |
-| OPENAI_API_KEY | Or another provider |
+| DBL_GATEWAY_POLICY_MODULE | Policy module path (e.g., `dbl_policy.allow_all`) |
+| OPENAI_API_KEY | OpenAI API key (or configure another provider) |
 
-#### Optional
+#### Model Configuration
+
+```bash
+# OpenAI (comma-separated)
+OPENAI_CHAT_MODEL_IDS="gpt-5.2,gpt-4.1,gpt-4o-mini"
+
+# Anthropic
+ANTHROPIC_API_KEY="sk-ant-..."
+ANTHROPIC_MODEL_IDS="claude-sonnet-4-20250514,claude-3-5-sonnet-20241022,claude-3-haiku-20240307"
+
+# Ollama (auto-discovered from OLLAMA_HOST, or override manually)
+OLLAMA_HOST="http://localhost:11434"
+OLLAMA_MODEL_IDS="qwen2.5-coder:7b,llama3.2:latest,deepseek-r1:8b"
+```
+
+#### Other Options
 | Variable | Description |
 |---|---|
-| DBL_GATEWAY_POLICY_OBJECT | Default: `policy` |
-| OLLAMA_HOST | Remote Ollama endpoint |
+| DBL_GATEWAY_POLICY_OBJECT | Policy object name (default: `POLICY`) |
+| OPENAI_BASE_URL | Custom OpenAI-compatible endpoint |
 
 ### Start Command
 ```bash
