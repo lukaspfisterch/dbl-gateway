@@ -1,9 +1,9 @@
-# AI Gateway
+# DBL Gateway
 
-![Tests](https://github.com/lukaspfisterch/deterministic-ai-gateway/actions/workflows/tests.yml/badge.svg)
+![Tests](https://github.com/lukaspfisterch/dbl-gateway/actions/workflows/tests.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
-![License](https://img.shields.io/github/license/lukaspfisterch/deterministic-ai-gateway)
-[![PyPI version](https://img.shields.io/pypi/v/deterministic-ai-gateway.svg)](https://pypi.org/project/deterministic-ai-gateway/)
+![License](https://img.shields.io/github/license/lukaspfisterch/dbl-gateway)
+[![PyPI version](https://img.shields.io/pypi/v/dbl-gateway.svg)](https://pypi.org/project/dbl-gateway/)
 
 This repository provides a **deterministic execution boundary for LLM calls**.
 
@@ -23,7 +23,7 @@ The gateway does not decide *what* to do. It decides *whether* an explicitly dec
 
 The gateway is part of a small toolchain:
 
-### deterministic-ai-gateway (this repository)
+### dbl-gateway (this repository)
 Authoritative execution boundary and event log. The gateway is authoritative for execution, but not for interpretation. It emits facts, not narratives.
 - Accepts explicit intents.
 - Applies policy.

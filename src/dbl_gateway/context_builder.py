@@ -430,7 +430,7 @@ def build_context_with_refs(
     resolution: ResolutionResult | None = None
     resolved_refs: list[ResolvedRef] = []
     normative_input_digests: list[str] = []
-    transforms: list[NormalizationRecord] = []
+    transforms: list[dict[str, Any]] = []
     
     # 1. Automatic Context Expansion (declarative mode)
     # If explicit declared_refs AND context_mode are both present, explicit wins (or we could merge?)
@@ -464,8 +464,13 @@ def build_context_with_refs(
                 
                 transforms.append({
                     "op": "AUTO_DECLARE_REFS",
-                    "args": {"mode": ctx_mode, "n": n, "count": len(resolved_refs)},
-                    "result": "expanded"
+                    "target": "context.refs",
+                    "params": {
+                        "mode": ctx_mode,
+                        "n": n,
+                        "count": len(resolved_refs),
+                        "result": "expanded",
+                    },
                 })
 
     # 2. Explicit Resolution (if no auto refs)

@@ -1,10 +1,23 @@
 # Changelog
 
-## v0.4.1 — Context Injection Fix
 
-- **Execution Pipeline**: `model_messages` (assembled context with system block) are now correctly passed to the execution port.
-- **Ingress Logic**: Fixed a bug where `declared_refs` were lost during payload shaping (`_shape_payload` whitelist updated).
-- **Provider Interface**: OpenAI provider `execute()` method updated to accept `messages` list, enabling structured system context injection.
+
+## v0.4.1 — Context, Performance & Ollama
+ 
+**Capabilities & Performance**
+- **Non-blocking Capabilities**: `get_capabilities` is now async/threaded with TTL caching (60s), preventing event loop freeze during provider discovery.
+- **Ollama Integration**: Full support for remote Ollama instances via `OLLAMA_HOST` (e.g., `http://10.x.x.x:11434`). Includes automatic discovery and model execution.
+- **Resilient Discovery**: Timeout handling improved (cache + short network timeout) to ensure the gateway remains "snappy" even if providers are unreachable.
+ 
+**Context Injection**
+- **Declarative `context_mode`**: New parameter `context_mode="first_plus_last_n"` (default) automatically assembles thread history into `declared_refs`.
+- **Deterministic Assembly**: Gateway expands context policies into explicit `declared_refs`, preserving the "Audit = Replay" invariant.
+- **Model Messages**: Execution pipeline now passes structured `model_messages` (System + User + Context) to providers instead of flattening to string.
+ 
+**Contract & Guards**
+- **Transform Hardening**: Fixed a contract violation where `transform.target` could be empty. All transforms now enforce stable, non-empty targets.
+- **Env Hygiene**: Consolidated Ollama configuration to `OLLAMA_HOST` (discovery) and strict audit logging.
+
 
 ## v0.4.0 — Safe Context
 

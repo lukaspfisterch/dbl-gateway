@@ -10,13 +10,14 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from dbl_core.normalize.trace import sanitize_trace
 from dbl_core.events.trace_digest import trace_digest
 
 from .admission import admit_and_shape_intent, AdmissionFailure
-from .capabilities import CapabilitiesResponse, get_capabilities, resolve_model, resolve_provider
+from .capabilities import CapabilitiesResponse, get_capabilities_cached, resolve_model, resolve_provider, get_capabilities
 from .adapters.execution_adapter_kl import KlExecutionAdapter
 from .adapters.policy_adapter_dbl_policy import DblPolicyAdapter, _load_policy
 from .context_builder import build_context_with_refs
@@ -121,7 +122,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
     async def capabilities(request: Request) -> dict[str, object]:
         actor = await _require_actor(request)
         _require_role(actor, ["gateway.snapshot.read"])
-        return get_capabilities()
+        return await run_in_threadpool(get_capabilities_cached)
 
     @app.post("/ingress/intent")
     async def ingress_intent(request: Request, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
@@ -790,6 +791,7 @@ def _audit_env() -> None:
         "PERPLEXITY_API_KEY",
         "OPENROUTER_API_KEY",
         "OLLAMA_HOST",
+        "OLLAMA_BASE_URL",
         "VLLM_ENDPOINT",
         "LMSTUDIO_API_KEY",
         "ANY_API_KEY",

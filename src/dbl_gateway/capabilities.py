@@ -2,12 +2,21 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import os
+import time
 from typing import Any
 import httpx
+import logging
+
+_LOGGER = logging.getLogger(__name__)
 
 from pydantic import BaseModel
 
 from .wire_contract import INTERFACE_VERSION
+
+# Global TTL cache for capabilities
+# Structure: {"value": dict, "expires_at": float}
+_CAPS_CACHE: dict[str, Any] = {}
+_CAPS_TTL_SECONDS = 60.0
 
 class CapabilitiesHealth(BaseModel):
     status: str
@@ -48,6 +57,25 @@ class CapabilitiesResponse(BaseModel):
     interface_version: int
     providers: list[CapabilitiesProvider]
     surfaces: CapabilitiesSurfaces
+
+
+def get_capabilities_cached() -> dict[str, object]:
+    """
+    Cached version of get_capabilities with TTL.
+    This should be called via run_in_threadpool if used in async context
+    to avoid blocking the event loop on cache misses.
+    """
+    now = time.time()
+    cached = _CAPS_CACHE.get("value")
+    expires = _CAPS_CACHE.get("expires_at", 0)
+
+    if cached is not None and now < expires:
+        return cached
+
+    caps = get_capabilities()
+    _CAPS_CACHE["value"] = caps
+    _CAPS_CACHE["expires_at"] = now + _CAPS_TTL_SECONDS
+    return caps
 
 
 def get_capabilities() -> dict[str, object]:
@@ -163,7 +191,7 @@ def _ollama_models_all() -> list[str]:
         return models
     
     # Try dynamic discovery
-    base = os.getenv("OLLAMA_BASE_URL")
+    base = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST")
     if not base:
         return []
         
@@ -179,12 +207,16 @@ def _ollama_models_all() -> list[str]:
 
 
 def _discover_ollama(checked_at: str) -> dict[str, Any] | None:
-    base = os.getenv("OLLAMA_BASE_URL")
+    base = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST")
     if not base:
         return None
+    if not base.startswith(("http://", "https://")):
+        base = f"http://{base}"
+    _LOGGER.info("ollama discovery base_url=%s", base)
     try:
-        with httpx.Client(timeout=5.0) as c:
+        with httpx.Client(timeout=2.0) as c:
             r = c.get(base.rstrip("/") + "/api/tags")
+            _LOGGER.info("ollama tags status=%s", r.status_code)
             if r.status_code >= 400:
                 return None
             tags = r.json().get("models", [])
@@ -211,7 +243,8 @@ def _discover_ollama(checked_at: str) -> dict[str, Any] | None:
             if not models:
                 return None
             return {"id": "ollama", "models": models}
-    except Exception:
+    except Exception as exc:
+        _LOGGER.warning("ollama discovery failed: %s", exc)
         return None
 
 

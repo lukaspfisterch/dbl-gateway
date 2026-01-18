@@ -5,7 +5,10 @@ import httpx
 from .errors import ProviderError
 
 def _base_url() -> str:
-    return os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+    val = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST")
+    if val and not val.startswith(("http://", "https://")):
+        val = f"http://{val}"
+    return (val or "http://localhost:11434").rstrip("/")
 
 def execute(*, model_id: str, messages: list[dict[str, str]], base_url: str | None = None, **_: Any) -> str:
     url = f"{(base_url or _base_url())}/api/chat"
