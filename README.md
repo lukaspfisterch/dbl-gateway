@@ -5,6 +5,9 @@
 ![License](https://img.shields.io/github/license/lukaspfisterch/dbl-gateway)
 [![PyPI version](https://img.shields.io/pypi/v/dbl-gateway.svg)](https://pypi.org/project/dbl-gateway/)
 
+> **Looking for the full end-to-end demo?**
+> See [dbl-stack](https://github.com/lukaspfisterch/dbl-stack) for a one-command setup including UI and observer.
+
 
 DBL Gateway is a deterministic execution boundary for LLM calls.
 
