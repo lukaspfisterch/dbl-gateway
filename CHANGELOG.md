@@ -1,9 +1,5 @@
 # Changelog
 
-## Unreleased (local; will be cleaned before next push)
-- **LLM Max Tokens**: Allow `OPENAI_MAX_TOKENS` and `ANTHROPIC_MAX_TOKENS` to override provider defaults.
-- **OpenAI Param Routing**: Use responses API for `gpt-5*` and switch to `max_completion_tokens` for newer chat models that reject `max_tokens`.
-
 ## v0.5.0 — Controlled Multi-User Execution & Job-Oriented Runtime
 - **Typed Jobs**: Internal job model for request execution with per-type queues and status reporting.
 - **Concurrency Gates**: Per-job-type semaphores (ingest/embed/index/LLM) with strict LLM provider-call gating.
