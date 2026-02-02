@@ -6,10 +6,24 @@ build-backend = "setuptools.build_meta"
 name = "dbl-gateway"
 version = "0.5.0"
 description = "DBL Gateway"
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
-license = { text = "MIT" }
-
+license = "MIT"
+authors = [
+  { name = "Lukas Pfister", email = "228201683+lukaspfisterch@users.noreply.github.com" }
+]
+keywords = ["dbl", "gateway", "llm", "policy", "deterministic", "audit"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Internet :: WWW/HTTP"
+]
 dependencies = [
   "dbl-core>=0.3.2,<0.4.0",
   "dbl-policy>=0.2.0,<0.3.0",
@@ -20,6 +34,14 @@ dependencies = [
   "uvicorn>=0.27.0",
   "httpx>=0.27.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/lukaspfisterch/dbl-gateway"
+Repository = "https://github.com/lukaspfisterch/dbl-gateway"
+Issues = "https://github.com/lukaspfisterch/dbl-gateway/issues"
+
+[project.license-files]
+paths = ["LICENSE"]
 
 [project.scripts]
 dbl-gateway = "dbl_gateway.app:main"
@@ -37,7 +59,6 @@ oidc = [
 
 [tool.setuptools]
 package-dir = { "" = "src" }
-license-files = ["LICENSE"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
