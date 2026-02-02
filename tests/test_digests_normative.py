@@ -9,7 +9,8 @@ from dbl_gateway.event_builder import make_event
 def _decision_base():
     return {
         "policy": {"policy_id": "p.core", "policy_version": "1.0.0"},
-        "context_digest": "sha256:" + ("0" * 64),
+        "assembly_digest": "sha256:" + ("1" * 64),
+        "context_digest": "sha256:" + ("1" * 64),
         "result": "ALLOW",
         "reasons": [{"code": "ALLOW.BASELINE"}],
         "transforms": [],

@@ -22,7 +22,7 @@ This is **not**:
 
 The gateway does not decide *what* to do. It decides *whether* an explicitly declared action may execute.
 
-## Supported Providers (v0.4.x)
+## Supported Providers (v0.5.x)
 
 The gateway supports multiple LLM providers through a unified execution contract.
 
@@ -156,7 +156,7 @@ docker run --rm -p 8010:8010 \
   -e OPENAI_API_KEY="sk-..." \
   -e DBL_GATEWAY_POLICY_MODULE="dbl_policy.allow_all" \
   -e DBL_GATEWAY_POLICY_OBJECT="policy" \
-  lukaspfister/dbl-gateway:0.4.3
+  lukaspfister/dbl-gateway:0.5.0
 ```
 
 ---
@@ -193,6 +193,16 @@ OLLAMA_MODEL_IDS="qwen2.5-coder:7b,llama3.2:latest,deepseek-r1:8b"
 | DBL_GATEWAY_POLICY_OBJECT | Policy object name (default: `POLICY`) |
 | OPENAI_BASE_URL | Custom OpenAI-compatible endpoint |
 
+#### Job Runtime (v0.5.0)
+| Variable | Description |
+|---|---|
+| DBL_JOB_QUEUE_MAX | Max queued jobs per type (default: 100) |
+| DBL_JOB_CONCURRENCY_INGEST | Max concurrent `case.ingest` (default: 2) |
+| DBL_JOB_CONCURRENCY_EMBED | Max concurrent `case.embed` (default: 1) |
+| DBL_JOB_CONCURRENCY_INDEX | Max concurrent `case.index` (default: 1) |
+| DBL_JOB_CONCURRENCY_LLM | Max concurrent `chat.message` provider calls (default: 1) |
+| DBL_LLM_WALL_CLOCK_S | LLM wall-clock timeout seconds (default: 60) |
+
 ### Start Command
 ```bash
 dbl-gateway serve --host 127.0.0.1 --port 8010
@@ -209,6 +219,13 @@ Returns a point-in-time state of the event log. Suitable for audits and offline 
 A live SSE stream of events. 
 - `since`: Start streaming from a specific event index.
 - `backlog`: Number of recent events to emit on connect (default: 20).
+
+### Status (`/status`)
+Returns runtime status plus job runtime metrics:
+- `job_runtime.queue_sizes` per job type
+- `job_runtime.active_counts` per job type
+- `job_runtime.queue_max`
+- `job_runtime.llm.queue_position` (per requesting user)
 
 ---
 

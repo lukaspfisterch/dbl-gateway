@@ -529,10 +529,55 @@ def test_decision_normative_shape(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         decision = [event for event in snap["events"] if event["kind"] == "DECISION"][-1]
         payload = decision["payload"]
         assert "policy" in payload and isinstance(payload["policy"], dict)
-        assert "context_digest" in payload and isinstance(payload["context_digest"], str)
+        assert "assembly_digest" in payload and isinstance(payload["assembly_digest"], str)
+        assert payload["assembly_digest"] != "sha256:" + ("0" * 64)
+        assert "context_digest" in payload
+        if payload["result"] == "ALLOW":
+            assert isinstance(payload["context_digest"], str)
+            assert payload["context_digest"] != "sha256:" + ("0" * 64)
+        else:
+            assert payload["context_digest"] is None
         assert "result" in payload and payload["result"] in {"ALLOW", "DENY"}
         assert "reasons" in payload and isinstance(payload["reasons"], list)
         assert "transforms" in payload and isinstance(payload["transforms"], list)
+
+    run_with_client(app, scenario)
+
+
+def test_policy_evaluation_error_sets_error_ref(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    monkeypatch.setenv("DBL_GATEWAY_POLICY_MODULE", "policy_raises")
+    monkeypatch.setenv("DBL_GATEWAY_POLICY_OBJECT", "policy")
+    app = create_app(start_workers=True)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        await client.post("/ingress/intent", json=_intent_envelope("hello"))
+        decision = None
+        snap = None
+        for _ in range(40):
+            snap = (await client.get("/snapshot")).json()
+            decisions = [event for event in snap["events"] if event["kind"] == "DECISION"]
+            if decisions:
+                decision = decisions[-1]
+                break
+            await asyncio.sleep(0.05)
+        assert decision is not None
+        payload = decision["payload"]
+        assert payload["decision"] == "DENY"
+        assert payload["reason_codes"] == ["evaluation_error"]
+        assert payload["context_digest"] is None
+        assert isinstance(payload.get("assembly_digest"), str)
+        assert payload.get("assembly_digest") != "sha256:" + ("0" * 64)
+        error_ref = payload.get("error_ref")
+        assert isinstance(error_ref, str) and error_ref
+        assert snap is not None
+        artifact_events = [
+            event for event in snap["events"]
+            if event["kind"] == "PROOF" and event.get("payload", {}).get("artifact_id") == error_ref
+        ]
+        assert artifact_events
+        artifact_payload = artifact_events[-1]["payload"]
+        assert artifact_payload.get("stage") == "policy"
 
     run_with_client(app, scenario)
 

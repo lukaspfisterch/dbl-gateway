@@ -36,7 +36,8 @@ class DecisionTransform(TypedDict, total=False):
 
 class DecisionNormative(TypedDict):
     policy: PolicyIdent
-    context_digest: str
+    assembly_digest: str | None
+    context_digest: str | None
     result: str
     reasons: list[DecisionReason]
     transforms: list[DecisionTransform]
@@ -124,7 +125,14 @@ def normalize_sha256_hex(value: str) -> str:
 
 def decision_digest(decision: Mapping[str, Any]) -> str:
     # Only normative fields count toward the digest.
-    required_fields = {"policy", "context_digest", "result", "reasons", "transforms"}
+    required_fields = {
+        "policy",
+        "assembly_digest",
+        "context_digest",
+        "result",
+        "reasons",
+        "transforms",
+    }
     missing = [f for f in required_fields if f not in decision]
     if missing:
         raise ValueError(f"DecisionNormative missing fields: {', '.join(missing)}")
@@ -180,9 +188,17 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
         raise ValueError("policy.policy_id must be a non-empty string")
     if not isinstance(policy_version, str) or not policy_version.strip():
         raise ValueError("policy.policy_version must be a non-empty string")
+    assembly_digest_value = decision.get("assembly_digest")
+    if assembly_digest_value is not None:
+        if not isinstance(assembly_digest_value, str) or not assembly_digest_value.strip():
+            raise ValueError("assembly_digest must be a non-empty string or null")
+        assembly_digest_value = normalize_sha256_hex(assembly_digest_value.strip())
+
     context_digest_value = decision.get("context_digest")
-    if not isinstance(context_digest_value, str) or not context_digest_value.strip():
-        raise ValueError("context_digest must be a non-empty string")
+    if context_digest_value is not None:
+        if not isinstance(context_digest_value, str) or not context_digest_value.strip():
+            raise ValueError("context_digest must be a non-empty string or null")
+        context_digest_value = normalize_sha256_hex(context_digest_value.strip())
     result = decision.get("result")
     if result not in ("ALLOW", "DENY"):
         raise ValueError("result must be ALLOW or DENY")
@@ -233,7 +249,8 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
 
     return {
         "policy": {"policy_id": policy_id.strip(), "policy_version": policy_version.strip()},
-        "context_digest": context_digest_value.strip(),
+        "assembly_digest": assembly_digest_value,
+        "context_digest": context_digest_value,
         "result": result,
         "reasons": norm_reasons,
         "transforms": norm_transforms,

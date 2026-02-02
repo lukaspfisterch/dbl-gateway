@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dbl-gateway"
-version = "0.4.3"
+version = "0.5.0"
 description = "DBL Gateway"
 readme = "README.md"
 requires-python = ">=3.11"

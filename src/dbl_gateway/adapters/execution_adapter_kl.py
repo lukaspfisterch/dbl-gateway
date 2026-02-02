@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -19,6 +20,8 @@ class KlExecutionAdapter(ExecutionPort):
         intent_event: Mapping[str, Any],
         *,
         model_messages: Sequence[Mapping[str, str]] | None = None,
+        llm_semaphore: asyncio.Semaphore | None = None,
+        llm_wall_clock_s: int | None = None,
     ) -> ExecutionResult:
         payload = intent_event.get("payload")
         if not isinstance(payload, Mapping):
@@ -58,7 +61,14 @@ class KlExecutionAdapter(ExecutionPort):
         
         call = _select_provider(provider)
         try:
-            output_text, trace, trace_digest, error = await _call_kernel(messages, resolved_model, provider, call)
+            output_text, trace, trace_digest, error = await _execute_llm_call(
+                messages,
+                resolved_model,
+                provider,
+                call,
+                llm_semaphore=llm_semaphore,
+                llm_wall_clock_s=llm_wall_clock_s,
+            )
             return ExecutionResult(
                 output_text=output_text,
                 provider=provider,
@@ -66,6 +76,16 @@ class KlExecutionAdapter(ExecutionPort):
                 trace=trace,
                 trace_digest=trace_digest,
                 error=error,
+            )
+        except asyncio.TimeoutError:
+            return ExecutionResult(
+                provider=provider,
+                model_id=resolved_model,
+                error={
+                    "provider": provider,
+                    "code": "llm.timeout",
+                    "message": f"wall clock exceeded {llm_wall_clock_s}s",
+                },
             )
         except Exception:
             return ExecutionResult(
@@ -170,6 +190,37 @@ async def _call_kernel(messages: list[dict[str, str]], model_id: str, provider: 
     else:
         trace = _run_kernel_sync(messages, model_id, provider, provider_call)
     return _normalize_kernel_trace(trace, provider, model_id)
+
+
+async def _execute_llm_call(
+    messages: list[dict[str, str]],
+    model_id: str,
+    provider: str,
+    provider_call,
+    *,
+    llm_semaphore: asyncio.Semaphore | None,
+    llm_wall_clock_s: int | None,
+):
+    async def _run():
+        return await _call_kernel(messages, model_id, provider, provider_call)
+
+    async def _run_with_timeout():
+        if llm_wall_clock_s and llm_wall_clock_s > 0:
+            task = asyncio.create_task(_run())
+            try:
+                return await asyncio.wait_for(task, timeout=llm_wall_clock_s)
+            except asyncio.TimeoutError:
+                task.cancel()
+                with suppress(Exception):
+                    await task
+                raise
+        return await _run()
+
+    if llm_semaphore is None:
+        return await _run_with_timeout()
+
+    async with llm_semaphore:
+        return await _run_with_timeout()
 
 
 def _extract_message(payload: Mapping[str, Any]) -> str | None:

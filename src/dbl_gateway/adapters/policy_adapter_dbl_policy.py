@@ -29,6 +29,7 @@ class ObserverPolicy:
             reason_code="gateway.observer_mode",
             policy_id=PolicyId("observer"),
             policy_version=PolicyVersion("1"),
+            tenant_id=context.tenant_id,
         )
 
 

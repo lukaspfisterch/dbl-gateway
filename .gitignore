@@ -1,8 +1,11 @@
 # Local workflow
 inventory_*.md
+inventory_summary.json
 agents.md
 git.md
 SESSION_NOTES.md
+.env
+env_loader.ps1
 
 # OS / editor
 Thumbs.db

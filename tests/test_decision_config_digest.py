@@ -52,7 +52,8 @@ def make_decision_payload(
     """Build a DECISION payload mimicking what app.py does."""
     normative = build_normative_decision(
         decision,
-        context_digest=artifacts.context_digest,
+        assembly_digest=artifacts.context_digest,
+        context_digest=artifacts.context_digest if decision.decision == "ALLOW" else None,
         transforms=artifacts.transforms,
     )
     payload: dict[str, Any] = {

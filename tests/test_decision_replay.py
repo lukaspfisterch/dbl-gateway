@@ -49,6 +49,7 @@ def test_decision_replay_matches_digest(tmp_path: Path, monkeypatch: pytest.Monk
         requested_model_id=None,
         resolved_model_id=None,
         provider=None,
+        assembly_digest=context_artifacts.context_digest,
         context_digest=context_artifacts.context_digest,
         boundary={
             "context_digest": context_artifacts.context_digest,
@@ -128,7 +129,8 @@ def test_replay_fails_when_context_artifacts_missing(tmp_path: Path) -> None:
             "policy": {"policy_id": "p.test", "policy_version": "1"},
             "policy_id": "p.test",
             "policy_version": "1",
-            "context_digest": "sha256:" + ("0" * 64),
+            "assembly_digest": "sha256:" + ("1" * 64),
+            "context_digest": "sha256:" + ("1" * 64),
         },
     )
     with pytest.raises(DecisionReplayError) as excinfo:

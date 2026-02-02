@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, Sequence
 
@@ -20,6 +21,8 @@ class ExecutionPort(Protocol):
         intent_event: Mapping[str, Any],
         *,
         model_messages: Sequence[Mapping[str, str]] | None = None,
+        llm_semaphore: asyncio.Semaphore | None = None,
+        llm_wall_clock_s: int | None = None,
     ) -> ExecutionResult:
         """
         Execute the intent.
@@ -29,6 +32,7 @@ class ExecutionPort(Protocol):
             model_messages: Optional pre-assembled messages from context builder.
                            If provided, these are used instead of extracting from payload.
                            This ensures declared_refs content flows into execution.
+            llm_semaphore: Optional semaphore to gate provider calls.
+            llm_wall_clock_s: Optional wall clock timeout for provider calls.
         """
         ...
-

@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import time
+import traceback
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -410,6 +411,7 @@ async def _process_intent(
 ) -> None:
     thread_id, turn_id, parent_turn_id = _anchors_for_event(intent_event)
     decision_emitted = False
+    assembly_digest: str | None = None
     context_digest: str | None = None
     context_config_digest: str | None = None  # NEW: Config digest for DECISION
     boundary_context: dict[str, Any] | None = None
@@ -422,27 +424,46 @@ async def _process_intent(
         # Fetch thread events for ref resolution
         thread_events = app.state.store.timeline(thread_id=thread_id)
         
-        context_artifacts = build_context_with_refs(
-            authoritative.get("payload"),
-            intent_type=str(authoritative.get("intent_type") or ""),
-            thread_events=thread_events,
-        )
-        context_digest = context_artifacts.context_digest
-        context_config_digest = context_artifacts.config_digest  # NEW: Extract config digest
-        context_transforms = list(context_artifacts.transforms)
-        context_spec = context_artifacts.context_spec
-        assembled_context = context_artifacts.assembled_context
-        boundary_context = {
-            "context_digest": context_digest,
-            "context_spec": context_spec,
-            "assembled_context": assembled_context,
-            "admitted_model_messages": assembled_context.get("model_messages", []),
-            "meta": context_artifacts.boundary_meta,
-        }
         try:
-            decision = app.state.policy.decide(authoritative)
+            context_artifacts = build_context_with_refs(
+                authoritative.get("payload"),
+                intent_type=str(authoritative.get("intent_type") or ""),
+                thread_events=thread_events,
+            )
+            assembly_digest = context_artifacts.context_digest
+            context_config_digest = context_artifacts.config_digest  # NEW: Extract config digest
+            context_transforms = list(context_artifacts.transforms)
+            context_spec = context_artifacts.context_spec
+            assembled_context = context_artifacts.assembled_context
+            boundary_context = {
+                "context_digest": assembly_digest,
+                "context_spec": context_spec,
+                "assembled_context": assembled_context,
+                "admitted_model_messages": assembled_context.get("model_messages", []),
+                "meta": context_artifacts.boundary_meta,
+            }
         except Exception as exc:
-            _LOGGER.exception("policy decision failed: %s", exc)
+            _LOGGER.exception("context assembly failed: %s", exc)
+            error_ref = _emit_policy_error_artifact(
+                app,
+                thread_id=thread_id,
+                turn_id=turn_id,
+                parent_turn_id=parent_turn_id,
+                lane=authoritative["lane"],
+                actor="gateway",
+                intent_type=authoritative["intent_type"],
+                stream_id=authoritative["stream_id"],
+                correlation_id=correlation_id,
+                trace_id=trace_id,
+                stage="assembly",
+                error=exc,
+                stacktrace=traceback.format_exc(),
+                partial_inputs={
+                    "thread_id": thread_id,
+                    "turn_id": turn_id,
+                    "correlation_id": correlation_id,
+                },
+            )
             app.state.store.append(
                 kind="DECISION",
                 thread_id=thread_id,
@@ -456,7 +477,60 @@ async def _process_intent(
                 payload=_decision_payload(
                     DecisionResult(decision="DENY", reason_codes=["evaluation_error"]),
                     trace_id,
-                    context_digest=context_digest,
+                    assembly_digest=None,
+                    context_digest=None,
+                    error_ref=error_ref,
+                    context_config_digest=None,
+                    boundary=None,
+                    requested_model_id=None,
+                    resolved_model_id=None,
+                    provider=None,
+                    transforms=[],
+                    context_spec=None,
+                    assembled_context=None,
+                ),
+            )
+            return
+        try:
+            decision = app.state.policy.decide(authoritative)
+        except Exception as exc:
+            _LOGGER.exception("policy decision failed: %s", exc)
+            error_ref = _emit_policy_error_artifact(
+                app,
+                thread_id=thread_id,
+                turn_id=turn_id,
+                parent_turn_id=parent_turn_id,
+                lane=authoritative["lane"],
+                actor="gateway",
+                intent_type=authoritative["intent_type"],
+                stream_id=authoritative["stream_id"],
+                correlation_id=correlation_id,
+                trace_id=trace_id,
+                stage="policy",
+                error=exc,
+                stacktrace=traceback.format_exc(),
+                partial_inputs={
+                    "thread_id": thread_id,
+                    "turn_id": turn_id,
+                    "correlation_id": correlation_id,
+                },
+            )
+            app.state.store.append(
+                kind="DECISION",
+                thread_id=thread_id,
+                turn_id=turn_id,
+                parent_turn_id=parent_turn_id,
+                lane=authoritative["lane"],
+                actor="policy",
+                intent_type=authoritative["intent_type"],
+                stream_id=authoritative["stream_id"],
+                correlation_id=correlation_id,
+                payload=_decision_payload(
+                    DecisionResult(decision="DENY", reason_codes=["evaluation_error"]),
+                    trace_id,
+                    assembly_digest=assembly_digest,
+                    context_digest=None,
+                    error_ref=error_ref,
                     context_config_digest=context_config_digest,
                     boundary=boundary_context,
                     requested_model_id=None,
@@ -505,7 +579,8 @@ async def _process_intent(
                 requested_model_id=requested_model or None,
                 resolved_model_id=resolved_model or None,
                 provider=provider,
-                context_digest=context_digest,
+                assembly_digest=assembly_digest,
+                context_digest=assembly_digest if decision.decision == "ALLOW" else None,
                 context_config_digest=context_config_digest,
                 boundary=boundary_context,
                 resolution_reason=resolution_reason,
@@ -535,7 +610,7 @@ async def _process_intent(
                 trace_id,
                 requested_model_id=requested_model or None,
                 resolved_model_id=resolved_model or None,
-                context_digest=context_digest,
+                context_digest=assembly_digest,
                 boundary=boundary_context,
             )
         except Exception as exc:
@@ -562,8 +637,8 @@ async def _process_intent(
                 "trace": trace,
                 "trace_digest": trace_digest_value,
             }
-            if context_digest:
-                payload["context_digest"] = context_digest
+            if assembly_digest:
+                payload["context_digest"] = assembly_digest
             _attach_boundary_obs(payload, boundary_context, trace_id)
 
         app.state.store.append(
@@ -582,6 +657,26 @@ async def _process_intent(
         _LOGGER.exception("intent processing failed: %s", exc)
         if decision_emitted:
             return
+        error_ref = _emit_policy_error_artifact(
+            app,
+            thread_id=thread_id,
+            turn_id=turn_id,
+            parent_turn_id=parent_turn_id,
+            lane=intent_event["lane"],
+            actor="gateway",
+            intent_type=intent_event["intent_type"],
+            stream_id=intent_event["stream_id"],
+            correlation_id=correlation_id,
+            trace_id=trace_id,
+            stage="processing",
+            error=exc,
+            stacktrace=traceback.format_exc(),
+            partial_inputs={
+                "thread_id": thread_id,
+                "turn_id": turn_id,
+                "correlation_id": correlation_id,
+            },
+        )
         app.state.store.append(
             kind="DECISION",
             thread_id=thread_id,
@@ -595,7 +690,9 @@ async def _process_intent(
             payload=_decision_payload(
                 DecisionResult(decision="DENY", reason_codes=["evaluation_error"]),
                 trace_id,
-                context_digest=context_digest,
+                assembly_digest=assembly_digest,
+                context_digest=None,
+                error_ref=error_ref,
                 context_config_digest=context_config_digest,
                 boundary=boundary_context,
                 requested_model_id=None,
@@ -616,15 +713,18 @@ def _decision_payload(
     resolved_model_id: str | None,
     provider: str | None,
     resolution_reason: str | None = None,
+    assembly_digest: str | None = None,
     context_digest: str | None = None,
     context_config_digest: str | None = None,  # NEW: Config digest for replay
     boundary: Mapping[str, Any] | None = None,
     transforms: Sequence[Mapping[str, Any]] | None = None,
     context_spec: Mapping[str, Any] | None = None,
     assembled_context: Mapping[str, Any] | None = None,
+    error_ref: str | None = None,
 ) -> dict[str, Any]:
     normative = build_normative_decision(
         decision,
+        assembly_digest=assembly_digest,
         context_digest=context_digest,
         transforms=transforms,
     )
@@ -635,6 +735,8 @@ def _decision_payload(
         "policy_version": normative["policy"]["policy_version"],
         **normative,
     }
+    if error_ref:
+        payload["error_ref"] = error_ref
     if context_spec is not None:
         payload["context_spec"] = context_spec
     if assembled_context is not None:
@@ -663,6 +765,52 @@ def _decision_payload(
             payload["_obs"] = obs
         obs["resolution_reason"] = resolution_reason
     return payload
+
+
+def _emit_policy_error_artifact(
+    app: FastAPI,
+    *,
+    thread_id: str,
+    turn_id: str,
+    parent_turn_id: str | None,
+    lane: str,
+    actor: str,
+    intent_type: str,
+    stream_id: str,
+    correlation_id: str,
+    trace_id: str,
+    stage: str,
+    error: Exception,
+    stacktrace: str | None,
+    partial_inputs: Mapping[str, Any] | None,
+) -> str:
+    artifact_id = f"err-{uuid.uuid4().hex}"
+    payload: dict[str, Any] = {
+        "artifact_id": artifact_id,
+        "name": "policy.evaluation_error.v1.json",
+        "trace_id": trace_id,
+        "thread_id": thread_id,
+        "turn_id": turn_id,
+        "stage": stage,
+        "error_type": type(error).__name__,
+        "error_message": str(error),
+        "partial_inputs": dict(partial_inputs or {}),
+    }
+    if stacktrace:
+        payload["stacktrace"] = stacktrace
+    app.state.store.append(
+        kind="PROOF",
+        thread_id=thread_id,
+        turn_id=turn_id,
+        parent_turn_id=parent_turn_id,
+        lane=lane,
+        actor=actor,
+        intent_type=intent_type,
+        stream_id=stream_id,
+        correlation_id=correlation_id,
+        payload=payload,
+    )
+    return artifact_id
 
 
 def _execution_payload(

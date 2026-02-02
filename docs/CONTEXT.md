@@ -12,7 +12,8 @@ This document describes how context is handled in the gateway, including the sep
 | `resolved_refs` | Gateway-validated references with metadata (event_index, event_digest, admitted_for) |
 | `normative_inputs` | INTENT events admitted for governance (policy input) |
 | `execution_only` | EXECUTION events admitted only for prompt construction, excluded from governance |
-| `context_digest` | SHA256 over context_spec + assembled_context (deterministic identifier) |
+| `assembly_digest` | SHA256 over context_spec + assembled_context (deterministic identifier) |
+| `context_digest` | Digest of final allowed model payload (ALLOW only; null on DENY) |
 | `context_config_digest` | SHA256 over the context configuration (pinned in DECISION) |
 | `I_context` | Normative context inputs (only INTENT payloads) |
 | `O_context` | Observational context (EXECUTION outputs, post-decision only) |
@@ -24,13 +25,13 @@ The fundamental principle: **Observations must not influence governance decision
 ### I_context (Normative)
 - Contains only INTENT event payloads
 - Used for policy evaluation (G)
-- Included in `context_digest` computation
+- Included in `assembly_digest` computation
 - Digests stored in `normative_input_digests`
 
 ### O_context (Observational)
 - Contains EXECUTION event outputs (LLM responses)
 - Used only for prompt construction **after** DECISION
-- Excluded from `context_digest` computation
+- Excluded from `assembly_digest` computation
 - Marked as `admitted_for: "execution_only"`
 
 ### Example 1: Chat History
@@ -80,7 +81,7 @@ This ensures the LLM has conversational memory (O_context) while the policy rema
 
 ## Digest Scope
 
-### Included in `context_digest`
+### Included in `assembly_digest`
 
 | Component | Reason |
 |-----------|--------|
@@ -92,7 +93,7 @@ This ensures the LLM has conversational memory (O_context) while the policy rema
 | `assembly_rules` (schema_version, ordering) | Determinism parameters |
 | `normative_input_digests` | INTENT payload digests |
 
-### Excluded from `context_digest`
+### Excluded from `assembly_digest`
 
 | Component | Reason |
 |-----------|--------|
@@ -106,7 +107,7 @@ This ensures the LLM has conversational memory (O_context) while the policy rema
 ### Stream Replay
 - All events available in the event stream
 - Refs resolved against stream
-- `context_digest` recomputed and compared
+- `assembly_digest` recomputed and compared
 
 ### Ledger Replay
 - Stream projected into database
@@ -119,7 +120,8 @@ This ensures the LLM has conversational memory (O_context) while the policy rema
 |-----------|---------------------|
 | Same config was used | `DECISION.boundary.context_config_digest == reloaded_config.digest` |
 | Same refs were resolved | `DECISION.context_spec.retrieval.resolved_refs` contains event_digests |
-| Same context was assembled | `recompute(context_spec, assembled_context) == stored.context_digest` |
+| Same context was assembled | `recompute(context_spec, assembled_context) == stored.assembly_digest` |
+| Final payload digest present only for ALLOW | `stored.context_digest != null` |
 | No observation leaked | `normative_input_digests` contains only INTENT digests |
 
 ## Failure Modes
@@ -130,6 +132,7 @@ This ensures the LLM has conversational memory (O_context) while the policy rema
 | Cross-thread reference | `CROSS_THREAD_REF` | Referenced event belongs to different thread | Client must only reference events in current thread |
 | Too many references | `MAX_REFS_EXCEEDED` | declared_refs.length > config.max_refs | Client must respect limits |
 | Empty refs policy | `EMPTY_REFS_DENIED` | declared_refs is empty and policy is DENY | Client must provide at least one ref (or config must allow empty) |
+| Policy evaluation error | `evaluation_error` | Policy evaluation raised an exception | DECISION includes `error_ref` pointing to a PROOF artifact |
 
 ## Configuration
 
@@ -161,7 +164,7 @@ The config digest is computed once at startup and pinned in every DECISION event
 3. **Config pinned via digest**: Every DECISION contains `boundary.context_config_digest`
 4. **Canonical ordering**: Refs are sorted by `event_index` regardless of client order
 5. **Scope-bound refs**: All refs must belong to the same thread_id
-6. **Replay recompute equality**: `recompute(stored_inputs) == stored_digest`
+6. **Replay recompute equality**: `recompute(stored_inputs) == stored.assembly_digest`
 
 ## Not Supported (Explicit Non-Goals)
 

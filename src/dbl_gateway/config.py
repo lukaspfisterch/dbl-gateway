@@ -17,7 +17,14 @@ from dbl_core.events.canonical import canonicalize_value, json_dumps
 from hashlib import sha256
 
 
-__all__ = ["ContextConfig", "load_context_config", "get_context_config"]
+__all__ = [
+    "ContextConfig",
+    "JobRuntimeConfig",
+    "load_context_config",
+    "get_context_config",
+    "load_job_runtime_config",
+    "get_job_runtime_config",
+]
 
 DEFAULT_CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "context.json"
 
@@ -163,3 +170,47 @@ def get_context_config() -> ContextConfig:
 def reset_config_cache() -> None:
     """Reset config cache. Only for testing."""
     get_context_config.cache_clear()
+
+
+@dataclass(frozen=True)
+class JobRuntimeConfig:
+    queue_max: int
+    concurrency_ingest: int
+    concurrency_embed: int
+    concurrency_index: int
+    concurrency_llm: int
+    llm_wall_clock_s: int
+
+
+def _read_int_env(names: list[str], *, default: int, minimum: int = 1) -> int:
+    for name in names:
+        raw = os.getenv(name, "").strip()
+        if not raw:
+            continue
+        try:
+            value = int(raw)
+        except ValueError:
+            continue
+        return max(minimum, value)
+    return max(minimum, default)
+
+
+def load_job_runtime_config() -> JobRuntimeConfig:
+    queue_max = _read_int_env(
+        ["DBL_JOB_QUEUE_MAX", "DBL_GATEWAY_WORK_QUEUE_MAX"],
+        default=100,
+        minimum=1,
+    )
+    return JobRuntimeConfig(
+        queue_max=queue_max,
+        concurrency_ingest=_read_int_env(["DBL_JOB_CONCURRENCY_INGEST"], default=2, minimum=1),
+        concurrency_embed=_read_int_env(["DBL_JOB_CONCURRENCY_EMBED"], default=1, minimum=1),
+        concurrency_index=_read_int_env(["DBL_JOB_CONCURRENCY_INDEX"], default=1, minimum=1),
+        concurrency_llm=_read_int_env(["DBL_JOB_CONCURRENCY_LLM"], default=1, minimum=1),
+        llm_wall_clock_s=_read_int_env(["DBL_LLM_WALL_CLOCK_S"], default=60, minimum=1),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_job_runtime_config() -> JobRuntimeConfig:
+    return load_job_runtime_config()

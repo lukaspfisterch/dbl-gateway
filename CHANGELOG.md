@@ -1,6 +1,16 @@
 # Changelog
 
+## Unreleased (local; will be cleaned before next push)
+- **LLM Max Tokens**: Allow `OPENAI_MAX_TOKENS` and `ANTHROPIC_MAX_TOKENS` to override provider defaults.
+- **OpenAI Param Routing**: Use responses API for `gpt-5*` and switch to `max_completion_tokens` for newer chat models that reject `max_tokens`.
 
+## v0.5.0 — Controlled Multi-User Execution & Job-Oriented Runtime
+- **Typed Jobs**: Internal job model for request execution with per-type queues and status reporting.
+- **Concurrency Gates**: Per-job-type semaphores (ingest/embed/index/LLM) with strict LLM provider-call gating.
+- **Fair LLM Scheduling**: Per-user round robin scheduling for `chat.message` workloads.
+- **Timeouts & Backpressure**: LLM wall-clock limit and per-type queue max with 503 on overload.
+- **Status Surface**: `/status` now includes queue sizes, active counts, and per-user LLM queue position.
+- **Decision Digests**: `assembly_digest` is always recorded; `context_digest` is null on DENY; evaluation errors emit `error_ref` pointing to a PROOF artifact.
 
 ## v0.4.3 — Docker Config Fix
 - **Docker Fix**: Set `DBL_GATEWAY_CONTEXT_CONFIG` environment variable in Dockerfile to resolve config path issue in containerized deployments.

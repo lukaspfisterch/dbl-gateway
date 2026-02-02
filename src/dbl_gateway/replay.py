@@ -20,7 +20,8 @@ class DecisionReplayError(RuntimeError):
 
 @dataclass(frozen=True)
 class DecisionReplayResult:
-    context_digest: str
+    assembly_digest: str
+    context_digest: str | None
     recomputed_decision_digest: str
     stored_decision_digest: str
     decision_event: EventRecord
@@ -60,14 +61,18 @@ def replay_decision_for_turn(
         computed_context_digest = context_digest(context_spec, assembled_context)
     except Exception as exc:
         raise DecisionReplayError("context.invalid", str(exc)) from exc
-    stored_context_digest = decision_payload.get("context_digest")
-    if not isinstance(stored_context_digest, str):
-        raise DecisionReplayError("context_digest.missing", "context_digest missing from decision payload")
-    if computed_context_digest != stored_context_digest:
+    stored_assembly_digest = decision_payload.get("assembly_digest")
+    if stored_assembly_digest is None:
+        raise DecisionReplayError("assembly_digest.missing", "assembly_digest missing from decision payload")
+    if not isinstance(stored_assembly_digest, str):
+        raise DecisionReplayError("assembly_digest.invalid", "assembly_digest must be a string")
+    if computed_context_digest != stored_assembly_digest:
         raise DecisionReplayError(
-            "context_digest.mismatch",
-            "context_digest does not match recomputed value from stored context artifacts",
+            "assembly_digest.mismatch",
+            "assembly_digest does not match recomputed value from stored context artifacts",
         )
+
+    stored_context_digest = decision_payload.get("context_digest")
 
     stored_policy = _policy_from_payload(decision_payload)
     transforms = decision_payload.get("transforms")
@@ -88,16 +93,30 @@ def replay_decision_for_turn(
         policy_version=stored_policy.get("policy_version") or policy_result.policy_version,
         gate_event=policy_result.gate_event,
     )
+    context_digest_value = computed_context_digest if decision_for_digest.decision == "ALLOW" else None
+    if decision_for_digest.decision == "ALLOW":
+        if not isinstance(stored_context_digest, str):
+            raise DecisionReplayError(
+                "context_digest.missing",
+                "context_digest missing from ALLOW decision payload",
+            )
+        if stored_context_digest != computed_context_digest:
+            raise DecisionReplayError(
+                "context_digest.mismatch",
+                "context_digest does not match recomputed value from stored context artifacts",
+            )
     normative = build_normative_decision(
         decision_for_digest,
-        context_digest=computed_context_digest,
+        assembly_digest=computed_context_digest,
+        context_digest=context_digest_value,
         transforms=transform_list,
     )
     recomputed_decision_digest = decision_digest(normative)
     stored_decision_digest = decision_event.get("digest") if isinstance(decision_event.get("digest"), str) else ""
 
     return DecisionReplayResult(
-        context_digest=computed_context_digest,
+        assembly_digest=computed_context_digest,
+        context_digest=context_digest_value,
         recomputed_decision_digest=recomputed_decision_digest,
         stored_decision_digest=stored_decision_digest,
         decision_event=decision_event,

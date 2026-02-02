@@ -28,12 +28,14 @@ class IntentEnvelope(TypedDict):
 
 class DecisionPayload(TypedDict, total=False):
     policy: dict[str, Any]
-    context_digest: str
+    assembly_digest: str | None
+    context_digest: str | None
     result: str
     reasons: list[dict[str, Any]]
     transforms: list[dict[str, Any]]
     decision: str
     reason_codes: list[str]
+    error_ref: str
     requested_model_id: str
     resolved_model_id: str
     provider: str

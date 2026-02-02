@@ -15,7 +15,7 @@ def execute(*, model_id: str, messages: list[dict[str, str]], base_url: str | No
     payload = {"model": model_id, "messages": messages, "stream": False}
 
     try:
-        with httpx.Client(timeout=httpx.Timeout(120.0)) as client:
+        with httpx.Client(timeout=httpx.Timeout(240.0)) as client:
             resp = client.post(url, json=payload)
             if resp.status_code >= 400:
                 data = {}
