@@ -1,8 +1,8 @@
-# Context System
+# Context References
 
 > Deterministic context assembly for DBL Gateway.
 
-This document describes how context is handled in the gateway, including the separation between normative and observational inputs, the digest computation scope, and the invariants that must be maintained.
+This document describes how context references are handled in the gateway, including the separation between normative and observational inputs, the digest computation scope, and the invariants that must be maintained.
 
 ## Core Concepts
 
@@ -21,6 +21,8 @@ This document describes how context is handled in the gateway, including the sep
 ## The I_context / O_context Split
 
 The fundamental principle: **Observations must not influence governance decisions.**
+
+The gateway never infers conversational context; all references are explicit and scope-bound.
 
 ### I_context (Normative)
 - Contains only INTENT event payloads
@@ -77,7 +79,7 @@ While **policy** only sees I_context (INTENTs), the **execution** (LLM prompt) r
 2. **Injection**: This block is prepended to the user's message.
 3. **Execution**: The provider receives `[system_context, user_message]`.
 
-This ensures the LLM has conversational memory (O_context) while the policy remains purely normative (I_context).
+This ensures execution receives explicit, deterministic references (O_context) while the policy remains purely normative (I_context).
 
 ## Digest Scope
 

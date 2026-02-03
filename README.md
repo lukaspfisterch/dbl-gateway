@@ -6,15 +6,14 @@
 [![PyPI version](https://img.shields.io/pypi/v/dbl-gateway.svg)](https://pypi.org/project/dbl-gateway/)
 
 **Current version:** 0.5.x  
-This README reflects the 0.5.x execution and runtime model. Notable changes since 0.4.x are summarized below.
+This README reflects the 0.5.x execution and runtime model.
 
-> **Looking for the full end-to-end demo?**
+> **Looking for the full end-to-end demo?**  
 > See [dbl-stack](https://github.com/lukaspfisterch/dbl-stack) for a one-command setup including UI and observer.
-
 
 DBL Gateway is a deterministic execution boundary for LLM calls.
 
-It enforces explicit intent, policy decisions, and execution as an auditable, replayable event stream.
+It accepts explicitly declared intents, applies policy decisions, executes permitted calls, and records the result as an auditable, replayable event stream.
 
 Part of the [Deterministic Boundary Layer](https://github.com/lukaspfisterch/deterministic-boundary-layer) architecture.
 
@@ -23,26 +22,85 @@ This is **not**:
 - a workflow engine
 - a UI product
 
-The gateway does not decide *what* to do. It decides *whether* an explicitly declared action may execute.
+The gateway does not decide what to do. It decides whether an explicitly declared action may execute.
 
-## What changed in 0.5.0
+## What changed in 0.5.x
 
-- Introduced job runtime governance (queues, concurrency limits, wall-clock timeouts).
-- Formalized execution scheduling without adding workflow semantics.
-- Stabilized decision digest computation for replay and audit.
+- Job runtime governance (queues, concurrency limits, wall-clock timeouts).
+- Formalized scheduling without adding workflow semantics.
+- Stabilized decision digests for replay and audit.
 - Expanded runtime observability for job admission and execution gating.
-- Context system remains explicit and scope-bound; no implicit history was added.
 
 ## Supported Providers (v0.5.x)
 
-The gateway supports multiple LLM providers through a unified execution contract.
+The gateway supports multiple providers through a unified execution contract.
 
 Currently supported:
 - **OpenAI** (cloud)
 - **Anthropic** (cloud)
 - **Ollama** (local or remote)
 
-Providers are currently configured via environment variables and exposed at runtime through capabilities introspection.
+Providers are configured via environment variables and exposed at runtime through capabilities introspection.
+
+---
+
+## Interaction Model
+
+Every accepted request follows the same event sequence:
+
+1. **INTENT**: explicit request with identity anchors (`thread_id`, `turn_id`)
+2. **DECISION**: policy outcome (ALLOW or DENY)
+3. **EXECUTION**: provider call and result (only when ALLOW)
+4. **OBSERVATION**: read-only access via snapshot or tail
+
+Only DECISION events are normative. EXECUTION events are observational and never influence policy.
+
+No step is implicit. Every event is linked via a stable `correlation_id`.
+
+---
+
+## Design Principles
+
+- **Explicit boundaries**: separation between admission, policy, and execution
+- **Append-only records**: immutable event trail for audit and replay
+- **No hidden state**: no heuristics, no implicit memory, no semantic inference
+- **Observer-safe**: clients may project state, but cannot affect policy, execution, or ordering
+
+---
+
+## Context References (not context generation)
+
+The gateway does not generate or interpret context.
+
+It supports explicit references to prior events so downstream clients can build multi-turn interactions without implicit history.
+
+### declared_refs
+
+Clients may reference prior events via `IntentEnvelope.payload.declared_refs`:
+
+```json
+{
+  "declared_refs": [
+    {"ref_type": "event", "ref_id": "correlation-id-1"},
+    {"ref_type": "event", "ref_id": "turn-id-2"}
+  ]
+}
+```
+
+The gateway validates and resolves these references and makes them available to the execution pipeline as deterministic, scope-bound inputs.
+
+The gateway never infers conversational context. All references are explicit and must be scope-bound to the thread.
+
+### I_context / O_context split
+
+| Type | Admitted For | Policy Access |
+|------|--------------|---------------|
+| INTENT events | `governance` | Yes |
+| EXECUTION events | `execution_only` | No |
+
+This ensures observational outputs never influence governance decisions.
+
+See [docs/CONTEXT.md](docs/CONTEXT.md) for the full specification.
 
 ---
 
@@ -51,7 +109,7 @@ Providers are currently configured via environment variables and exposed at runt
 The gateway is part of a small toolchain:
 
 ### dbl-gateway (this repository)
-Authoritative execution boundary and event log. The gateway is authoritative for execution, but not for interpretation. It emits facts, not narratives.
+Authoritative execution boundary and event log. The gateway is authoritative for execution, not interpretation.
 - Accepts explicit intents.
 - Applies policy.
 - Executes provider calls.
@@ -67,100 +125,23 @@ Pure event-projection UI. Real-time visualization of the gateway event stream an
 
 ---
 
-## Interaction Model
-
-Every interaction follows the same sequence:
-
-1. **INTENT** – explicit request with identity anchors (`thread_id`, `turn_id`).
-2. **DECISION** – policy outcome (ALLOW/DENY).
-3. **EXECUTION** – provider call and result.
-4. **OBSERVATION** – read-only access via snapshot or tail.
-
-Only DECISION events are normative. EXECUTION events are observational and cannot influence policy or state.
-
-No step is implicit; every event is linked via a stable `correlation_id`.
-
----
-
-## Design Principles
-
-- **Explicit boundaries**: Strict separation between core logic, policy, and execution.
-- **Append-only records**: Immutable event trail for audit and replay.
-- **No hidden state**: No heuristics or internal memory beyond the event stream.
-- **Observer-safe**: Clients may observe and project state, but cannot affect policy, execution, or event ordering.
-
----
-
-## Context System (v0.4.0+)
-
-The gateway supports explicit context declaration for multi-turn conversations.
-
-### declared_refs
-
-Clients can reference prior events as context via `IntentEnvelope.payload.declared_refs`:
-
-```json
-{
-  "declared_refs": [
-    {"ref_type": "event", "ref_id": "correlation-id-1"},
-    {"ref_type": "event", "ref_id": "turn-id-2"}
-  ]
-}
-```
-
-These references are resolved by the gateway and **injected into the LLM context** as a deterministic system block. This allows for multi-turn conversations without the gateway implicitly managing history.
-
-The gateway never infers conversational context. All context must be explicitly declared and is scope-bound by policy.
-
-### I_context / O_context Split
-
-| Type | Admitted For | Digest Scope | Policy Access |
-|------|--------------|--------------|---------------|
-| INTENT events | `governance` | ✅ Included | ✅ Yes |
-| EXECUTION events | `execution_only` | ✅ Included (audit) | ❌ No |
-
-This ensures **observations never influence governance decisions** (DBL Claim 4).
-
-### Configuration
-
-Context behavior is controlled by `config/context.json`:
-
-```json
-{
-  "max_refs": 50,
-  "empty_refs_policy": "DENY",
-  "canonical_sort": "event_index_asc",
-  "enforce_scope_bound": true
-}
-```
-
-The config digest is pinned in every DECISION event for replay verification.
-
-See [docs/CONTEXT.md](docs/CONTEXT.md) for the full specification.
-
----
-
 ## Installation
 
-### Local Install
-Create a virtual environment and install the gateway:
+### Local install
 ```bash
 pip install .
 ```
 
-### Docker (Quick Start)
+### Docker (quick start)
 
-The gateway can be started in **observer mode** without executing any LLM calls:
+Observer mode (no policy, no providers required):
 
 ```bash
 docker run -p 8010:8010 dbl-gateway
 ```
 
-This allows inspecting capabilities, snapshots, and event streams.
+Execution-enabled:
 
-To enable execution, provide a policy and at least one provider:
-
-**Execution-enabled (dev policy, evaluation only):**
 ```bash
 docker run --rm -p 8010:8010 \
   -e OPENAI_API_KEY="sk-..." \
@@ -173,15 +154,20 @@ docker run --rm -p 8010:8010 \
 
 ## Running the Gateway
 
-### Environment Variables
+### Start command
+```bash
+dbl-gateway serve --host 127.0.0.1 --port 8010
+```
+
+### Environment variables
 
 #### Required for execution
 | Variable | Description |
 |---|---|
-| DBL_GATEWAY_POLICY_MODULE | Policy module path (e.g., `dbl_policy.allow_all`) |
+| DBL_GATEWAY_POLICY_MODULE | Policy module path (e.g. `dbl_policy.allow_all`) |
 | OPENAI_API_KEY | OpenAI API key (or configure another provider) |
 
-#### Model Configuration
+#### Model configuration
 
 ```bash
 # OpenAI (comma-separated)
@@ -192,18 +178,18 @@ OPENAI_CHAT_MODEL_IDS="gpt-5.2,gpt-4.1,gpt-4o-mini"
 ANTHROPIC_API_KEY="sk-ant-..."
 ANTHROPIC_MODEL_IDS="claude-sonnet-4-20250514,claude-3-5-sonnet-20241022,claude-3-haiku-20240307"
 
-# Ollama (auto-discovered from OLLAMA_HOST, or override manually)
+# Ollama
 OLLAMA_HOST="http://localhost:11434"
 OLLAMA_MODEL_IDS="qwen2.5-coder:7b,llama3.2:latest,deepseek-r1:8b"
 ```
 
-#### Other Options
+#### Other options
 | Variable | Description |
 |---|---|
 | DBL_GATEWAY_POLICY_OBJECT | Policy object name (default: `POLICY`) |
 | OPENAI_BASE_URL | Custom OpenAI-compatible endpoint |
 
-#### Job Runtime (v0.5.0)
+#### Job runtime (v0.5.x)
 | Variable | Description |
 |---|---|
 | DBL_JOB_QUEUE_MAX | Max queued jobs per type (default: 100) |
@@ -213,27 +199,28 @@ OLLAMA_MODEL_IDS="qwen2.5-coder:7b,llama3.2:latest,deepseek-r1:8b"
 | DBL_JOB_CONCURRENCY_LLM | Max concurrent `chat.message` provider calls (default: 1) |
 | DBL_LLM_WALL_CLOCK_S | LLM wall-clock timeout seconds (default: 60) |
 
-### Start Command
-```bash
-dbl-gateway serve --host 127.0.0.1 --port 8010
-```
-
 ---
 
 ## Observation Surfaces
 
 ### Snapshot (`/snapshot`)
-Returns a point-in-time state of the event log. Suitable for audits and offline inspection.
+
+Point-in-time view of the event log, suitable for audits and offline inspection.
 
 ### Tail (`/tail`)
-A live SSE stream of events. 
-- `since`: Start streaming from a specific event index.
-- `backlog`: Number of recent events to emit on connect (default: 20).
+
+Live SSE stream of events.
+Parameters:
+
+- `since`: start streaming from a specific event index
+- `backlog`: number of recent events to emit on connect (default: 20)
 
 ### Status (`/status`)
-Returns runtime status plus job runtime metrics:
-- `job_runtime.queue_sizes` per job type
-- `job_runtime.active_counts` per job type
+
+Runtime status plus job runtime metrics:
+
+- `job_runtime.queue_sizes`
+- `job_runtime.active_counts`
 - `job_runtime.queue_max`
 - `job_runtime.llm.queue_position` (per requesting user)
 
@@ -257,3 +244,11 @@ npm install && npm run dev
 
 ## Status
 **Early, but operational.** Core execution, policy gating, and auditing are stable. Current focus: surface stabilization and contract clarity.
+
+## Reflexionsblock (Check 1)
+
+Selbstprüfung: Die größte inhaltliche Korrektur ist die Umbenennung/Entschärfung von „Context System“ hin zu „Context References“ und das explizite Entfernen von „Kontext-Generation“ aus der Gateway-Verantwortung. Technisch konsistent mit deinem Modell: Gateway validiert, resolved, injiziert deterministisch, aber interpretiert nicht.
+
+Bias/Konsistenz: Ich habe bewusst keine neuen Konzepte eingeführt, nur Begriffe präzisiert und Verantwortungen schärfer getrennt. Mögliche Schwäche: Der Begriff „OBSERVATION“ als Schritt 4 bleibt als Beschreibung okay, obwohl es kein Event-Kind ist, sondern ein Zugriffspfad. Das ist aber im Text klar als „read-only access“ formuliert.
+
+Externe Validierung: Ohne externe Links, weil hier keine neuen Fakten behauptet werden, nur Umformulierung. Für echte Claims (z. B. Provider-Details, API-Surfaces) sollte README immer mit deinem wire_contract.md und docs/CONTEXT.md übereinstimmen.
