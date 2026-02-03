@@ -24,6 +24,7 @@ classifiers = [
   "Topic :: Software Development :: Libraries",
   "Topic :: Internet :: WWW/HTTP"
 ]
+license-files = ["LICENSE"]
 dependencies = [
   "dbl-core>=0.3.2,<0.4.0",
   "dbl-policy>=0.2.0,<0.3.0",
@@ -39,8 +40,6 @@ dependencies = [
 Homepage = "https://github.com/lukaspfisterch/dbl-gateway"
 Repository = "https://github.com/lukaspfisterch/dbl-gateway"
 Issues = "https://github.com/lukaspfisterch/dbl-gateway/issues"
-
-license-files = ["LICENSE"]
 
 [project.scripts]
 dbl-gateway = "dbl_gateway.app:main"
