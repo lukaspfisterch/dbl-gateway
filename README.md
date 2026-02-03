@@ -5,6 +5,9 @@
 ![License](https://img.shields.io/github/license/lukaspfisterch/dbl-gateway)
 [![PyPI version](https://img.shields.io/pypi/v/dbl-gateway.svg)](https://pypi.org/project/dbl-gateway/)
 
+**Current version:** 0.5.x  
+This README reflects the 0.5.x execution and runtime model. Notable changes since 0.4.x are summarized below.
+
 > **Looking for the full end-to-end demo?**
 > See [dbl-stack](https://github.com/lukaspfisterch/dbl-stack) for a one-command setup including UI and observer.
 
@@ -21,6 +24,14 @@ This is **not**:
 - a UI product
 
 The gateway does not decide *what* to do. It decides *whether* an explicitly declared action may execute.
+
+## What changed in 0.5.0
+
+- Introduced job runtime governance (queues, concurrency limits, wall-clock timeouts).
+- Formalized execution scheduling without adding workflow semantics.
+- Stabilized decision digest computation for replay and audit.
+- Expanded runtime observability for job admission and execution gating.
+- Context system remains explicit and scope-bound; no implicit history was added.
 
 ## Supported Providers (v0.5.x)
 
@@ -48,11 +59,8 @@ Authoritative execution boundary and event log. The gateway is authoritative for
 - Persists an append-only event trail.
 - Exposes read-only observation surfaces (`/snapshot`, `/tail`).
 
-### [dbl-operator](https://github.com/lukaspfisterch/dbl-operator)
-Observer and intervention client. Used for rendering timelines, audits, and decision views. Does not evaluate policy or store authoritative state.
-
-### [dbl-chat-cli](https://github.com/lukaspfisterch/dbl-chat-cli)
-Minimal interactive CLI client for smoke testing and quick interaction via terminal.
+### [dbl-observer](https://github.com/lukaspfisterch/dbl-observer)
+Observer UI for rendering timelines, audits, and decision views. Does not evaluate policy or store authoritative state.
 
 ### [dbl-chat-client](https://github.com/lukaspfisterch/dbl-chat-client)
 Pure event-projection UI. Real-time visualization of the gateway event stream and identity anchor management.
@@ -101,6 +109,8 @@ Clients can reference prior events as context via `IntentEnvelope.payload.declar
 ```
 
 These references are resolved by the gateway and **injected into the LLM context** as a deterministic system block. This allows for multi-turn conversations without the gateway implicitly managing history.
+
+The gateway never infers conversational context. All context must be explicitly declared and is scope-bound by policy.
 
 ### I_context / O_context Split
 
@@ -231,15 +241,10 @@ Returns runtime status plus job runtime metrics:
 
 ## Integration Examples
 
-### Using the [Operator](https://github.com/lukaspfisterch/dbl-operator)
+### Using the [Observer](https://github.com/lukaspfisterch/dbl-observer)
 ```powershell
 $env:DBL_GATEWAY_BASE_URL = "http://127.0.0.1:8010"
-dbl-operator thread-view --thread-id t-1
-```
-
-### Using the [Chat CLI](https://github.com/lukaspfisterch/dbl-chat-cli)
-```powershell
-dbl-chat-cli --base-url http://127.0.0.1:8010 --principal-id user-1
+uvicorn dbl_observer.app:app --host 127.0.0.1 --port 8787
 ```
 
 ### Using the [Chat Client](https://github.com/lukaspfisterch/dbl-chat-client)
