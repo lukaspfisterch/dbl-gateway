@@ -53,8 +53,10 @@ Resolution:
   ]
   
 Policy sees: [INTENT-1]
-Prompt gets: [INTENT-1, EXECUTION-1, INTENT-2]
+Execution context receives: [INTENT-1, EXECUTION-1, INTENT-2]
 ```
+
+Only explicitly declared references are admitted; no automatic history is added.
 
 ### Example 2: Policy Count Limit
 
@@ -135,6 +137,7 @@ This ensures execution receives explicit, deterministic references (O_context) w
 | Too many references | `MAX_REFS_EXCEEDED` | declared_refs.length > config.max_refs | Client must respect limits |
 | Empty refs policy | `EMPTY_REFS_DENIED` | declared_refs is empty and policy is DENY | Client must provide at least one ref (or config must allow empty) |
 | Policy evaluation error | `evaluation_error` | Policy evaluation raised an exception | DECISION includes `error_ref` pointing to a PROOF artifact |
+| DENY is final | `DENY` | Policy returns DENY | `context_digest` is null and execution input is not emitted |
 
 ## Configuration
 
