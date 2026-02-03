@@ -40,8 +40,7 @@ Homepage = "https://github.com/lukaspfisterch/dbl-gateway"
 Repository = "https://github.com/lukaspfisterch/dbl-gateway"
 Issues = "https://github.com/lukaspfisterch/dbl-gateway/issues"
 
-[project.license-files]
-paths = ["LICENSE"]
+license-files = ["LICENSE"]
 
 [project.scripts]
 dbl-gateway = "dbl_gateway.app:main"
