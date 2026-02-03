@@ -1,6 +1,7 @@
 import pytest
-import json
-from dbl_gateway.context_builder import build_context_with_refs, ContextArtifacts
+from dataclasses import replace
+
+from dbl_gateway.context_builder import build_context_with_refs, RefResolutionError
 from dbl_gateway.config import ContextConfig
 
 @pytest.fixture
@@ -16,6 +17,7 @@ def mock_config(tmp_path):
         config_digest="sha256:mock",
         schema_version="1",
         normalization_rules=("SORT",), # Tuple
+        expand_thread_history_enabled=False,
         _raw={} # Required
     )
 
@@ -62,11 +64,12 @@ def test_auto_context_expansion_first_plus_last_n(mock_config):
         "message": "User 4"
     }
     
+    cfg = replace(mock_config, expand_thread_history_enabled=True)
     artifacts = build_context_with_refs(
         payload=payload,
         intent_type="chat.message",
         thread_events=events,
-        config=mock_config
+        config=cfg
     )
     
     resolved = artifacts.context_spec["retrieval"]["resolved_refs"]
@@ -83,18 +86,7 @@ def test_auto_context_expansion_first_plus_last_n(mock_config):
     assert "AI 3" in contents
     assert "User 2" not in contents
     
-    # Check transform record
-    norms = artifacts.context_spec["retrieval"]["normalization"]
-    transforms = norms.get("transformations", [])
-    auto_ops = [n for n in transforms if n.get("op") == "AUTO_DECLARE_REFS"]
-    assert len(auto_ops) == 1
-    assert auto_ops[0]["params"]["count"] == 4
-
-def test_auto_context_defaults(mock_config):
-    # If context_mode not provided, but no declared_refs, default to nothing? 
-    # Or strict? DBL usually strict.
-    # But user said "Default... mode = payload.get(..., 'first_plus_last_n')"
-    # This implies defaulting to ON.
+def test_empty_refs_denied_when_auto_disabled(mock_config):
     
     events = [{
         "turn_id": "t1", "correlation_id": "c1", "kind": "INTENT", "thread_id": "th1", "index": 0,
@@ -108,20 +100,11 @@ def test_auto_context_defaults(mock_config):
         # No context params
     }
     
-    artifacts = build_context_with_refs(
-        payload=payload,
-        intent_type="chat.message",
-        thread_events=events,
-        config=mock_config
-    )
-    
-    # Should default to first_plus_last_n=10
-    resolved = artifacts.context_spec["retrieval"]["resolved_refs"]
-    assert len(resolved) > 0
-    assert resolved[0]["content"] == "U1"
-    
-    # Check normalization indicates auto
-    norms = artifacts.context_spec["retrieval"]["normalization"]
-    transforms = norms.get("transformations", [])
-    ops = [n.get("op") for n in transforms]
-    assert "AUTO_DECLARE_REFS" in ops
+    with pytest.raises(RefResolutionError) as exc:
+        build_context_with_refs(
+            payload=payload,
+            intent_type="chat.message",
+            thread_events=events,
+            config=mock_config
+        )
+    assert exc.value.code == "EMPTY_REFS_DENIED"

@@ -13,7 +13,7 @@ This document describes how context references are handled in the gateway, inclu
 | `normative_inputs` | INTENT events admitted for governance (policy input) |
 | `execution_only` | EXECUTION events admitted only for prompt construction, excluded from governance |
 | `assembly_digest` | SHA256 over context_spec + assembled_context (deterministic identifier) |
-| `context_digest` | Digest of final allowed model payload (ALLOW only; null on DENY) |
+| `context_digest` | In 0.5.x, this is the same digest over context_spec + assembled_context |
 | `context_config_digest` | SHA256 over the context configuration (pinned in DECISION) |
 | `I_context` | Normative context inputs (only INTENT payloads) |
 | `O_context` | Observational context (EXECUTION outputs, post-decision only) |
@@ -106,6 +106,8 @@ This ensures execution receives explicit, deterministic references (O_context) w
 | EXECUTION output content | Observational (Claim 4) |
 | `_obs` fields | Explicitly observational |
 
+> Note: A provider payload digest may be introduced in a future release to fingerprint the exact request sent to a specific provider. It is intentionally out of scope for 0.5.x.
+
 ## Replay Modes
 
 ### Stream Replay
@@ -125,7 +127,7 @@ This ensures execution receives explicit, deterministic references (O_context) w
 | Same config was used | `DECISION.boundary.context_config_digest == reloaded_config.digest` |
 | Same refs were resolved | `DECISION.context_spec.retrieval.resolved_refs` contains event_digests |
 | Same context was assembled | `recompute(context_spec, assembled_context) == stored.assembly_digest` |
-| Final payload digest present only for ALLOW | `stored.context_digest != null` |
+| Context assembly digest present only for ALLOW | `stored.context_digest != null` |
 | No observation leaked | `normative_input_digests` contains only INTENT digests |
 
 ## Failure Modes

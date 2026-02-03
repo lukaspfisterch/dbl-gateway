@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 from typing import Any, Mapping, Sequence
 
 from .boundary import admit_model_messages
@@ -24,6 +25,8 @@ __all__ = ["ContextArtifacts", "build_context", "build_context_with_refs", "RefR
 
 # Version of ContextSpec schema (separate from config schema)
 CONTEXT_SPEC_SCHEMA_VERSION = "ctxspec.2"
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -432,46 +435,46 @@ def build_context_with_refs(
     normative_input_digests: list[str] = []
     transforms: list[dict[str, Any]] = []
     
-    # 1. Automatic Context Expansion (declarative mode)
-    # If explicit declared_refs AND context_mode are both present, explicit wins (or we could merge?)
-    # For now: if declared_refs is present, use it. If not, and context_mode is set, use auto.
+    # 1. Automatic Context Expansion (explicit and gated by config)
     auto_refs: list[ResolvedRef] = []
-    
+
     if not declared_refs:
         ctx_mode = payload_obj.get("context_mode")
-        # Default to "first_plus_last_n" if not specified but implicitly desired?
-        # User said: "Default, wenn payload.declared_refs fehlt: mode = payload.get... default first_plus_last_n"
-        if not ctx_mode:
-             ctx_mode = "first_plus_last_n"
-             
-        if ctx_mode == "first_plus_last_n":
-            n = payload_obj.get("context_n", 10)
-            if isinstance(n, int):
-                n = max(1, min(20, n)) # Clamp 1-20
-            else:
-                n = 10
-            
+        ctx_n = payload_obj.get("context_n")
+        allow_auto = cfg.expand_thread_history_enabled
+
+        if allow_auto and ctx_mode == "first_plus_last_n":
+            n = ctx_n if isinstance(ctx_n, int) else cfg.expand_last_n
+            n = max(1, min(20, n))
             auto_refs = _resolve_auto_context(list(thread_events), n, cfg)
-            if auto_refs:
-                resolved_refs = auto_refs
-                # We don't have normative digests here easily without re-scanning, 
-                # but auto_refs contains them. 
-                # We need to populate normative_input_digests for the ResolutionResult equivalent
-                normative_input_digests = [
-                    r["event_digest"] for r in resolved_refs 
-                    if r.get("admitted_for") == "governance" and r.get("event_digest")
-                ]
-                
-                transforms.append({
+        elif allow_auto and ctx_mode is None and cfg.empty_refs_policy == "EXPAND_LAST_N":
+            n = max(1, min(20, cfg.expand_last_n))
+            auto_refs = _resolve_auto_context(list(thread_events), n, cfg)
+
+        if auto_refs:
+            resolved_refs = auto_refs
+            normative_input_digests = [
+                r["event_digest"] for r in resolved_refs
+                if r.get("admitted_for") == "governance" and r.get("event_digest")
+            ]
+            transforms.append(
+                {
                     "op": "AUTO_DECLARE_REFS",
                     "target": "context.refs",
                     "params": {
-                        "mode": ctx_mode,
+                        "mode": ctx_mode or "first_plus_last_n",
                         "n": n,
                         "count": len(resolved_refs),
                         "result": "expanded",
                     },
-                })
+                }
+            )
+        elif cfg.empty_refs_policy == "DENY":
+            _LOGGER.info("declared_refs empty; policy=DENY; auto-expand disabled")
+            raise RefResolutionError("EMPTY_REFS_DENIED", "declared_refs is empty and policy is DENY")
+        elif cfg.empty_refs_policy == "EXPAND_LAST_N" and not allow_auto:
+            _LOGGER.info("declared_refs empty; EXPAND_LAST_N configured but auto-expand disabled")
+            raise RefResolutionError("EMPTY_REFS_DENIED", "auto expansion disabled by config")
 
     # 2. Explicit Resolution (if no auto refs)
     if declared_refs and not resolved_refs:

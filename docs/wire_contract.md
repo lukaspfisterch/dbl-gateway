@@ -89,13 +89,14 @@ Events are emitted as SSE envelopes:
 }
 ```
 
-## DECISION Payload (v0.4.0+)
+## DECISION Payload (v0.5.x)
 
-DECISION events now include a `boundary` block for replay verification:
+DECISION events include a `boundary` block for replay verification:
 
 ```json
 {
   "policy": {"policy_id": "...", "policy_version": "..."},
+  "assembly_digest": "sha256:...",
   "context_digest": "sha256:...",
   "result": "ALLOW",
   "reasons": [...],
@@ -109,5 +110,6 @@ DECISION events now include a `boundary` block for replay verification:
 }
 ```
 
-The `boundary.context_config_digest` pins the configuration that was used to make this decision.
+In 0.5.x, `context_digest` is the same digest as `assembly_digest` (context_spec + assembled_context). A provider payload digest is out of scope for 0.5.x.
 
+The `boundary.context_config_digest` pins the configuration that was used to make this decision.

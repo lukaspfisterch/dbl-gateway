@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.5.1 — Consistency & Context Gating
+- Gate auto-context expansion behind config flag (off by default).
+- Align context digest semantics in docs (assembly digest).
+
 ## v0.5.0 — Controlled Multi-User Execution & Job-Oriented Runtime
 - **Typed Jobs**: Internal job model for request execution with per-type queues and status reporting.
 - **Concurrency Gates**: Per-job-type semaphores (ingest/embed/index/LLM) with strict LLM provider-call gating.

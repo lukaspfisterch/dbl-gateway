@@ -13,8 +13,8 @@
 
 ### 2) Deterministic Context Assembly (Technical Motor)
 - Purpose: Build reproducible, explainable context for downstream processing.
-- Responsibilities: Construct context only from declared inputs and references; enforce canonical ordering and inclusion rules; produce stable context_digest.
-- Outputs: context_spec; assembled context; context_digest.
+- Responsibilities: Construct context only from declared inputs and references; enforce canonical ordering and inclusion rules; produce a stable assembly digest.
+- Outputs: context_spec; assembled context; assembly_digest (recorded as context_digest in 0.5.x).
 - Non-Goals: No implicit context accumulation, hidden memory, or dynamic relevance scoring/learning. If context cannot be rebuilt deterministically, decisions and outputs are not explainable.
 
 ### 3) Session and State (Coherence Carrier)
@@ -31,9 +31,9 @@
 - Behavior is explained through artifacts, not interpretation.
 
 ## Demonstrable Capabilities (success criteria)
-- Same session, different context spec -> different context_digest -> different DECISION.
+- Same session, different context spec -> different assembly_digest -> different DECISION.
 - Advisory content admitted while output scope is rejected by policy.
-- Stable, replayable context_digest per turn.
+- Stable, replayable assembly_digest per turn.
 - Full thread reconstruction with causal ordering.
 
 ## Explicit Non-Goals

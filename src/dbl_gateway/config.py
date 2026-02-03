@@ -43,6 +43,9 @@ class ContextConfig:
     
     # Normalization rules
     normalization_rules: tuple[str, ...]
+
+    # Conditional rules
+    expand_thread_history_enabled: bool
     
     # Schema version
     schema_version: str
@@ -127,6 +130,14 @@ def _parse_config(raw: Mapping[str, Any]) -> ContextConfig:
     rules = normalization.get("rules", [])
     if not isinstance(rules, list):
         raise ValueError("normalization.rules must be a list")
+
+    conditional_rules = normalization.get("conditional_rules", {})
+    if not isinstance(conditional_rules, Mapping):
+        conditional_rules = {}
+    expand_rule = conditional_rules.get("EXPAND_THREAD_HISTORY", {})
+    if not isinstance(expand_rule, Mapping):
+        expand_rule = {}
+    expand_enabled = bool(expand_rule.get("enabled", False))
     
     # Compute config_digest
     config_digest = _compute_config_digest(raw)
@@ -139,6 +150,7 @@ def _parse_config(raw: Mapping[str, Any]) -> ContextConfig:
         canonical_sort=canonical_sort,
         enforce_scope_bound=enforce_scope,
         normalization_rules=tuple(rules),
+        expand_thread_history_enabled=expand_enabled,
         schema_version=str(schema_version),
         config_digest=config_digest,
         _raw=raw,

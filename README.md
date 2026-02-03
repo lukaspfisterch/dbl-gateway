@@ -5,11 +5,8 @@
 ![License](https://img.shields.io/github/license/lukaspfisterch/dbl-gateway)
 [![PyPI version](https://img.shields.io/pypi/v/dbl-gateway.svg)](https://pypi.org/project/dbl-gateway/)
 
-**Current version:** 0.5.x  
+**Current version:** 0.5.1  
 This README reflects the 0.5.x execution and runtime model.
-
-> **Looking for the full end-to-end demo?**  
-> See [dbl-stack](https://github.com/lukaspfisterch/dbl-stack) for a one-command setup including UI and observer.
 
 DBL Gateway is a deterministic execution boundary for LLM calls.
 
@@ -23,6 +20,8 @@ This is **not**:
 - a UI product
 
 The gateway does not decide what to do. It decides whether an explicitly declared action may execute.
+
+The gateway does not assemble conversation history, infer relevance, or manage memory. It only accepts explicitly declared references and enforces their admissibility.
 
 ## What changed in 0.5.x
 
@@ -68,7 +67,7 @@ No step is implicit. Every event is linked via a stable `correlation_id`.
 
 ---
 
-## Context References (not context generation)
+## Reference Resolution (explicit only)
 
 The gateway does not generate or interpret context.
 
@@ -91,6 +90,8 @@ The gateway validates and resolves these references and makes them available to 
 
 The gateway never infers conversational context. All references are explicit and must be scope-bound to the thread.
 
+`context_digest` identifies the resolved context assembly (context specification + referenced artifacts). It is not a provider payload digest and does not claim to represent the exact request sent to a model. A provider-specific “final payload digest” is intentionally out of scope for v0.5.x.
+
 ### I_context / O_context split
 
 | Type | Admitted For | Policy Access |
@@ -107,6 +108,9 @@ See [docs/CONTEXT.md](docs/CONTEXT.md) for the full specification.
 ## Repository Landscape
 
 The gateway is part of a small toolchain:
+
+> **Looking for the full end-to-end demo?**  
+> See [dbl-stack](https://github.com/lukaspfisterch/dbl-stack) for a one-command setup including UI and observer.
 
 ### dbl-gateway (this repository)
 Authoritative execution boundary and event log. The gateway is authoritative for execution, not interpretation.
@@ -147,7 +151,7 @@ docker run --rm -p 8010:8010 \
   -e OPENAI_API_KEY="sk-..." \
   -e DBL_GATEWAY_POLICY_MODULE="dbl_policy.allow_all" \
   -e DBL_GATEWAY_POLICY_OBJECT="policy" \
-  lukaspfister/dbl-gateway:0.5.0
+  lukaspfister/dbl-gateway:0.5.1
 ```
 
 ---
@@ -244,11 +248,3 @@ npm install && npm run dev
 
 ## Status
 **Early, but operational.** Core execution, policy gating, and auditing are stable. Current focus: surface stabilization and contract clarity.
-
-## Reflexionsblock (Check 1)
-
-Selbstprüfung: Die größte inhaltliche Korrektur ist die Umbenennung/Entschärfung von „Context System“ hin zu „Context References“ und das explizite Entfernen von „Kontext-Generation“ aus der Gateway-Verantwortung. Technisch konsistent mit deinem Modell: Gateway validiert, resolved, injiziert deterministisch, aber interpretiert nicht.
-
-Bias/Konsistenz: Ich habe bewusst keine neuen Konzepte eingeführt, nur Begriffe präzisiert und Verantwortungen schärfer getrennt. Mögliche Schwäche: Der Begriff „OBSERVATION“ als Schritt 4 bleibt als Beschreibung okay, obwohl es kein Event-Kind ist, sondern ein Zugriffspfad. Das ist aber im Text klar als „read-only access“ formuliert.
-
-Externe Validierung: Ohne externe Links, weil hier keine neuen Fakten behauptet werden, nur Umformulierung. Für echte Claims (z. B. Provider-Details, API-Surfaces) sollte README immer mit deinem wire_contract.md und docs/CONTEXT.md übereinstimmen.

@@ -21,7 +21,7 @@ from .admission import admit_and_shape_intent, AdmissionFailure
 from .capabilities import CapabilitiesResponse, get_capabilities_cached, resolve_model, resolve_provider, get_capabilities
 from .adapters.execution_adapter_kl import KlExecutionAdapter
 from .adapters.policy_adapter_dbl_policy import DblPolicyAdapter, ObserverPolicy, _load_policy
-from .context_builder import build_context_with_refs
+from .context_builder import build_context_with_refs, RefResolutionError
 from .config import get_context_config
 from .decision_builder import build_normative_decision
 from .ports.execution_port import ExecutionResult
@@ -442,6 +442,35 @@ async def _process_intent(
                 "admitted_model_messages": assembled_context.get("model_messages", []),
                 "meta": context_artifacts.boundary_meta,
             }
+        except RefResolutionError as exc:
+            _LOGGER.info("context resolution denied: %s", exc)
+            app.state.store.append(
+                kind="DECISION",
+                thread_id=thread_id,
+                turn_id=turn_id,
+                parent_turn_id=parent_turn_id,
+                lane=authoritative["lane"],
+                actor="policy",
+                intent_type=authoritative["intent_type"],
+                stream_id=authoritative["stream_id"],
+                correlation_id=correlation_id,
+                payload=_decision_payload(
+                    DecisionResult(decision="DENY", reason_codes=[exc.code]),
+                    trace_id,
+                    assembly_digest=None,
+                    context_digest=None,
+                    error_ref=None,
+                    context_config_digest=None,
+                    boundary=None,
+                    requested_model_id=None,
+                    resolved_model_id=None,
+                    provider=None,
+                    transforms=[],
+                    context_spec=None,
+                    assembled_context=None,
+                ),
+            )
+            return
         except Exception as exc:
             _LOGGER.exception("context assembly failed: %s", exc)
             error_ref = _emit_policy_error_artifact(
