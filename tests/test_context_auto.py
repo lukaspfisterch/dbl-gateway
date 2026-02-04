@@ -86,7 +86,7 @@ def test_auto_context_expansion_first_plus_last_n(mock_config):
     assert "AI 3" in contents
     assert "User 2" not in contents
     
-def test_empty_refs_denied_when_auto_disabled(mock_config):
+def test_empty_refs_allowed_for_chat_message_when_auto_disabled(mock_config):
     
     events = [{
         "turn_id": "t1", "correlation_id": "c1", "kind": "INTENT", "thread_id": "th1", "index": 0,
@@ -100,10 +100,31 @@ def test_empty_refs_denied_when_auto_disabled(mock_config):
         # No context params
     }
     
+    artifacts = build_context_with_refs(
+        payload=payload,
+        intent_type="chat.message",
+        thread_events=events,
+        config=mock_config
+    )
+    assert artifacts.context_spec["retrieval"]["declared_refs"] == []
+
+
+def test_empty_refs_denied_for_non_chat_when_auto_disabled(mock_config):
+    events = [{
+        "turn_id": "t1", "correlation_id": "c1", "kind": "INTENT", "thread_id": "th1", "index": 0,
+        "payload": {"message": "U1"}
+    }]
+
+    payload = {
+        "thread_id": "th1",
+        "turn_id": "t2",
+        "message": "U2"
+    }
+
     with pytest.raises(RefResolutionError) as exc:
         build_context_with_refs(
             payload=payload,
-            intent_type="chat.message",
+            intent_type="tool.invoke",
             thread_events=events,
             config=mock_config
         )
