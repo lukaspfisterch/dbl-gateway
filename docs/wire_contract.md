@@ -63,6 +63,64 @@ interface DeclaredRef {
 | Cross-thread ref | 400 | `{"ok": false, "reason_code": "CROSS_THREAD_REF", "detail": "..."}` |
 | Too many refs | 400 | `{"ok": false, "reason_code": "MAX_REFS_EXCEEDED", "detail": "..."}` |
 
+## Attachment Handle Events (1A: Handle-Only Bridge)
+
+To bridge external artifact storage (e.g., Workbench) without inlining content,
+clients should emit **handle-only** INTENT events and then reference those
+events in `declared_refs`.
+
+### Handle Event (INTENT)
+
+Use `intent_type: "artifact.handle"` and a payload that includes identity
+anchors plus a `handle` block:
+
+```json
+{
+  "interface_version": 2,
+  "correlation_id": "wb-attach-uuid",
+  "payload": {
+    "stream_id": "default",
+    "lane": "user_chat",
+    "actor": "workbench",
+    "intent_type": "artifact.handle",
+    "thread_id": "case-uuid",
+    "turn_id": "turn-uuid",
+    "parent_turn_id": "turn-uuid",
+    "payload": {
+      "thread_id": "case-uuid",
+      "turn_id": "turn-uuid",
+      "parent_turn_id": "turn-uuid",
+      "handle": {
+        "artifact_ref_id": "artifact-uuid",
+        "artifact_kind": "summary",
+        "artifact_digest": "sha256:...",
+        "mime": "text/plain",
+        "bytes": 12345,
+        "origin": "workbench",
+        "scope": "full",
+        "created_ts": "2026-02-03T12:34:56Z"
+      },
+      "resolver": {
+        "type": "workbench",
+        "endpoint": "workbench://cases/{case_id}/artifacts/{artifact_id}"
+      }
+    }
+  }
+}
+```
+
+These handle events are **metadata-only** and do **not** trigger policy decisions.
+
+### Declared Refs for Chat Intents
+
+Subsequent chat intents should reference the handle event by **`turn_id`**:
+
+```json
+"declared_refs": [
+  {"ref_type": "event", "ref_id": "turn-uuid"}
+]
+```
+
 ## Tail Semantics
 
 `GET /tail?since=<index>` streams events where `event.index > since`.

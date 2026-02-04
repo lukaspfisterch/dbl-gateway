@@ -197,6 +197,50 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
                 content={"ok": False, "reason_code": "admission.invalid_parent", "detail": str(exc)},
             )
 
+        # Some intents are metadata-only and should not trigger policy decisions.
+        if intent_payload.get("intent_type") in {"artifact.handle"}:
+            app.state.store.append(
+                kind="DECISION",
+                thread_id=thread_id,
+                turn_id=turn_id,
+                parent_turn_id=parent_turn_id,
+                lane=authoritative["lane"],
+                actor="policy",
+                intent_type=authoritative["intent_type"],
+                stream_id=authoritative["stream_id"],
+                correlation_id=envelope["correlation_id"],
+                payload=_decision_payload(
+                    DecisionResult(
+                        decision="ALLOW",
+                        reason_codes=["HANDLE_METADATA_ONLY"],
+                        policy_id="builtin",
+                        policy_version="1",
+                    ),
+                    trace_id,
+                    assembly_digest=None,
+                    context_digest=None,
+                    error_ref=None,
+                    context_config_digest=None,
+                    boundary=None,
+                    requested_model_id=None,
+                    resolved_model_id=None,
+                    provider=None,
+                    transforms=[],
+                    context_spec=None,
+                    assembled_context=None,
+                ),
+            )
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "accepted": True,
+                    "stream_id": authoritative["stream_id"],
+                    "index": intent_event["index"],
+                    "correlation_id": envelope["correlation_id"],
+                    "queued": False,
+                },
+            )
+
         work_queue = getattr(app.state, "work_queue", None)
         if work_queue is None:
             return JSONResponse(

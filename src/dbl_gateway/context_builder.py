@@ -470,8 +470,11 @@ def build_context_with_refs(
                 }
             )
         elif cfg.empty_refs_policy == "DENY":
-            _LOGGER.info("declared_refs empty; policy=DENY; auto-expand disabled")
-            raise RefResolutionError("EMPTY_REFS_DENIED", "declared_refs is empty and policy is DENY")
+            if intent_type == "chat.message":
+                _LOGGER.info("declared_refs empty; policy=DENY; chat.message allowed")
+            else:
+                _LOGGER.info("declared_refs empty; policy=DENY; auto-expand disabled")
+                raise RefResolutionError("EMPTY_REFS_DENIED", "declared_refs is empty and policy is DENY")
         elif cfg.empty_refs_policy == "EXPAND_LAST_N" and not allow_auto:
             _LOGGER.info("declared_refs empty; EXPAND_LAST_N configured but auto-expand disabled")
             raise RefResolutionError("EMPTY_REFS_DENIED", "auto expansion disabled by config")

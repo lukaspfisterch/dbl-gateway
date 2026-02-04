@@ -8,7 +8,7 @@ version = "0.5.1"
 description = "DBL Gateway"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
-license = "MIT"
+license = { text = "MIT" }
 authors = [
   { name = "Lukas Pfister", email = "228201683+lukaspfisterch@users.noreply.github.com" }
 ]
@@ -16,7 +16,6 @@ keywords = ["dbl", "gateway", "llm", "policy", "deterministic", "audit"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
