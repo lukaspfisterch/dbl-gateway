@@ -51,3 +51,4 @@ data/
 *.sqlite
 *.db
 dev-shell.ps1
+start_gw.cmd
