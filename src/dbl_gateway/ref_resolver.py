@@ -10,6 +10,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
+import time
+import httpx
+import logging
 
 from .config import ContextConfig
 from .contracts import DeclaredRef, ResolvedRef
@@ -24,6 +27,8 @@ __all__ = [
     "resolve_declared_refs",
     "ResolutionResult",
 ]
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class RefResolutionError(ValueError):
@@ -79,6 +84,7 @@ class ResolutionResult:
     
     # Digests of normative input payloads (for assembled_context)
     normative_input_digests: tuple[str, ...]
+    warnings: tuple[str, ...] = ()
 
 
 def _extract_event_content(event: EventRecord) -> str:
@@ -129,6 +135,8 @@ def resolve_declared_refs(
     thread_id: str,
     thread_events: Sequence[EventRecord],
     config: ContextConfig,
+    *,
+    intent_type: str,
 ) -> ResolutionResult:
     """
     Resolve declared_refs against thread events.
@@ -167,15 +175,29 @@ def resolve_declared_refs(
     by_turn: dict[str, EventRecord] = {}
     
     for event in thread_events:
-        if event.get("correlation_id"):
-            by_correlation[event["correlation_id"]] = event
-        if event.get("turn_id"):
-            by_turn[event["turn_id"]] = event
+        corr = event.get("correlation_id")
+        turn = event.get("turn_id")
+        kind = event.get("kind", "")
+        intent = event.get("intent_type")
+
+        # Prefer handle INTENTs for lookup by turn_id/correlation_id
+        if kind == "INTENT" and intent == "artifact.handle":
+            if corr:
+                by_correlation[corr] = event
+            if turn:
+                by_turn[turn] = event
+            continue
+
+        if corr and corr not in by_correlation:
+            by_correlation[corr] = event
+        if turn and turn not in by_turn:
+            by_turn[turn] = event
     
     # 3. Resolve each ref
     resolved: list[ResolvedRef] = []
     normative: list[ResolvedRef] = []
     normative_digests: list[str] = []
+    warnings: list[str] = []
     
     for ref in declared_refs:
         ref_id = ref.get("ref_id", "")
@@ -194,7 +216,16 @@ def resolve_declared_refs(
         
         # Classify based on event kind
         event_kind = event.get("kind", "")
-        if event_kind == "INTENT":
+        if event_kind == "INTENT" and event.get("intent_type") == "artifact.handle":
+            content, warn = _resolve_handle_content(
+                event,
+                config=config,
+                intent_type=intent_type,
+            )
+            if warn:
+                warnings.append(warn)
+            admitted_for = "model_context" if content else "execution_only"
+        elif event_kind == "INTENT":
             admitted_for = "governance"
         elif event_kind == "EXECUTION":
             if config.allow_execution_refs_for_prompt:
@@ -213,7 +244,7 @@ def resolve_declared_refs(
             "event_digest": event.get("digest", ""),
             "event_kind": event_kind,
             "admitted_for": admitted_for,
-            "content": _extract_event_content(event),
+            "content": content if event_kind == "INTENT" and event.get("intent_type") == "artifact.handle" else _extract_event_content(event),
         }
         
         if ref.get("version"):
@@ -243,4 +274,91 @@ def resolve_declared_refs(
         resolved_refs=tuple(resolved),
         normative_refs=tuple(normative),
         normative_input_digests=tuple(normative_digests),
+        warnings=tuple(warnings),
     )
+
+
+def _resolve_handle_content(
+    event: EventRecord,
+    *,
+    config: ContextConfig,
+    intent_type: str,
+) -> tuple[str | None, str | None]:
+    def _warn(code: str) -> str:
+        ref_id = event.get("turn_id") or event.get("correlation_id") or "unknown"
+        return f"{code} ref_id={ref_id}"
+
+    if intent_type != "chat.message":
+        return None, _warn("HANDLE_CONTENT_FETCH_DISABLED")
+    if not config.allow_handle_content_fetch:
+        return None, _warn("HANDLE_CONTENT_FETCH_DISABLED")
+    if not config.workbench_resolver_url:
+        return None, _warn("HANDLE_CONTENT_FETCH_DISABLED")
+    payload = event.get("payload")
+    if not isinstance(payload, Mapping):
+        return None, _warn("HANDLE_CONTENT_FETCH_PARSE_ERROR")
+    handle = payload.get("handle")
+    resolver = payload.get("resolver")
+    if not isinstance(handle, Mapping) or not isinstance(resolver, Mapping):
+        return None, _warn("HANDLE_CONTENT_FETCH_PARSE_ERROR")
+    artifact_kind = handle.get("artifact_kind")
+    if not isinstance(artifact_kind, str) or artifact_kind not in config.workbench_admit_kinds:
+        return None, _warn("HANDLE_CONTENT_FETCH_KIND_DENIED")
+    scope = handle.get("scope")
+    if not isinstance(scope, str) or scope not in ("full", "summary"):
+        return None, _warn("HANDLE_CONTENT_FETCH_PARSE_ERROR")
+    size = handle.get("bytes")
+    if isinstance(size, int) and size > config.workbench_max_bytes:
+        return None, _warn("HANDLE_CONTENT_FETCH_TOO_LARGE")
+    resolver_type = resolver.get("type")
+    endpoint = resolver.get("endpoint")
+    if resolver_type != "workbench" or not isinstance(endpoint, str):
+        return None, _warn("HANDLE_CONTENT_FETCH_PARSE_ERROR")
+    case_id, artifact_id = _parse_workbench_endpoint(endpoint)
+    if not case_id or not artifact_id:
+        return None, _warn("HANDLE_CONTENT_FETCH_PARSE_ERROR")
+    handle_art_id = handle.get("artifact_ref_id")
+    if not isinstance(handle_art_id, str) or handle_art_id != artifact_id:
+        return None, _warn("HANDLE_CONTENT_FETCH_PARSE_ERROR")
+    base_url = config.workbench_resolver_url.rstrip("/")
+    url = f"{base_url}/cases/{case_id}/artifacts/{artifact_id}"
+    headers = {}
+    if config.workbench_auth_bearer_token:
+        headers["Authorization"] = f"Bearer {config.workbench_auth_bearer_token}"
+    timeout_s = config.workbench_fetch_timeout_ms / 1000.0
+    start = time.perf_counter()
+    try:
+        _LOGGER.info("handle_fetch.start url=%s timeout_s=%.3f", url, timeout_s)
+        resp = httpx.get(url, headers=headers, timeout=timeout_s)
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        _LOGGER.info("handle_fetch.done url=%s status=%s elapsed_ms=%d", url, resp.status_code, elapsed_ms)
+    except httpx.TimeoutException:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        _LOGGER.warning("handle_fetch.timeout url=%s elapsed_ms=%d", url, elapsed_ms)
+        return None, _warn("HANDLE_CONTENT_FETCH_TIMEOUT")
+    except Exception:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        _LOGGER.exception("handle_fetch.error url=%s elapsed_ms=%d", url, elapsed_ms)
+        return None, _warn("HANDLE_CONTENT_FETCH_HTTP_ERROR")
+    if resp.status_code >= 400:
+        return None, _warn("HANDLE_CONTENT_FETCH_HTTP_ERROR")
+    ctype = resp.headers.get("content-type", "")
+    if ctype and not ctype.lower().startswith("text/plain"):
+        return None, _warn("HANDLE_CONTENT_FETCH_CONTENT_TYPE")
+    data = resp.content
+    if len(data) > config.workbench_max_bytes:
+        return None, _warn("HANDLE_CONTENT_FETCH_TOO_LARGE")
+    text = data.decode("utf-8", errors="replace")
+    return text, None
+
+
+def _parse_workbench_endpoint(endpoint: str) -> tuple[str | None, str | None]:
+    if not endpoint.startswith("workbench://"):
+        return None, None
+    rest = endpoint[len("workbench://"):].strip("/")
+    parts = rest.split("/")
+    if len(parts) < 4:
+        return None, None
+    if parts[0] != "cases" or parts[2] != "artifacts":
+        return None, None
+    return parts[1], parts[3]

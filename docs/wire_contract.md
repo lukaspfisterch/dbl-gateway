@@ -111,6 +111,30 @@ anchors plus a `handle` block:
 
 These handle events are **metadata-only** and do **not** trigger policy decisions.
 
+### Handle Content Fetch (Gateway)
+
+If enabled, the gateway may resolve `artifact.handle` references into **model context**
+for `chat.message` intents by fetching content from the Workbench resolver.
+
+This is guarded by config and never uses the event-provided endpoint as a free URL.
+
+Config keys (context.handle_content_fetch):
+- `allow_handle_content_fetch` (bool)
+- `workbench_resolver_url` (base URL; must be http/https)
+- `workbench_auth_bearer_token` (optional)
+- `workbench_fetch_timeout_ms` (default 1500)
+- `workbench_max_bytes` (default 512000)
+- `workbench_admit_kinds` (default ["extracted_text","summary"])
+
+Warnings (observational, stored in `assembled_context.warnings`):
+- `HANDLE_CONTENT_FETCH_DISABLED`
+- `HANDLE_CONTENT_FETCH_KIND_DENIED`
+- `HANDLE_CONTENT_FETCH_TOO_LARGE`
+- `HANDLE_CONTENT_FETCH_TIMEOUT`
+- `HANDLE_CONTENT_FETCH_HTTP_ERROR`
+- `HANDLE_CONTENT_FETCH_PARSE_ERROR`
+- `HANDLE_CONTENT_FETCH_CONTENT_TYPE`
+
 ### Declared Refs for Chat Intents
 
 Subsequent chat intents should reference the handle event by **`turn_id`**:

@@ -341,6 +341,7 @@ def _boundary_transforms(
     boundary_meta: Mapping[str, Any] | None,
 ) -> list[dict[str, Any]]:
     transforms: list[dict[str, Any]] = []
+    resolution_warnings: list[str] = []
     rejections = []
     if isinstance(boundary_meta, Mapping):
         rejections = boundary_meta.get("rejections") or []
@@ -434,6 +435,7 @@ def build_context_with_refs(
     resolved_refs: list[ResolvedRef] = []
     normative_input_digests: list[str] = []
     transforms: list[dict[str, Any]] = []
+    resolution_warnings: list[str] = []
     
     # 1. Automatic Context Expansion (explicit and gated by config)
     auto_refs: list[ResolvedRef] = []
@@ -486,9 +488,11 @@ def build_context_with_refs(
             thread_id=thread_id,
             thread_events=list(thread_events),
             config=cfg,
+            intent_type=intent_type,
         )
         resolved_refs = list(resolution.resolved_refs)
         normative_input_digests = list(resolution.normative_input_digests)
+        resolution_warnings = list(resolution.warnings)
     
         # Also, check if we need to expand resolved_refs if some auto-mode was requested on TOP?
         # Non-goal for now. Explicit > Implicit.
@@ -533,6 +537,8 @@ def build_context_with_refs(
         "assembled_from": resolved_refs,
         "normative_input_digests": normative_input_digests,
     }
+    if resolution_warnings:
+        assembled_context["warnings"] = list(resolution_warnings)
     
     context_digest_value = context_digest(context_spec, assembled_context)
     

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from urllib.parse import urlparse
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -40,6 +41,14 @@ class ContextConfig:
     allow_execution_refs_for_prompt: bool
     canonical_sort: Literal["event_index_asc", "event_index_desc", "none"]
     enforce_scope_bound: bool
+
+    # Handle content fetch (Workbench resolver)
+    allow_handle_content_fetch: bool
+    workbench_resolver_url: str | None
+    workbench_auth_bearer_token: str | None
+    workbench_fetch_timeout_ms: int
+    workbench_max_bytes: int
+    workbench_admit_kinds: tuple[str, ...]
     
     # Normalization rules
     normalization_rules: tuple[str, ...]
@@ -124,6 +133,70 @@ def _parse_config(raw: Mapping[str, Any]) -> ContextConfig:
     enforce_scope = context.get("enforce_scope_bound", True)
     if not isinstance(enforce_scope, bool):
         raise ValueError("enforce_scope_bound must be boolean")
+
+    handle_cfg = context.get("handle_content_fetch", {})
+    if not isinstance(handle_cfg, Mapping):
+        handle_cfg = {}
+    allow_handle_fetch = handle_cfg.get("allow_handle_content_fetch", False)
+    if not isinstance(allow_handle_fetch, bool):
+        raise ValueError("handle_content_fetch.allow_handle_content_fetch must be boolean")
+    resolver_url = handle_cfg.get("workbench_resolver_url")
+    if resolver_url is not None and not isinstance(resolver_url, str):
+        raise ValueError("handle_content_fetch.workbench_resolver_url must be string when provided")
+    auth_token = handle_cfg.get("workbench_auth_bearer_token")
+    if auth_token is not None and not isinstance(auth_token, str):
+        raise ValueError("handle_content_fetch.workbench_auth_bearer_token must be string when provided")
+    fetch_timeout_ms = handle_cfg.get("workbench_fetch_timeout_ms", 1500)
+    if not isinstance(fetch_timeout_ms, int) or fetch_timeout_ms < 100:
+        raise ValueError("handle_content_fetch.workbench_fetch_timeout_ms must be int >= 100")
+    max_bytes = handle_cfg.get("workbench_max_bytes", 512000)
+    if not isinstance(max_bytes, int) or max_bytes < 1024:
+        raise ValueError("handle_content_fetch.workbench_max_bytes must be int >= 1024")
+    admit_kinds = handle_cfg.get("workbench_admit_kinds", ["extracted_text", "summary"])
+    if not isinstance(admit_kinds, list) or not all(isinstance(k, str) for k in admit_kinds):
+        raise ValueError("handle_content_fetch.workbench_admit_kinds must be list[str]")
+
+    # Env overrides (explicit)
+    def _env_bool(name: str) -> bool | None:
+        raw_val = os.getenv(name)
+        if raw_val is None:
+            return None
+        val = raw_val.strip().lower()
+        if val in ("1", "true", "yes", "on"):
+            return True
+        if val in ("0", "false", "no", "off"):
+            return False
+        return None
+
+    def _env_int(name: str) -> int | None:
+        raw_val = os.getenv(name)
+        if raw_val is None:
+            return None
+        try:
+            return int(raw_val.strip())
+        except ValueError:
+            return None
+
+    env_allow = _env_bool("ALLOW_HANDLE_CONTENT_FETCH")
+    if env_allow is not None:
+        allow_handle_fetch = env_allow
+    env_url = os.getenv("WORKBENCH_RESOLVER_URL")
+    if env_url is not None and env_url.strip():
+        resolver_url = env_url.strip()
+    env_token = os.getenv("WORKBENCH_AUTH_BEARER_TOKEN")
+    if env_token is not None:
+        auth_token = env_token.strip()
+    env_timeout = _env_int("WORKBENCH_FETCH_TIMEOUT_MS")
+    if env_timeout is not None and env_timeout >= 100:
+        fetch_timeout_ms = env_timeout
+    env_max = _env_int("WORKBENCH_MAX_BYTES")
+    if env_max is not None and env_max >= 1024:
+        max_bytes = env_max
+    env_kinds = os.getenv("WORKBENCH_ADMIT_KINDS")
+    if env_kinds is not None:
+        items = [k.strip() for k in env_kinds.split(",") if k.strip()]
+        if items:
+            admit_kinds = items
     
     # Normalization rules
     normalization = raw.get("normalization", {})
@@ -142,6 +215,12 @@ def _parse_config(raw: Mapping[str, Any]) -> ContextConfig:
     # Compute config_digest
     config_digest = _compute_config_digest(raw)
     
+    # Basic scheme guard for resolver URL (trusted operator config)
+    if isinstance(resolver_url, str) and resolver_url.strip():
+        parsed = urlparse(resolver_url.strip())
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError("handle_content_fetch.workbench_resolver_url must be http(s)")
+
     return ContextConfig(
         max_refs=max_refs,
         empty_refs_policy=empty_refs_policy,
@@ -149,6 +228,12 @@ def _parse_config(raw: Mapping[str, Any]) -> ContextConfig:
         allow_execution_refs_for_prompt=allow_execution,
         canonical_sort=canonical_sort,
         enforce_scope_bound=enforce_scope,
+        allow_handle_content_fetch=allow_handle_fetch,
+        workbench_resolver_url=resolver_url.strip() if isinstance(resolver_url, str) and resolver_url.strip() else None,
+        workbench_auth_bearer_token=auth_token.strip() if isinstance(auth_token, str) and auth_token.strip() else None,
+        workbench_fetch_timeout_ms=fetch_timeout_ms,
+        workbench_max_bytes=max_bytes,
+        workbench_admit_kinds=tuple(admit_kinds),
         normalization_rules=tuple(rules),
         expand_thread_history_enabled=expand_enabled,
         schema_version=str(schema_version),

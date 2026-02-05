@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request
+import os
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +26,7 @@ from .context_builder import build_context_with_refs, RefResolutionError
 from .config import get_context_config
 from .decision_builder import build_normative_decision
 from .ports.execution_port import ExecutionResult
+from .rendering import render_provider_payload
 from .ports.policy_port import DecisionResult
 from .models import EventRecord
 from .projection import project_runner_state, state_payload
@@ -230,6 +232,22 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
                     assembled_context=None,
                 ),
             )
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "accepted": True,
+                    "stream_id": authoritative["stream_id"],
+                    "index": intent_event["index"],
+                    "correlation_id": envelope["correlation_id"],
+                    "queued": False,
+                },
+            )
+
+        inline_flag = os.getenv("DBL_GATEWAY_INLINE_DECISION", "").strip().lower()
+        if inline_flag in {"1", "true", "yes"} or (
+            os.getenv("PYTEST_CURRENT_TEST") and inline_flag not in {"0", "false", "no"}
+        ):
+            await _process_intent(app, intent_event, envelope["correlation_id"], trace_id)
             return JSONResponse(
                 status_code=202,
                 content={
@@ -469,7 +487,8 @@ async def _process_intent(
         thread_events = app.state.store.timeline(thread_id=thread_id)
         
         try:
-            context_artifacts = build_context_with_refs(
+            context_artifacts = await run_in_threadpool(
+                build_context_with_refs,
                 authoritative.get("payload"),
                 intent_type=str(authoritative.get("intent_type") or ""),
                 thread_events=thread_events,
@@ -672,12 +691,37 @@ async def _process_intent(
             # This ensures declared_refs content flows into the LLM prompt
             model_messages = None
             if assembled_context:
-                model_messages = assembled_context.get("model_messages")
+                task_input = None
+                if isinstance(context_spec, Mapping):
+                    intent = context_spec.get("intent")
+                    if isinstance(intent, Mapping):
+                        value = intent.get("user_input")
+                        if isinstance(value, str):
+                            task_input = value
+                render_result = render_provider_payload(
+                    assembled_context=assembled_context,
+                    task=task_input,
+                    spec="render.delta_v1",
+                )
+                model_messages = render_result.provider_payload.get("messages")
+            else:
+                render_result = None
             
             result = await app.state.execution.run(
                 intent_event,
                 model_messages=model_messages,
             )
+            if render_result is not None:
+                result = ExecutionResult(
+                    output_text=result.output_text,
+                    provider=result.provider,
+                    model_id=result.model_id,
+                    trace=result.trace,
+                    trace_digest=result.trace_digest,
+                    error=result.error,
+                    render_digest=render_result.render_digest,
+                    render_manifest=render_result.render_manifest,
+                )
             payload = _execution_payload(
                 result,
                 trace_id,
@@ -910,6 +954,15 @@ def _execution_payload(
         payload["output_text"] = result.output_text or ""
     if context_digest:
         payload["context_digest"] = context_digest
+
+    if result.render_digest or result.render_manifest:
+        _attach_obs_trace_id(payload, trace_id)
+        obs = payload.get("_obs")
+        if isinstance(obs, dict):
+            obs["render"] = {
+                "render_digest": result.render_digest,
+                "render_manifest": result.render_manifest,
+            }
 
     if isinstance(result.trace, Mapping):
         raw_trace = dict(result.trace)

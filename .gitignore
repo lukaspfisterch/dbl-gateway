@@ -20,6 +20,7 @@ __pycache__/
 
 # Virtual environments
 .venv/
+.venv-*/
 venv/
 env/
 .env/
@@ -49,3 +50,4 @@ build/
 data/
 *.sqlite
 *.db
+dev-shell.ps1

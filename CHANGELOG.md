@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.5.2 — Capabilities Inventory
+- Added client-facing capabilities inventory in `docs/capabilities.gateway.v1.json` and `docs/CAPABILITIES.md`.
+- Documented stable vs variable capability surface and default limits.
+
 ## v0.5.1 — Consistency & Context Gating
 - Gate auto-context expansion behind config flag (off by default).
 - Align context digest semantics in docs (assembly digest).

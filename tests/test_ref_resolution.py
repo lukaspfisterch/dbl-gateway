@@ -79,6 +79,7 @@ class TestRefResolver:
             thread_id="thread-1",
             thread_events=events,
             config=sample_config,
+            intent_type="chat.message",
         )
         
         assert len(result.resolved_refs) == 1
@@ -100,6 +101,7 @@ class TestRefResolver:
                 thread_id="thread-1",
                 thread_events=events,
                 config=sample_config,
+                intent_type="chat.message",
             )
         
         assert exc.value.code == "REF_NOT_FOUND"
@@ -118,6 +120,7 @@ class TestRefResolver:
                 thread_id="thread-B",  # Requesting from thread-B
                 thread_events=events,
                 config=sample_config,
+                intent_type="chat.message",
             )
         
         assert exc.value.code == "CROSS_THREAD_REF"
@@ -135,6 +138,7 @@ class TestRefResolver:
                 thread_id="t",
                 thread_events=events,
                 config=sample_config,  # max_refs=5
+                intent_type="chat.message",
             )
         
         assert exc.value.code == "MAX_REFS_EXCEEDED"
@@ -162,12 +166,14 @@ class TestRefResolver:
             thread_id="thread-1",
             thread_events=events,
             config=sample_config,
+            intent_type="chat.message",
         )
         result_ord = resolve_declared_refs(
             declared_refs=declared_refs_ord,
             thread_id="thread-1",
             thread_events=events,
             config=sample_config,
+            intent_type="chat.message",
         )
         
         # Both should produce same canonical order
@@ -191,6 +197,7 @@ class TestRefResolver:
             thread_id="thread-1",
             thread_events=events,
             config=sample_config,
+            intent_type="chat.message",
         )
         
         assert len(result.resolved_refs) == 2
@@ -217,6 +224,7 @@ class TestRefResolver:
             thread_id="thread-1",
             thread_events=events,
             config=sample_config,
+            intent_type="chat.message",
         )
         
         # Only INTENT digest in normative

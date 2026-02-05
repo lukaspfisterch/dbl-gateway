@@ -1,0 +1,194 @@
+{
+  "schema": "gateway.capabilities.v1",
+  "generated_at": "2026-02-05T20:29:10.227156+00:00",
+  "gateway": {
+    "name": "DBL Gateway",
+    "version": "unknown",
+    "boundary_version": "1",
+    "policy_version": "unknown"
+  },
+  "api": {
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/healthz",
+        "purpose": "Health check",
+        "request_schema": "none",
+        "response_schema": "{status: string}"
+      },
+      {
+        "method": "GET",
+        "path": "/capabilities",
+        "purpose": "List provider/model capabilities and supported surfaces",
+        "request_schema": "none",
+        "response_schema": "CapabilitiesResponse (interface_version=2)"
+      },
+      {
+        "method": "POST",
+        "path": "/ingress/intent",
+        "purpose": "Ingest an intent envelope (authoritative input)",
+        "request_schema": "IntentEnvelope (interface_version=2)",
+        "response_schema": "{accepted:boolean, stream_id:string, index:int, correlation_id:string, queued:boolean, reason_code?:string, detail?:string}"
+      },
+      {
+        "method": "GET",
+        "path": "/snapshot",
+        "purpose": "Snapshot of event log",
+        "request_schema": "SnapshotQuery {limit, offset, stream_id?, lane?}",
+        "response_schema": "SnapshotResponse {length, offset, limit, v_digest, events[] }"
+      },
+      {
+        "method": "GET",
+        "path": "/threads/{thread_id}/timeline",
+        "purpose": "Thread timeline grouped by turns",
+        "request_schema": "{thread_id:path, include_payload?:bool}",
+        "response_schema": "{thread_id, turns:[{turn_id,parent_turn_id,events:[{idx,kind,correlation_id,context_digest?,decision_digest?,payload?}]}]}"
+      },
+      {
+        "method": "GET",
+        "path": "/tail",
+        "purpose": "SSE stream of events from snapshot",
+        "request_schema": "TailQuery {since, stream_id?, lanes?}",
+        "response_schema": "text/event-stream (event: envelope, data: EventRecord JSON)"
+      },
+      {
+        "method": "GET",
+        "path": "/status",
+        "purpose": "Projected runner state",
+        "request_schema": "{stream_id?:string}",
+        "response_schema": "{phase, runner_status, t_index, note}"
+      },
+      {
+        "method": "POST",
+        "path": "/execution/event",
+        "purpose": "Submit external execution result (only when exec_mode=external)",
+        "request_schema": "{correlation_id, lane, actor, intent_type, stream_id, payload}",
+        "response_schema": "{ok:boolean, execution_index:int}"
+      }
+    ]
+  },
+  "intents": [
+    {
+      "intent_type": "chat.message",
+      "accepted_inputs": "payload.message (string), payload.inputs (object optional), payload.declared_refs (list optional), payload.context_mode/context_n (optional)",
+      "declared_refs_rules": "declared_refs must be list of {ref_type, ref_id, optional version}; max_refs=50; empty_refs_policy=DENY by default; scope bound enforced",
+      "admitted_content_rules": "INTENT events admitted for governance; EXECUTION refs admitted only if allow_execution_refs_for_prompt=true; artifact.handle can fetch content when handle_content_fetch enabled and kind allowlisted"
+    },
+    {
+      "intent_type": "artifact.handle",
+      "accepted_inputs": "payload.handle + payload.resolver (see workbench handle schema)",
+      "declared_refs_rules": "Same as chat.message; ref_type=event",
+      "admitted_content_rules": "Content fetch denied by default unless handle_content_fetch enabled and artifact kind allowlisted"
+    }
+  ],
+  "schemas": [
+    {
+      "id": "IntentEnvelope",
+      "version": "2",
+      "source": "wire_contract.py INTERFACE_VERSION=2"
+    },
+    {
+      "id": "ContextSpec",
+      "version": "ctxspec.2",
+      "source": "context_builder.py CONTEXT_SPEC_SCHEMA_VERSION"
+    },
+    {
+      "id": "ContextConfig",
+      "version": "1",
+      "source": "config/context.schema.json"
+    },
+    {
+      "id": "CapabilitiesResponse",
+      "version": "interface_version=2",
+      "source": "capabilities.py"
+    }
+  ],
+  "providers": [
+    {
+      "id": "openai",
+      "model_sources": [
+        "OPENAI_CHAT_MODEL_IDS",
+        "OPENAI_MODEL_IDS",
+        "OPENAI_RESPONSES_MODEL_IDS"
+      ],
+      "default_models": [
+        "gpt-4o-mini",
+        "gpt-5.2"
+      ],
+      "notes": "Responses API used for gpt-5* and OPENAI_RESPONSES_MODEL_IDS"
+    },
+    {
+      "id": "anthropic",
+      "model_sources": [
+        "ANTHROPIC_MODEL_IDS"
+      ],
+      "default_models": [
+        "claude-3-haiku-20240307"
+      ],
+      "notes": "Requires ANTHROPIC_API_KEY"
+    },
+    {
+      "id": "ollama",
+      "model_sources": [
+        "OLLAMA_MODEL_IDS",
+        "OLLAMA_BASE_URL/OLLAMA_HOST /api/tags"
+      ],
+      "default_models": [],
+      "notes": "Dynamic discovery if base URL set"
+    }
+  ],
+  "limits": {
+    "max_refs": 50,
+    "empty_refs_policy": "DENY",
+    "expand_last_n": 10,
+    "allow_execution_refs_for_prompt": true,
+    "canonical_sort": "event_index_asc",
+    "enforce_scope_bound": true,
+    "handle_content_fetch": {
+      "allow_handle_content_fetch": false,
+      "workbench_fetch_timeout_ms": 1500,
+      "workbench_max_bytes": 512000,
+      "workbench_admit_kinds": [
+        "extracted_text",
+        "summary"
+      ]
+    },
+    "queue_max": 100,
+    "concurrency": {
+      "ingest": 2,
+      "embed": 1,
+      "index": 1,
+      "llm": 1
+    },
+    "llm_wall_clock_s": 60,
+    "max_output_tokens": {
+      "openai": 8192,
+      "anthropic": 8192,
+      "ollama": 4096
+    }
+  },
+  "failure_codes": [
+    "admission.invalid_parent",
+    "queue.full",
+    "workers.stopped",
+    "EMPTY_REFS_DENIED",
+    "REF_NOT_FOUND",
+    "CROSS_THREAD_REF",
+    "MAX_REFS_EXCEEDED",
+    "context.invalid_shape",
+    "gateway.observer_mode",
+    "evaluation_error",
+    "model_unavailable",
+    "provider.missing_credentials",
+    "model.unavailable",
+    "llm.timeout",
+    "input.invalid",
+    "HANDLE_CONTENT_FETCH_DISABLED",
+    "HANDLE_CONTENT_FETCH_KIND_DENIED",
+    "HANDLE_CONTENT_FETCH_TOO_LARGE",
+    "HANDLE_CONTENT_FETCH_TIMEOUT",
+    "HANDLE_CONTENT_FETCH_HTTP_ERROR",
+    "HANDLE_CONTENT_FETCH_CONTENT_TYPE",
+    "HANDLE_CONTENT_FETCH_PARSE_ERROR"
+  ]
+}

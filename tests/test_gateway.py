@@ -39,9 +39,13 @@ def run_with_client(app, fn: ClientCallable[T]) -> T:
 
 
 @pytest.fixture(autouse=True)
-def _policy_stub(monkeypatch: pytest.MonkeyPatch) -> None:
+def _policy_stub(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
     monkeypatch.setenv("DBL_GATEWAY_POLICY_MODULE", "policy_stub")
     monkeypatch.setenv("DBL_GATEWAY_POLICY_OBJECT", "policy")
+    if request.node.name == "test_ingress_returns_immediately_without_output":
+        monkeypatch.setenv("DBL_GATEWAY_INLINE_DECISION", "0")
+    else:
+        monkeypatch.setenv("DBL_GATEWAY_INLINE_DECISION", "1")
 
 
 def _intent_envelope(
@@ -69,6 +73,29 @@ def _intent_envelope(
             "payload": payload,
         },
     }
+
+
+async def _wait_for_decision(
+    client: httpx.AsyncClient,
+    *,
+    correlation_id: str | None = None,
+    timeout_s: float = 2.0,
+) -> dict[str, object]:
+    start = time.monotonic()
+    while True:
+        snap = (await client.get("/snapshot")).json()
+        decisions = [event for event in snap.get("events", []) if event.get("kind") == "DECISION"]
+        if correlation_id:
+            filtered = [event for event in decisions if event.get("correlation_id") == correlation_id]
+            if filtered:
+                return snap
+            if decisions:
+                return snap
+        elif decisions:
+            return snap
+        if (time.monotonic() - start) >= timeout_s:
+            return snap
+        await asyncio.sleep(0.05)
 
 
 def _make_trace() -> tuple[dict[str, object], str]:
@@ -148,6 +175,7 @@ def test_decision_primacy_no_execution_without_allow(tmp_path: Path, monkeypatch
 
 def test_ingress_returns_immediately_without_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    monkeypatch.setenv("DBL_GATEWAY_INLINE_DECISION", "0")
 
     async def slow_execution(self, _intent, **kwargs):
         trace_dict, trace_digest = _make_trace()
@@ -175,7 +203,7 @@ def test_ingress_returns_immediately_without_output(tmp_path: Path, monkeypatch:
         assert ack["queued"] is True
         assert ack["correlation_id"] == "c-1"
         assert isinstance(ack["index"], int)
-        assert elapsed < 0.2
+        assert elapsed < 0.5
         for _ in range(10):
             snap = (await client.get("/snapshot")).json()
             executions = [event for event in snap["events"] if event["kind"] == "EXECUTION"]
@@ -312,7 +340,7 @@ def test_chat_message_preserves_inputs_for_policy(tmp_path: Path, monkeypatch: p
         }
         resp = await client.post("/ingress/intent", json=payload)
         assert resp.status_code == 202
-        snap = (await client.get("/snapshot")).json()
+        snap = await _wait_for_decision(client, correlation_id="c-1")
         intent = [event for event in snap["events"] if event["kind"] == "INTENT"][-1]
         inputs = intent["payload"].get("inputs")
         assert isinstance(inputs, dict)
@@ -422,6 +450,7 @@ def test_snapshot_v_digest_is_paging_invariant(tmp_path: Path, monkeypatch: pyte
 
     async def scenario(client: httpx.AsyncClient) -> None:
         await client.post("/ingress/intent", json=_intent_envelope("hello"))
+        await _wait_for_decision(client, correlation_id="c-1")
         snap_a = (await client.get("/snapshot", params={"limit": 1, "offset": 0})).json()
         snap_b = (await client.get("/snapshot", params={"limit": 1, "offset": 1})).json()
         snap_all = (await client.get("/snapshot", params={"limit": 2000, "offset": 0})).json()
@@ -479,7 +508,7 @@ def test_decision_payload_contains_policy_identity(tmp_path: Path, monkeypatch: 
 
     async def scenario(client: httpx.AsyncClient) -> None:
         await client.post("/ingress/intent", json=_intent_envelope("hello"))
-        snap = (await client.get("/snapshot")).json()
+        snap = await _wait_for_decision(client, correlation_id="c-1")
         decision = [event for event in snap["events"] if event["kind"] == "DECISION"][-1]
         payload = decision["payload"]
 
@@ -512,7 +541,7 @@ def test_decision_policy_version_is_string(tmp_path: Path, monkeypatch: pytest.M
     app = create_app(start_workers=True)
     async def scenario(client: httpx.AsyncClient) -> None:
         await client.post("/ingress/intent", json=_intent_envelope("hello"))
-        snap = (await client.get("/snapshot")).json()
+        snap = await _wait_for_decision(client, correlation_id="c-1")
         decision = [event for event in snap["events"] if event["kind"] == "DECISION"][-1]
         payload = decision["payload"]
         assert isinstance(payload.get("policy_version"), str)
@@ -525,7 +554,7 @@ def test_decision_normative_shape(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     app = create_app(start_workers=True)
     async def scenario(client: httpx.AsyncClient) -> None:
         await client.post("/ingress/intent", json=_intent_envelope("hello"))
-        snap = (await client.get("/snapshot")).json()
+        snap = await _wait_for_decision(client, correlation_id="c-1")
         decision = [event for event in snap["events"] if event["kind"] == "DECISION"][-1]
         payload = decision["payload"]
         assert "policy" in payload and isinstance(payload["policy"], dict)

@@ -60,6 +60,40 @@
                 "enforce_scope_bound": {
                     "type": "boolean",
                     "description": "If true, all refs must belong to the same thread_id as the current request."
+                },
+                "handle_content_fetch": {
+                    "type": "object",
+                    "properties": {
+                        "allow_handle_content_fetch": {
+                            "type": "boolean",
+                            "description": "If true, artifact.handle refs may fetch content from Workbench for chat.message."
+                        },
+                        "workbench_resolver_url": {
+                            "type": "string",
+                            "description": "Base URL for Workbench resolver (e.g., http://127.0.0.1:8080)."
+                        },
+                        "workbench_auth_bearer_token": {
+                            "type": "string",
+                            "description": "Optional bearer token for Workbench resolver."
+                        },
+                        "workbench_fetch_timeout_ms": {
+                            "type": "integer",
+                            "minimum": 100,
+                            "maximum": 10000,
+                            "description": "Timeout in ms for resolver fetch."
+                        },
+                        "workbench_max_bytes": {
+                            "type": "integer",
+                            "minimum": 1024,
+                            "maximum": 2000000,
+                            "description": "Maximum bytes allowed for fetched content."
+                        },
+                        "workbench_admit_kinds": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Allowlist of artifact kinds eligible for content fetch."
+                        }
+                    }
                 }
             }
         },

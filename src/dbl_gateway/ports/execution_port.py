@@ -13,6 +13,8 @@ class ExecutionResult:
     trace: dict[str, Any] | None = None
     trace_digest: str | None = None
     error: dict[str, Any] | None = None
+    render_digest: str | None = None
+    render_manifest: dict[str, Any] | None = None
 
 
 class ExecutionPort(Protocol):

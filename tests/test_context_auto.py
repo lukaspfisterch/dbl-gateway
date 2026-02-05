@@ -14,6 +14,12 @@ def mock_config(tmp_path):
         canonical_sort="event_index_asc",
         enforce_scope_bound=True,
         allow_execution_refs_for_prompt=True,
+        allow_handle_content_fetch=False,
+        workbench_resolver_url=None,
+        workbench_auth_bearer_token=None,
+        workbench_fetch_timeout_ms=1500,
+        workbench_max_bytes=512000,
+        workbench_admit_kinds=("extracted_text", "summary"),
         config_digest="sha256:mock",
         schema_version="1",
         normalization_rules=("SORT",), # Tuple

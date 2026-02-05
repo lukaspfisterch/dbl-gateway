@@ -5,8 +5,10 @@
 ![License](https://img.shields.io/github/license/lukaspfisterch/dbl-gateway)
 [![PyPI version](https://img.shields.io/pypi/v/dbl-gateway.svg)](https://pypi.org/project/dbl-gateway/)
 
-**Current version:** 0.5.1  
+**Current version:** 0.5.2  
 This README reflects the 0.5.x execution and runtime model.
+
+Client-facing capabilities are defined in `docs/capabilities.gateway.v1.json`.
 
 DBL Gateway is a deterministic execution boundary for LLM calls.
 
@@ -91,6 +93,26 @@ The gateway validates and resolves these references and makes them available to 
 The gateway never infers conversational context. All references are explicit and must be scope-bound to the thread.
 
 `context_digest` identifies the resolved context assembly (context specification + referenced artifacts). It is not a provider payload digest and does not claim to represent the exact request sent to a model. A provider-specific “final payload digest” is intentionally out of scope for v0.5.x.
+
+### Workbench Handle Fetch (Optional)
+
+For `artifact.handle` references, the gateway can optionally fetch content from a
+Workbench resolver and admit it into **model context** for `chat.message`.
+This is disabled by default and must be explicitly enabled in config/env.
+
+Guardrails:
+- Resolver base URL is config-driven and must be http/https.
+- Content-Type must be `text/plain`.
+- Enforced timeout and max bytes.
+- Allowlist of artifact kinds.
+
+Env overrides:
+- `ALLOW_HANDLE_CONTENT_FETCH`
+- `WORKBENCH_RESOLVER_URL`
+- `WORKBENCH_AUTH_BEARER_TOKEN`
+- `WORKBENCH_FETCH_TIMEOUT_MS`
+- `WORKBENCH_MAX_BYTES`
+- `WORKBENCH_ADMIT_KINDS`
 
 ### I_context / O_context split
 
