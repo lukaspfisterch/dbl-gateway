@@ -11,6 +11,11 @@ class DecisionResult:
     policy_id: str | None = None
     policy_version: str | None = None
     gate_event: object | None = None
+    permitted_tools: list[str] | None = None
+    tool_scope_enforced: str | None = None
+    tools_denied: list[str] | None = None
+    tools_denied_reason: str | None = None
+    enforced_budget: dict[str, Any] | None = None
 
 
 class PolicyPort(Protocol):

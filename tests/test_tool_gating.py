@@ -1,0 +1,60 @@
+"""Tests for tool gating computation and enforcement."""
+import pytest
+from dbl_gateway.app import _compute_permitted_tools
+from dbl_gateway.ports.policy_port import DecisionResult
+
+
+def _allow(**kwargs) -> DecisionResult:
+    return DecisionResult(decision="ALLOW", reason_codes=[], **kwargs)
+
+
+def _deny(**kwargs) -> DecisionResult:
+    return DecisionResult(decision="DENY", reason_codes=["test"], **kwargs)
+
+
+# --- _compute_permitted_tools ---
+
+class TestComputePermittedTools:
+    def test_no_tools_declared(self):
+        """No declared_tools or tool_scope returns all None."""
+        result = _compute_permitted_tools(None, None, _allow())
+        assert result == (None, None, None, None)
+
+    def test_tools_passthrough(self):
+        """declared_tools are passed through as permitted_tools."""
+        tools = ["web.search", "code.execute"]
+        permitted, scope, denied, reason = _compute_permitted_tools(tools, "strict", _allow())
+        assert permitted == ["web.search", "code.execute"]
+        assert scope == "strict"
+        assert denied == []
+        assert reason is None
+
+    def test_default_scope_strict(self):
+        """tool_scope defaults to 'strict' when tools are declared."""
+        tools = ["web.search"]
+        _, scope, _, _ = _compute_permitted_tools(tools, None, _allow())
+        assert scope == "strict"
+
+    def test_advisory_scope(self):
+        """Advisory scope passes through."""
+        tools = ["web.search"]
+        _, scope, _, _ = _compute_permitted_tools(tools, "advisory", _allow())
+        assert scope == "advisory"
+
+    def test_deny_returns_none(self):
+        """DENY decision returns all None regardless of tools."""
+        tools = ["web.search"]
+        result = _compute_permitted_tools(tools, "strict", _deny())
+        assert result == (None, None, None, None)
+
+    def test_empty_tools_with_scope(self):
+        """Empty declared_tools with scope set."""
+        permitted, scope, denied, reason = _compute_permitted_tools([], "strict", _allow())
+        assert permitted == []
+        assert scope == "strict"
+
+    def test_only_scope_no_tools(self):
+        """tool_scope without declared_tools still triggers computation."""
+        permitted, scope, denied, reason = _compute_permitted_tools(None, "advisory", _allow())
+        assert permitted == []
+        assert scope == "advisory"

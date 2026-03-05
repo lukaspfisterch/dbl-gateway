@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json as _json
 import os
 from typing import Any, Mapping, Sequence
 
 import httpx
 
 from .errors import ProviderError
+from ..ports.execution_port import NormalizedResponse
 
 
 def _base_url() -> str:
@@ -29,7 +31,7 @@ def _token_param_name(model_id: str) -> str:
     return "max_tokens"
 
 
-def execute(*, model_id: str, messages: list[dict[str, str]], api_key: str | None = None, **_: Any) -> str:
+def execute(*, model_id: str, messages: list[dict[str, str]], api_key: str | None = None, max_tokens: int | None = None, **_: Any) -> NormalizedResponse:
     key = (api_key or os.getenv("OPENAI_API_KEY", "")).strip()
     if not key:
         raise ProviderError("missing OpenAI credentials")
@@ -38,12 +40,13 @@ def execute(*, model_id: str, messages: list[dict[str, str]], api_key: str | Non
         raise ProviderError("invalid messages")
 
     headers = {"authorization": f"Bearer {key}", "content-type": "application/json"}
+    effective_max_tokens = max_tokens if max_tokens is not None else _max_tokens(1024)
     if _use_responses(model_id):
         message = _extract_user_content(messages)
         if not message:
             raise ProviderError("no user message")
-        return _execute_responses(message, model_id, headers)
-    return _execute_chat_messages(messages, model_id, headers)
+        return _execute_responses(message, model_id, headers, effective_max_tokens)
+    return _execute_chat_messages(messages, model_id, headers, effective_max_tokens)
 
 
 def _extract_user_content(messages: list[dict[str, str]]) -> str:
@@ -67,7 +70,7 @@ def _responses_models() -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
-def _execute_responses(message: str, model_id: str, headers: dict[str, str]) -> str:
+def _execute_responses(message: str, model_id: str, headers: dict[str, str], effective_max_tokens: int) -> NormalizedResponse:
     payload: dict[str, Any] = {
         "model": model_id,
         "input": [
@@ -76,30 +79,31 @@ def _execute_responses(message: str, model_id: str, headers: dict[str, str]) -> 
                 "content": [{"type": "input_text", "text": message}],
             }
         ],
-        "max_output_tokens": _max_tokens(1024),
+        "max_output_tokens": effective_max_tokens,
     }
     with httpx.Client(timeout=30.0) as client:
         resp = client.post("https://api.openai.com/v1/responses", json=payload, headers=headers)
         if resp.status_code >= 400:
             _raise_openai(resp, "openai.responses failed")
         data = resp.json()
-    return _parse_response_text(data)
+    return NormalizedResponse(text=_parse_response_text(data))
 
 
-def _execute_chat_messages(messages: list[dict[str, str]], model_id: str, headers: dict[str, str]) -> str:
+def _execute_chat_messages(messages: list[dict[str, str]], model_id: str, headers: dict[str, str], effective_max_tokens: int) -> NormalizedResponse:
     """Execute chat completion with full messages list."""
     payload: dict[str, Any] = {
         "model": model_id,
         "messages": messages,
         "temperature": 0.2,
     }
-    payload[_token_param_name(model_id)] = _max_tokens(1024)  # Increased for context scenarios
+    payload[_token_param_name(model_id)] = effective_max_tokens
     with httpx.Client(timeout=30.0) as client:
         resp = client.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
         if resp.status_code >= 400:
             _raise_openai(resp, "openai.chat failed")
         data = resp.json()
-    return _parse_chat_text(data)
+    text, tool_calls = _parse_chat_result(data)
+    return NormalizedResponse(text=text, tool_calls=tool_calls)
 
 
 def _parse_chat_text(data: dict[str, Any]) -> str:
@@ -109,6 +113,29 @@ def _parse_chat_text(data: dict[str, Any]) -> str:
     message = choices[0].get("message", {})
     content = message.get("content")
     return content if isinstance(content, str) else ""
+
+
+def _parse_chat_result(data: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:
+    """Parse chat completion response, extracting text and tool calls."""
+    choices = data.get("choices", [])
+    if not choices:
+        return "", []
+    message = choices[0].get("message", {})
+    content = message.get("content")
+    text = content if isinstance(content, str) else ""
+    tool_calls: list[dict[str, Any]] = []
+    for tc in message.get("tool_calls", []):
+        func = tc.get("function", {})
+        args_raw = func.get("arguments", "{}")
+        try:
+            args = _json.loads(args_raw) if isinstance(args_raw, str) else args_raw
+        except _json.JSONDecodeError:
+            args = {"_raw": args_raw}
+        tool_calls.append({
+            "tool_name": func.get("name", ""),
+            "arguments": args if isinstance(args, dict) else {},
+        })
+    return text, tool_calls
 
 
 def _parse_response_text(data: dict[str, Any]) -> str:

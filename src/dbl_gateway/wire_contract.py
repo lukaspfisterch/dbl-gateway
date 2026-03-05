@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Mapping, TypedDict
 
 
-INTERFACE_VERSION = 2
+INTERFACE_VERSION = 3
 
 
 class IntentPayload(TypedDict, total=False):
@@ -18,6 +19,9 @@ class IntentPayload(TypedDict, total=False):
     requested_model_id: str | None
     inputs: dict[str, Any] | None
     declared_refs: list[dict[str, Any]] | None  # NEW: Context refs
+    declared_tools: list[str] | None
+    tool_scope: str | None
+    budget: dict[str, int] | None
 
 
 class IntentEnvelope(TypedDict):
@@ -41,6 +45,11 @@ class DecisionPayload(TypedDict, total=False):
     provider: str
     policy_id: str
     policy_version: str
+    permitted_tools: list[str]
+    tool_scope_enforced: str
+    tools_denied: list[str]
+    tools_denied_reason: str
+    enforced_budget: dict[str, Any]
     _obs: dict[str, Any]
 
 
@@ -54,6 +63,9 @@ class ExecutionPayload(TypedDict, total=False):
     trace: dict[str, Any]
     trace_digest: str
     context_digest: str
+    tool_calls: list[dict[str, Any]]
+    tool_blocked: list[dict[str, Any]]
+    usage: dict[str, Any]
     _obs: dict[str, Any]
 
 
@@ -138,6 +150,9 @@ def parse_intent_envelope(body: Mapping[str, Any]) -> IntentEnvelope:
     if requested_model_id is not None and not isinstance(requested_model_id, str):
         raise ValueError("payload.requested_model_id must be a string")
     declared_refs = _parse_declared_refs(payload.get("declared_refs"))
+    declared_tools = _parse_declared_tools(payload.get("declared_tools"))
+    tool_scope = _parse_tool_scope(payload.get("tool_scope"))
+    budget = _parse_budget(payload.get("budget"))
     return {
         "interface_version": interface_version,
         "correlation_id": correlation_id.strip(),
@@ -153,6 +168,9 @@ def parse_intent_envelope(body: Mapping[str, Any]) -> IntentEnvelope:
             "requested_model_id": requested_model_id.strip() if isinstance(requested_model_id, str) else None,
             "inputs": dict(inputs) if isinstance(inputs, Mapping) else None,
             "declared_refs": declared_refs,
+            "declared_tools": declared_tools,
+            "tool_scope": tool_scope,
+            "budget": budget,
         },
     }
 
@@ -183,3 +201,70 @@ def _parse_declared_refs(raw: Any) -> list[dict[str, Any]] | None:
             ref["version"] = str(version)
         parsed.append(ref)
     return parsed
+
+
+_TOOL_NAME_RE = re.compile(r"^[a-z][a-z0-9_.]{0,63}$")
+_MAX_DECLARED_TOOLS = 20
+
+
+def _parse_declared_tools(raw: Any) -> list[str] | None:
+    """Parse and validate declared_tools from payload."""
+    if raw is None:
+        return None
+    if not isinstance(raw, list):
+        raise ValueError("payload.declared_tools must be a list")
+    if len(raw) > _MAX_DECLARED_TOOLS:
+        raise ValueError(f"payload.declared_tools exceeds maximum of {_MAX_DECLARED_TOOLS}")
+    parsed: list[str] = []
+    for i, item in enumerate(raw):
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"declared_tools[{i}] must be a non-empty string")
+        name = item.strip()
+        if not _TOOL_NAME_RE.match(name):
+            raise ValueError(
+                f"declared_tools[{i}] '{name}' does not match pattern {_TOOL_NAME_RE.pattern}"
+            )
+        parsed.append(name)
+    return parsed
+
+
+def _parse_tool_scope(raw: Any) -> str | None:
+    """Parse and validate tool_scope from payload."""
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise ValueError("payload.tool_scope must be a string")
+    value = raw.strip()
+    if value not in ("strict", "advisory"):
+        raise ValueError("payload.tool_scope must be 'strict' or 'advisory'")
+    return value
+
+
+def _parse_budget(raw: Any) -> dict[str, int] | None:
+    """Parse and validate budget from payload."""
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise ValueError("payload.budget must be an object")
+    budget: dict[str, int] = {}
+    max_tokens = raw.get("max_tokens")
+    if max_tokens is not None:
+        if isinstance(max_tokens, float):
+            raise ValueError("budget.max_tokens must be an integer, not float")
+        if not isinstance(max_tokens, int):
+            raise ValueError("budget.max_tokens must be an integer")
+        if max_tokens < 1 or max_tokens > 1_000_000:
+            raise ValueError("budget.max_tokens must be between 1 and 1000000")
+        budget["max_tokens"] = max_tokens
+    max_duration_ms = raw.get("max_duration_ms")
+    if max_duration_ms is not None:
+        if isinstance(max_duration_ms, float):
+            raise ValueError("budget.max_duration_ms must be an integer, not float")
+        if not isinstance(max_duration_ms, int):
+            raise ValueError("budget.max_duration_ms must be an integer")
+        if max_duration_ms < 1000 or max_duration_ms > 300_000:
+            raise ValueError("budget.max_duration_ms must be between 1000 and 300000")
+        budget["max_duration_ms"] = max_duration_ms
+    if not budget:
+        raise ValueError("budget must contain at least one of max_tokens, max_duration_ms")
+    return budget

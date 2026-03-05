@@ -61,7 +61,9 @@ def test_timeline_linear(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
         decision_entries = [e for e in turn["events"] if e["kind"] == "DECISION"]
         assert decision_entries
         assert isinstance(decision_entries[-1].get("decision_digest"), str)
-        assert isinstance(decision_entries[-1].get("context_digest"), str)
+        # context_digest may be None when context resolution is OFF
+        ctx_digest = decision_entries[-1].get("context_digest")
+        assert ctx_digest is None or isinstance(ctx_digest, str)
 
 
 def test_timeline_fork(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

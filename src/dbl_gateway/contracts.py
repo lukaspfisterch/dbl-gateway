@@ -34,6 +34,12 @@ class DecisionTransform(TypedDict, total=False):
     params: Mapping[str, Any]
 
 
+class BudgetConstraint(TypedDict, total=False):
+    max_tokens: int
+    max_duration_ms: int
+    source: str
+
+
 class DecisionNormative(TypedDict):
     policy: PolicyIdent
     assembly_digest: str | None
@@ -41,6 +47,8 @@ class DecisionNormative(TypedDict):
     result: str
     reasons: list[DecisionReason]
     transforms: list[DecisionTransform]
+    permitted_tools: list[str] | None
+    enforced_budget: BudgetConstraint | None
 
 
 class ContextIdentity(TypedDict, total=False):
@@ -247,6 +255,31 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
     norm_transforms.sort(
         key=lambda t: (t["op"], t["target"], json_dumps(canonicalize_value(t.get("params", {})))))
 
+    # Normalize permitted_tools (sorted for canonical ordering).
+    permitted_tools_raw = decision.get("permitted_tools")
+    norm_permitted_tools: list[str] | None = None
+    if permitted_tools_raw is not None:
+        if not isinstance(permitted_tools_raw, list):
+            raise ValueError("permitted_tools must be a list")
+        norm_permitted_tools = sorted(str(t).strip() for t in permitted_tools_raw)
+
+    # Normalize enforced_budget.
+    enforced_budget_raw = decision.get("enforced_budget")
+    norm_enforced_budget: BudgetConstraint | None = None
+    if enforced_budget_raw is not None:
+        if not isinstance(enforced_budget_raw, Mapping):
+            raise ValueError("enforced_budget must be an object")
+        norm_enforced_budget = {}
+        for bk in ("max_tokens", "max_duration_ms"):
+            bv = enforced_budget_raw.get(bk)
+            if bv is not None:
+                if not isinstance(bv, int):
+                    raise ValueError(f"enforced_budget.{bk} must be an integer")
+                norm_enforced_budget[bk] = bv
+        source = enforced_budget_raw.get("source")
+        if isinstance(source, str) and source.strip():
+            norm_enforced_budget["source"] = source.strip()
+
     return {
         "policy": {"policy_id": policy_id.strip(), "policy_version": policy_version.strip()},
         "assembly_digest": assembly_digest_value,
@@ -254,6 +287,8 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
         "result": result,
         "reasons": norm_reasons,
         "transforms": norm_transforms,
+        "permitted_tools": norm_permitted_tools,
+        "enforced_budget": norm_enforced_budget,
     }
 
 

@@ -558,10 +558,13 @@ def test_decision_normative_shape(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         decision = [event for event in snap["events"] if event["kind"] == "DECISION"][-1]
         payload = decision["payload"]
         assert "policy" in payload and isinstance(payload["policy"], dict)
-        assert "assembly_digest" in payload and isinstance(payload["assembly_digest"], str)
-        assert payload["assembly_digest"] != "sha256:" + ("0" * 64)
+        assert "assembly_digest" in payload
+        # When context resolution is OFF, assembly_digest is None
+        if payload["assembly_digest"] is not None:
+            assert isinstance(payload["assembly_digest"], str)
+            assert payload["assembly_digest"] != "sha256:" + ("0" * 64)
         assert "context_digest" in payload
-        if payload["result"] == "ALLOW":
+        if payload["result"] == "ALLOW" and payload["assembly_digest"] is not None:
             assert isinstance(payload["context_digest"], str)
             assert payload["context_digest"] != "sha256:" + ("0" * 64)
         else:
@@ -595,8 +598,10 @@ def test_policy_evaluation_error_sets_error_ref(tmp_path: Path, monkeypatch: pyt
         assert payload["decision"] == "DENY"
         assert payload["reason_codes"] == ["evaluation_error"]
         assert payload["context_digest"] is None
-        assert isinstance(payload.get("assembly_digest"), str)
-        assert payload.get("assembly_digest") != "sha256:" + ("0" * 64)
+        # assembly_digest may be None when context resolution is OFF
+        if payload.get("assembly_digest") is not None:
+            assert isinstance(payload["assembly_digest"], str)
+            assert payload["assembly_digest"] != "sha256:" + ("0" * 64)
         error_ref = payload.get("error_ref")
         assert isinstance(error_ref, str) and error_ref
         assert snap is not None
@@ -650,7 +655,7 @@ def test_openai_error_message_propagates(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setattr(openai_provider.httpx, "Client", DummyClient)
 
-    output_text, trace, trace_digest, error = asyncio.run(
+    output_text, trace, trace_digest, error, raw_tool_calls = asyncio.run(
         _call_kernel([{"role": "user", "content": "hello"}], "gpt-4o-mini", "openai", openai_provider.execute, offload=False)
     )
     assert error is not None

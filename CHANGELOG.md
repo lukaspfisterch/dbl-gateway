@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.6.0 — Tool Gating, Budget Constraints & Context Gate
+
+**Breaking: Wire Contract v3**
+- `interface_version` bumped from 2 to 3. v2 clients are rejected at ingress.
+
+**Feature Gate: Context Resolution**
+- Context resolution and Workbench handle fetch are gated behind `GATEWAY_ENABLE_CONTEXT_RESOLUTION` (default OFF).
+- When OFF, `declared_refs` are stored in the INTENT event for audit but not resolved.
+- DECISION records `context_config_digest: "CONTEXT_RESOLUTION_DISABLED"` sentinel.
+- `artifact.handle` intents are rejected at ingress when gate is OFF.
+
+**Tool Gating (Operation 2)**
+- New INTENT fields: `declared_tools` (list of tool name strings), `tool_scope` (`"strict"` or `"advisory"`).
+- Tool names validated against `^[a-z][a-z0-9_.]{0,63}$`, max 20 per request.
+- DECISION records `permitted_tools`, `tool_scope_enforced`, `tools_denied`, `tools_denied_reason`.
+- EXECUTION records `tool_calls` (allowed) and `tool_blocked` (with reason) for replay determinism.
+- Strict scope blocks undeclared tools; advisory scope logs and allows.
+
+**Budget Constraint (Operation 3)**
+- New INTENT field: `budget` with `max_tokens` (1-1000000) and `max_duration_ms` (1000-300000), integer-only.
+- `effective_timeout = min(runtime_wall_clock_ms, client_max_duration_ms)`.
+- `max_tokens` passed through to provider call; `max_duration_ms` enforces full execution envelope.
+- DECISION records `enforced_budget` with `max_tokens`, `max_duration_ms`, `source`.
+- EXECUTION records `usage` with `duration_ms`.
+
+**Provider Changes**
+- All providers (OpenAI, Anthropic, Ollama) return `NormalizedResponse` (text + tool_calls).
+- Provider-agnostic tool call format: `{"tool_name": str, "arguments": dict}`.
+- `max_tokens` passed from enforced budget to provider call.
+
+**Normative Decision**
+- `DecisionNormative` extended with `permitted_tools` and `enforced_budget`.
+- Decision digests cover tool and budget fields for replay verification.
+
 ## v0.5.2 — Capabilities Inventory
 - Added client-facing capabilities inventory in `docs/capabilities.gateway.v1.json` and `docs/CAPABILITIES.md`.
 - Documented stable vs variable capability surface and default limits.

@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 import time
+import os
 import httpx
 import logging
 
@@ -29,6 +30,7 @@ __all__ = [
 ]
 
 _LOGGER = logging.getLogger(__name__)
+_HANDLE_DEBUG_SEEN: set[str] = set()
 
 
 class RefResolutionError(ValueError):
@@ -288,11 +290,41 @@ def _resolve_handle_content(
         ref_id = event.get("turn_id") or event.get("correlation_id") or "unknown"
         return f"{code} ref_id={ref_id}"
 
+    def _log_debug(reason: str, artifact_kind: str | None) -> None:
+        ref_id = event.get("turn_id") or event.get("correlation_id") or "unknown"
+        if ref_id in _HANDLE_DEBUG_SEEN:
+            return
+        _HANDLE_DEBUG_SEEN.add(ref_id)
+        env_snapshot = {
+            "DBL_HANDLE_CONTENT_FETCH_ENABLED": os.getenv("DBL_HANDLE_CONTENT_FETCH_ENABLED"),
+            "ALLOW_HANDLE_CONTENT_FETCH": os.getenv("ALLOW_HANDLE_CONTENT_FETCH"),
+            "WORKBENCH_RESOLVER_URL": os.getenv("WORKBENCH_RESOLVER_URL"),
+            "WORKBENCH_ADMIT_KINDS": os.getenv("WORKBENCH_ADMIT_KINDS"),
+            "DBL_HANDLE_CONTENT_FETCH_ALLOWED_KINDS": os.getenv("DBL_HANDLE_CONTENT_FETCH_ALLOWED_KINDS"),
+            "WORKBENCH_FETCH_TIMEOUT_MS": os.getenv("WORKBENCH_FETCH_TIMEOUT_MS"),
+            "WORKBENCH_MAX_BYTES": os.getenv("WORKBENCH_MAX_BYTES"),
+        }
+        _LOGGER.info(
+            "handle_fetch.guard reason=%s ref_id=%s intent_type=%s artifact_kind=%s "
+            "allow=%s resolver_url=%s admit_kinds=%s env=%s",
+            reason,
+            ref_id,
+            intent_type,
+            artifact_kind,
+            config.allow_handle_content_fetch,
+            config.workbench_resolver_url,
+            list(config.workbench_admit_kinds),
+            env_snapshot,
+        )
+
     if intent_type != "chat.message":
+        _log_debug("intent_type_not_chat", None)
         return None, _warn("HANDLE_CONTENT_FETCH_DISABLED")
     if not config.allow_handle_content_fetch:
+        _log_debug("disabled_flag", None)
         return None, _warn("HANDLE_CONTENT_FETCH_DISABLED")
     if not config.workbench_resolver_url:
+        _log_debug("missing_resolver_url", None)
         return None, _warn("HANDLE_CONTENT_FETCH_DISABLED")
     payload = event.get("payload")
     if not isinstance(payload, Mapping):
@@ -303,6 +335,7 @@ def _resolve_handle_content(
         return None, _warn("HANDLE_CONTENT_FETCH_PARSE_ERROR")
     artifact_kind = handle.get("artifact_kind")
     if not isinstance(artifact_kind, str) or artifact_kind not in config.workbench_admit_kinds:
+        _log_debug("kind_denied", str(artifact_kind) if artifact_kind is not None else None)
         return None, _warn("HANDLE_CONTENT_FETCH_KIND_DENIED")
     scope = handle.get("scope")
     if not isinstance(scope, str) or scope not in ("full", "summary"):

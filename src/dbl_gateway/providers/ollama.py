@@ -1,8 +1,10 @@
 from __future__ import annotations
+import json as _json
 import os
 from typing import Any
 import httpx
 from .errors import ProviderError
+from ..ports.execution_port import NormalizedResponse
 
 def _base_url() -> str:
     val = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST")
@@ -10,9 +12,11 @@ def _base_url() -> str:
         val = f"http://{val}"
     return (val or "http://localhost:11434").rstrip("/")
 
-def execute(*, model_id: str, messages: list[dict[str, str]], base_url: str | None = None, **_: Any) -> str:
+def execute(*, model_id: str, messages: list[dict[str, str]], base_url: str | None = None, max_tokens: int | None = None, **_: Any) -> NormalizedResponse:
     url = f"{(base_url or _base_url())}/api/chat"
-    payload = {"model": model_id, "messages": messages, "stream": False}
+    payload: dict[str, Any] = {"model": model_id, "messages": messages, "stream": False}
+    if max_tokens is not None:
+        payload.setdefault("options", {})["num_predict"] = max_tokens
 
     try:
         with httpx.Client(timeout=httpx.Timeout(240.0)) as client:
@@ -29,9 +33,16 @@ def execute(*, model_id: str, messages: list[dict[str, str]], base_url: str | No
                 raise err
 
             data = resp.json()
-            # Chat endpoint returns {"message": {"role": "...", "content": "..."}}
             msg = data.get("message", {})
-            return str(msg.get("content", "") or "")
+            text = str(msg.get("content", "") or "")
+            tool_calls: list[dict[str, Any]] = []
+            for tc in msg.get("tool_calls", []):
+                func = tc.get("function", {})
+                tool_calls.append({
+                    "tool_name": func.get("name", ""),
+                    "arguments": func.get("arguments", {}),
+                })
+            return NormalizedResponse(text=text, tool_calls=tool_calls)
     except httpx.TimeoutException as ex:
         err = ProviderError(f"timeout: {ex}")
         err.code = "timeout"

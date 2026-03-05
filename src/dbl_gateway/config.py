@@ -21,11 +21,17 @@ from hashlib import sha256
 __all__ = [
     "ContextConfig",
     "JobRuntimeConfig",
+    "context_resolution_enabled",
     "load_context_config",
     "get_context_config",
     "load_job_runtime_config",
     "get_job_runtime_config",
 ]
+
+
+def context_resolution_enabled() -> bool:
+    """Check GATEWAY_ENABLE_CONTEXT_RESOLUTION env var. Default: OFF."""
+    return os.environ.get("GATEWAY_ENABLE_CONTEXT_RESOLUTION", "").lower() in ("true", "1", "yes")
 
 DEFAULT_CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "context.json"
 
@@ -177,7 +183,9 @@ def _parse_config(raw: Mapping[str, Any]) -> ContextConfig:
         except ValueError:
             return None
 
-    env_allow = _env_bool("ALLOW_HANDLE_CONTENT_FETCH")
+    env_allow = _env_bool("DBL_HANDLE_CONTENT_FETCH_ENABLED")
+    if env_allow is None:
+        env_allow = _env_bool("ALLOW_HANDLE_CONTENT_FETCH")
     if env_allow is not None:
         allow_handle_fetch = env_allow
     env_url = os.getenv("WORKBENCH_RESOLVER_URL")
@@ -192,7 +200,9 @@ def _parse_config(raw: Mapping[str, Any]) -> ContextConfig:
     env_max = _env_int("WORKBENCH_MAX_BYTES")
     if env_max is not None and env_max >= 1024:
         max_bytes = env_max
-    env_kinds = os.getenv("WORKBENCH_ADMIT_KINDS")
+    env_kinds = os.getenv("DBL_HANDLE_CONTENT_FETCH_ALLOWED_KINDS")
+    if env_kinds is None:
+        env_kinds = os.getenv("WORKBENCH_ADMIT_KINDS")
     if env_kinds is not None:
         items = [k.strip() for k in env_kinds.split(",") if k.strip()]
         if items:

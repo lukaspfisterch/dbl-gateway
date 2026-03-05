@@ -1,17 +1,16 @@
 # Gateway Capabilities
 
-Generated: `2026-02-05T20:29:10.227156+00:00`
-
-This document lists client-visible capabilities only. Internal architecture is not described unless it affects behavior.
+Client-visible capabilities. Internal architecture is not described
+unless it affects wire behavior.
 
 ## Stable vs Variable
-- Stable: interface_version=2, ContextSpec schema ctxspec.2, ContextConfig schema v1, endpoint paths.
+- Stable: interface_version=3, ContextSpec schema ctxspec.2, ContextConfig schema v1, endpoint paths, tool_scope semantics, budget field schema.
 - Variable: provider list, model list, defaults, limits, policy version, and some failure codes may change with config/env.
 
 ## API Endpoints
 - `GET /healthz` — health check. Response `{status}`.
-- `GET /capabilities` — providers, models, and surfaces. Response `CapabilitiesResponse` (interface_version=2).
-- `POST /ingress/intent` — ingest `IntentEnvelope` (interface_version=2). Returns accepted/queued + correlation_id + index.
+- `GET /capabilities` — providers, models, and surfaces. Response `CapabilitiesResponse` (interface_version=3).
+- `POST /ingress/intent` — ingest `IntentEnvelope` (interface_version=3). Returns accepted/queued + correlation_id + index.
 - `GET /snapshot` — event snapshot (limit/offset/stream_id/lane). Returns `SnapshotResponse`.
 - `GET /threads/{thread_id}/timeline` — grouped by turn; optionally include payloads.
 - `GET /tail` — SSE stream of `EventRecord` envelopes.
@@ -19,8 +18,8 @@ This document lists client-visible capabilities only. Internal architecture is n
 - `POST /execution/event` — submit external execution result (only if exec_mode=external).
 
 ## Intents
-- `chat.message`: accepts `message` plus optional `inputs`, `declared_refs`, `context_mode/context_n`.
-- `artifact.handle`: metadata-only, does not trigger decision by default; content fetch is gated.
+- `chat.message`: accepts `message` plus optional `inputs`, `declared_refs`, `context_mode/context_n`, `declared_tools`, `tool_scope`, `budget`.
+- `artifact.handle`: metadata-only, does not trigger decision by default; content fetch is gated. Rejected when `GATEWAY_ENABLE_CONTEXT_RESOLUTION` is OFF.
 
 ## Declared Refs & Admission Rules
 - `declared_refs` must be a list of `{ref_type, ref_id, version?}`.
@@ -31,11 +30,29 @@ This document lists client-visible capabilities only. Internal architecture is n
   - EXECUTION refs -> execution_only if `allow_execution_refs_for_prompt=true`.
   - `artifact.handle` content fetch: only when enabled + kind allowlisted.
 
+## Tool Gating
+- `declared_tools`: list of tool name strings (max 20), validated against `^[a-z][a-z0-9_.]{0,63}$`.
+- `tool_scope`: `"strict"` (block undeclared) or `"advisory"` (log and allow). Default `"strict"` when `declared_tools` present.
+- DECISION records `permitted_tools`, `tool_scope_enforced`.
+- EXECUTION records `tool_calls` (allowed) and `tool_blocked` (blocked with reason).
+
+## Budget Constraint
+- `budget.max_tokens`: integer 1-1000000, passed to provider call.
+- `budget.max_duration_ms`: integer 1000-300000, enforces execution wall clock.
+- `effective_timeout = min(runtime_ms, client_ms)`.
+- DECISION records `enforced_budget` with `source` indicating clamping.
+- EXECUTION records `usage.duration_ms`.
+
+## Context Resolution Gate
+- Controlled by `GATEWAY_ENABLE_CONTEXT_RESOLUTION` env var (default OFF).
+- When OFF: `declared_refs` stored but not resolved, `artifact.handle` rejected at ingress.
+- DECISION records `context_config_digest: "CONTEXT_RESOLUTION_DISABLED"` sentinel.
+
 ## Schemas
-- `IntentEnvelope` (interface_version=2).
+- `IntentEnvelope` (interface_version=3).
 - `ContextSpec` schema `ctxspec.2`.
 - `ContextConfig` schema `v1` (config/context.schema.json).
-- `CapabilitiesResponse` (interface_version=2).
+- `CapabilitiesResponse` (interface_version=3).
 
 ## Providers & Models
 - OpenAI: uses `OPENAI_CHAT_MODEL_IDS`/`OPENAI_MODEL_IDS`; responses via `OPENAI_RESPONSES_MODEL_IDS` (default `gpt-5.2`).

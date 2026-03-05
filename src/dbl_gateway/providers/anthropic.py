@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from .errors import ProviderError
+from ..ports.execution_port import NormalizedResponse
 
 
 def _max_tokens(default: int) -> int:
@@ -19,20 +20,20 @@ def _max_tokens(default: int) -> int:
     return value if value > 0 else default
 
 
-def execute(*, model_id: str, messages: list[dict[str, str]], api_key: str | None = None, **_: Any) -> str:
+def execute(*, model_id: str, messages: list[dict[str, str]], api_key: str | None = None, max_tokens: int | None = None, **_: Any) -> NormalizedResponse:
     key = (api_key or os.getenv("ANTHROPIC_API_KEY", "")).strip()
     if not key:
         raise ProviderError("missing Anthropic credentials")
 
-    # Use last user content as primary input; include full messages for 3.0 API if needed later
     last_user = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), None)
     if not last_user:
         raise ProviderError("no user message")
 
+    effective_max_tokens = max_tokens if max_tokens is not None else _max_tokens(256)
     headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
     payload: dict[str, Any] = {
         "model": model_id,
-        "max_tokens": _max_tokens(256),
+        "max_tokens": effective_max_tokens,
         "messages": [{"role": "user", "content": [{"type": "text", "text": last_user}]}],
         "temperature": 0.2,
     }
@@ -42,7 +43,7 @@ def execute(*, model_id: str, messages: list[dict[str, str]], api_key: str | Non
             resp = client.post("https://api.anthropic.com/v1/messages", json=payload, headers=headers)
         except httpx.RequestError as exc:
              raise ProviderError(f"connection error: {str(exc)}") from exc
-             
+
         if resp.status_code >= 400:
             try:
                 data = resp.json()
@@ -53,8 +54,15 @@ def execute(*, model_id: str, messages: list[dict[str, str]], api_key: str | Non
             err.status_code = resp.status_code
             err.code = data.get("error", {}).get("type")
             raise err
-        
+
         data = resp.json()
         blocks = data.get("content", [])
         text = "".join([b.get("text", "") for b in blocks if b.get("type") == "text"])
-        return str(text or "")
+        tool_calls: list[dict[str, Any]] = []
+        for b in blocks:
+            if b.get("type") == "tool_use":
+                tool_calls.append({
+                    "tool_name": b.get("name", ""),
+                    "arguments": b.get("input", {}),
+                })
+        return NormalizedResponse(text=str(text or ""), tool_calls=tool_calls)

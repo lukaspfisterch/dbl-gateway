@@ -23,7 +23,7 @@ from .capabilities import CapabilitiesResponse, get_capabilities_cached, resolve
 from .adapters.execution_adapter_kl import KlExecutionAdapter
 from .adapters.policy_adapter_dbl_policy import DblPolicyAdapter, ObserverPolicy, _load_policy
 from .context_builder import build_context_with_refs, RefResolutionError
-from .config import get_context_config
+from .config import get_context_config, context_resolution_enabled, get_job_runtime_config
 from .decision_builder import build_normative_decision
 from .ports.execution_port import ExecutionResult
 from .rendering import render_provider_payload
@@ -149,6 +149,23 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         # Transfer declared_refs from intent_payload to shaped payload
         if intent_payload.get("declared_refs"):
             payload_for_shape["declared_refs"] = intent_payload["declared_refs"]
+        # Transfer tool gating and budget fields
+        if intent_payload.get("declared_tools") is not None:
+            payload_for_shape["declared_tools"] = intent_payload["declared_tools"]
+        if intent_payload.get("tool_scope") is not None:
+            payload_for_shape["tool_scope"] = intent_payload["tool_scope"]
+        if intent_payload.get("budget") is not None:
+            payload_for_shape["budget"] = intent_payload["budget"]
+        # Feature gate: reject artifact.handle when context resolution is OFF
+        if intent_payload.get("intent_type") == "artifact.handle" and not context_resolution_enabled():
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "reason_code": "intent_type.disabled",
+                    "detail": "artifact.handle requires GATEWAY_ENABLE_CONTEXT_RESOLUTION=true",
+                },
+            )
         shaped_payload = _shape_payload(intent_payload["intent_type"], payload_for_shape)
         try:
             admission_record = admit_and_shape_intent(
@@ -482,107 +499,124 @@ async def _process_intent(
     assembled_context: Mapping[str, Any] | None = None
     try:
         authoritative = _authoritative_from_event(intent_event, correlation_id)
-        
-        # Fetch thread events for ref resolution
-        thread_events = app.state.store.timeline(thread_id=thread_id)
-        
-        try:
-            context_artifacts = await run_in_threadpool(
-                build_context_with_refs,
-                authoritative.get("payload"),
-                intent_type=str(authoritative.get("intent_type") or ""),
-                thread_events=thread_events,
-            )
-            assembly_digest = context_artifacts.context_digest
-            context_config_digest = context_artifacts.config_digest  # NEW: Extract config digest
-            context_transforms = list(context_artifacts.transforms)
-            context_spec = context_artifacts.context_spec
-            assembled_context = context_artifacts.assembled_context
-            boundary_context = {
-                "context_digest": assembly_digest,
-                "context_spec": context_spec,
-                "assembled_context": assembled_context,
-                "admitted_model_messages": assembled_context.get("model_messages", []),
-                "meta": context_artifacts.boundary_meta,
-            }
-        except RefResolutionError as exc:
-            _LOGGER.info("context resolution denied: %s", exc)
-            app.state.store.append(
-                kind="DECISION",
-                thread_id=thread_id,
-                turn_id=turn_id,
-                parent_turn_id=parent_turn_id,
-                lane=authoritative["lane"],
-                actor="policy",
-                intent_type=authoritative["intent_type"],
-                stream_id=authoritative["stream_id"],
-                correlation_id=correlation_id,
-                payload=_decision_payload(
-                    DecisionResult(decision="DENY", reason_codes=[exc.code]),
-                    trace_id,
-                    assembly_digest=None,
-                    context_digest=None,
-                    error_ref=None,
-                    context_config_digest=None,
-                    boundary=None,
-                    requested_model_id=None,
-                    resolved_model_id=None,
-                    provider=None,
-                    transforms=[],
-                    context_spec=None,
-                    assembled_context=None,
-                ),
-            )
-            return
-        except Exception as exc:
-            _LOGGER.exception("context assembly failed: %s", exc)
-            error_ref = _emit_policy_error_artifact(
-                app,
-                thread_id=thread_id,
-                turn_id=turn_id,
-                parent_turn_id=parent_turn_id,
-                lane=authoritative["lane"],
-                actor="gateway",
-                intent_type=authoritative["intent_type"],
-                stream_id=authoritative["stream_id"],
-                correlation_id=correlation_id,
-                trace_id=trace_id,
-                stage="assembly",
-                error=exc,
-                stacktrace=traceback.format_exc(),
-                partial_inputs={
-                    "thread_id": thread_id,
-                    "turn_id": turn_id,
-                    "correlation_id": correlation_id,
-                },
-            )
-            app.state.store.append(
-                kind="DECISION",
-                thread_id=thread_id,
-                turn_id=turn_id,
-                parent_turn_id=parent_turn_id,
-                lane=authoritative["lane"],
-                actor="policy",
-                intent_type=authoritative["intent_type"],
-                stream_id=authoritative["stream_id"],
-                correlation_id=correlation_id,
-                payload=_decision_payload(
-                    DecisionResult(decision="DENY", reason_codes=["evaluation_error"]),
-                    trace_id,
-                    assembly_digest=None,
-                    context_digest=None,
-                    error_ref=error_ref,
-                    context_config_digest=None,
-                    boundary=None,
-                    requested_model_id=None,
-                    resolved_model_id=None,
-                    provider=None,
-                    transforms=[],
-                    context_spec=None,
-                    assembled_context=None,
-                ),
-            )
-            return
+
+        if context_resolution_enabled():
+            # Fetch thread events for ref resolution
+            thread_events = app.state.store.timeline(thread_id=thread_id)
+
+            try:
+                context_artifacts = await run_in_threadpool(
+                    build_context_with_refs,
+                    authoritative.get("payload"),
+                    intent_type=str(authoritative.get("intent_type") or ""),
+                    thread_events=thread_events,
+                )
+                assembly_digest = context_artifacts.context_digest
+                context_config_digest = context_artifacts.config_digest
+                context_transforms = list(context_artifacts.transforms)
+                context_spec = context_artifacts.context_spec
+                assembled_context = context_artifacts.assembled_context
+                boundary_context = {
+                    "context_digest": assembly_digest,
+                    "context_spec": context_spec,
+                    "assembled_context": assembled_context,
+                    "admitted_model_messages": assembled_context.get("model_messages", []),
+                    "meta": context_artifacts.boundary_meta,
+                }
+            except RefResolutionError as exc:
+                _LOGGER.info("context resolution denied: %s", exc)
+                app.state.store.append(
+                    kind="DECISION",
+                    thread_id=thread_id,
+                    turn_id=turn_id,
+                    parent_turn_id=parent_turn_id,
+                    lane=authoritative["lane"],
+                    actor="policy",
+                    intent_type=authoritative["intent_type"],
+                    stream_id=authoritative["stream_id"],
+                    correlation_id=correlation_id,
+                    payload=_decision_payload(
+                        DecisionResult(decision="DENY", reason_codes=[exc.code]),
+                        trace_id,
+                        assembly_digest=None,
+                        context_digest=None,
+                        error_ref=None,
+                        context_config_digest=None,
+                        boundary=None,
+                        requested_model_id=None,
+                        resolved_model_id=None,
+                        provider=None,
+                        transforms=[],
+                        context_spec=None,
+                        assembled_context=None,
+                    ),
+                )
+                return
+            except Exception as exc:
+                _LOGGER.exception("context assembly failed: %s", exc)
+                error_ref = _emit_policy_error_artifact(
+                    app,
+                    thread_id=thread_id,
+                    turn_id=turn_id,
+                    parent_turn_id=parent_turn_id,
+                    lane=authoritative["lane"],
+                    actor="gateway",
+                    intent_type=authoritative["intent_type"],
+                    stream_id=authoritative["stream_id"],
+                    correlation_id=correlation_id,
+                    trace_id=trace_id,
+                    stage="assembly",
+                    error=exc,
+                    stacktrace=traceback.format_exc(),
+                    partial_inputs={
+                        "thread_id": thread_id,
+                        "turn_id": turn_id,
+                        "correlation_id": correlation_id,
+                    },
+                )
+                app.state.store.append(
+                    kind="DECISION",
+                    thread_id=thread_id,
+                    turn_id=turn_id,
+                    parent_turn_id=parent_turn_id,
+                    lane=authoritative["lane"],
+                    actor="policy",
+                    intent_type=authoritative["intent_type"],
+                    stream_id=authoritative["stream_id"],
+                    correlation_id=correlation_id,
+                    payload=_decision_payload(
+                        DecisionResult(decision="DENY", reason_codes=["evaluation_error"]),
+                        trace_id,
+                        assembly_digest=None,
+                        context_digest=None,
+                        error_ref=error_ref,
+                        context_config_digest=None,
+                        boundary=None,
+                        requested_model_id=None,
+                        resolved_model_id=None,
+                        provider=None,
+                        transforms=[],
+                        context_spec=None,
+                        assembled_context=None,
+                    ),
+                )
+                return
+        else:
+            # Context resolution OFF: sentinel mode
+            # declared_refs already stored in INTENT event payload (audit trail preserved)
+            assembly_digest = None
+            context_config_digest = "CONTEXT_RESOLUTION_DISABLED"
+            context_transforms = []
+            context_spec = None
+            assembled_context = None
+            boundary_context = None
+
+        # --- Tool gating and budget computation (after context, before policy) ---
+        auth_payload = authoritative.get("payload") or {}
+        _declared_tools = auth_payload.get("declared_tools")
+        _tool_scope = auth_payload.get("tool_scope")
+        _client_budget = auth_payload.get("budget")
+
         try:
             decision = app.state.policy.decide(authoritative)
         except Exception as exc:
@@ -655,6 +689,26 @@ async def _process_intent(
             _LOGGER.exception("model resolution failed: %s", exc)
             resolution_reason = "resolution.error"
 
+        # Compute tool gating and budget constraints after policy ALLOW
+        if decision.decision == "ALLOW":
+            permitted_tools, tool_scope_enforced, tools_denied, tools_denied_reason = (
+                _compute_permitted_tools(_declared_tools, _tool_scope, decision)
+            )
+            runtime_cfg = get_job_runtime_config()
+            enforced_budget = _compute_enforced_budget(_client_budget, runtime_cfg.llm_wall_clock_s)
+            decision = DecisionResult(
+                decision=decision.decision,
+                reason_codes=decision.reason_codes,
+                policy_id=decision.policy_id,
+                policy_version=decision.policy_version,
+                gate_event=decision.gate_event,
+                permitted_tools=permitted_tools,
+                tool_scope_enforced=tool_scope_enforced,
+                tools_denied=tools_denied,
+                tools_denied_reason=tools_denied_reason,
+                enforced_budget=enforced_budget,
+            )
+
         app.state.store.append(
             kind="DECISION",
             thread_id=thread_id,
@@ -707,9 +761,18 @@ async def _process_intent(
             else:
                 render_result = None
             
+            # Compute effective wall clock from budget
+            effective_wall_clock_s: int | None = None
+            if decision.enforced_budget and decision.enforced_budget.get("max_duration_ms"):
+                effective_wall_clock_s = decision.enforced_budget["max_duration_ms"] // 1000
+
             result = await app.state.execution.run(
                 intent_event,
                 model_messages=model_messages,
+                permitted_tools=decision.permitted_tools,
+                tool_scope_enforced=decision.tool_scope_enforced,
+                enforced_budget=decision.enforced_budget,
+                llm_wall_clock_s=effective_wall_clock_s,
             )
             if render_result is not None:
                 result = ExecutionResult(
@@ -721,6 +784,9 @@ async def _process_intent(
                     error=result.error,
                     render_digest=render_result.render_digest,
                     render_manifest=render_result.render_manifest,
+                    tool_calls=result.tool_calls,
+                    tool_blocked=result.tool_blocked,
+                    usage=result.usage,
                 )
             payload = _execution_payload(
                 result,
@@ -954,6 +1020,12 @@ def _execution_payload(
         payload["output_text"] = result.output_text or ""
     if context_digest:
         payload["context_digest"] = context_digest
+    if result.tool_calls:
+        payload["tool_calls"] = result.tool_calls
+    if result.tool_blocked:
+        payload["tool_blocked"] = result.tool_blocked
+    if result.usage:
+        payload["usage"] = result.usage
 
     if result.render_digest or result.render_manifest:
         _attach_obs_trace_id(payload, trace_id)
@@ -1176,7 +1248,18 @@ def _shape_payload(intent_type: str, payload: Mapping[str, Any]) -> dict[str, An
         ctx_n = payload.get("context_n")
         if isinstance(ctx_n, int):
             shaped["context_n"] = ctx_n
-            
+        # Include tool gating fields
+        declared_tools = payload.get("declared_tools")
+        if isinstance(declared_tools, list):
+            shaped["declared_tools"] = declared_tools
+        tool_scope = payload.get("tool_scope")
+        if isinstance(tool_scope, str):
+            shaped["tool_scope"] = tool_scope
+        # Include budget
+        budget = payload.get("budget")
+        if isinstance(budget, Mapping):
+            shaped["budget"] = dict(budget)
+
         return shaped
     return dict(payload)
 
@@ -1258,6 +1341,52 @@ def _authoritative_from_event(intent_event: EventRecord, correlation_id: str) ->
 def make_trace_bundle(raw_trace: Mapping[str, Any]) -> tuple[dict[str, Any], str]:
     trace = sanitize_trace(raw_trace)
     return trace, trace_digest(trace)
+
+
+def _compute_permitted_tools(
+    declared_tools: list[str] | None,
+    tool_scope: str | None,
+    decision: DecisionResult,
+) -> tuple[list[str] | None, str | None, list[str] | None, str | None]:
+    """Compute tool gating fields for DECISION payload.
+
+    Returns (permitted_tools, tool_scope_enforced, tools_denied, tools_denied_reason).
+    For v0.6.0, gateway passes through declared_tools as permitted_tools.
+    Policy can override via DecisionResult.permitted_tools in future versions.
+    """
+    if decision.decision != "ALLOW":
+        return None, None, None, None
+    if declared_tools is None and tool_scope is None:
+        return None, None, None, None
+    scope = tool_scope or "strict"
+    tools = declared_tools or []
+    return tools, scope, [], None
+
+
+def _compute_enforced_budget(
+    budget: dict[str, int] | None,
+    llm_wall_clock_s: int,
+) -> dict[str, Any] | None:
+    """Compute enforced budget for DECISION payload.
+
+    effective_timeout = min(llm_wall_clock_s * 1000, budget.max_duration_ms).
+    max_tokens passes through to provider call only.
+    """
+    if not budget:
+        return None
+    enforced: dict[str, Any] = {}
+    max_tokens = budget.get("max_tokens")
+    if isinstance(max_tokens, int) and max_tokens > 0:
+        enforced["max_tokens"] = max_tokens
+    runtime_ms = llm_wall_clock_s * 1000
+    client_ms = budget.get("max_duration_ms")
+    if isinstance(client_ms, int) and client_ms > 0:
+        enforced["max_duration_ms"] = min(runtime_ms, client_ms)
+        enforced["source"] = "intent_clamped" if client_ms > runtime_ms else "intent_exact"
+    else:
+        enforced["max_duration_ms"] = runtime_ms
+        enforced["source"] = "policy_default"
+    return enforced if enforced else None
 
 
 def main() -> None:

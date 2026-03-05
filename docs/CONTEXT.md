@@ -1,8 +1,7 @@
 # Context References
 
-> Deterministic context assembly for DBL Gateway.
-
-This document describes how context references are handled in the gateway, including the separation between normative and observational inputs, the digest computation scope, and the invariants that must be maintained.
+How the gateway handles context references: separation between normative
+and observational inputs, digest computation scope, and invariants.
 
 ## Core Concepts
 

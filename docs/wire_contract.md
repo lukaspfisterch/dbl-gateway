@@ -2,13 +2,15 @@
 
 ## Interface Version
 
-The current interface version is `2`. All `IntentEnvelope` requests must include `interface_version: 2`.
+The current interface version is `3`. All `IntentEnvelope` requests must include `interface_version: 3`.
+
+Clients sending `interface_version: 2` will be rejected at ingress.
 
 ## IntentEnvelope Structure
 
 ```json
 {
-  "interface_version": 2,
+  "interface_version": 3,
   "correlation_id": "unique-request-id",
   "payload": {
     "stream_id": "default",
@@ -21,7 +23,13 @@ The current interface version is `2`. All `IntentEnvelope` requests must include
     "payload": {
       "message": "Hello, world!",
       "thread_id": "thread-uuid",
-      "turn_id": "turn-uuid"
+      "turn_id": "turn-uuid",
+      "declared_tools": ["web.search", "code.execute"],
+      "tool_scope": "strict",
+      "budget": {
+        "max_tokens": 4096,
+        "max_duration_ms": 30000
+      }
     },
     "declared_refs": [
       {"ref_type": "event", "ref_id": "correlation-id-1"},
@@ -76,7 +84,7 @@ anchors plus a `handle` block:
 
 ```json
 {
-  "interface_version": 2,
+  "interface_version": 3,
   "correlation_id": "wb-attach-uuid",
   "payload": {
     "stream_id": "default",
@@ -171,9 +179,85 @@ Events are emitted as SSE envelopes:
 }
 ```
 
-## DECISION Payload (v0.5.x)
+## Tool Gating (v0.6.0+)
 
-DECISION events include a `boundary` block for replay verification:
+Clients may declare which tools the model is allowed to invoke.
+
+### Intent Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `declared_tools` | `list[str]` | No | Tool names the client authorizes. Max 20. |
+| `tool_scope` | `"strict" \| "advisory"` | No | Enforcement mode. Default `"strict"` when `declared_tools` present. |
+
+Tool names must match `^[a-z][a-z0-9_.]{0,63}$`.
+
+### DECISION Fields
+
+| Field | Description |
+|-------|-------------|
+| `permitted_tools` | Tools the gateway allows (normative). |
+| `tool_scope_enforced` | `"strict"` or `"advisory"`. |
+| `tools_denied` | Tools removed by policy (empty in v0.6.0). |
+| `tools_denied_reason` | Reason for denial (null in v0.6.0). |
+
+### EXECUTION Fields
+
+| Field | Description |
+|-------|-------------|
+| `tool_calls` | Tool calls that passed enforcement. |
+| `tool_blocked` | `[{"tool_call": name, "reason": "not_in_permitted_tools"}]` for blocked calls. |
+
+### Enforcement
+
+- **Strict**: undeclared tool calls are blocked and recorded in `tool_blocked`.
+- **Advisory**: undeclared tool calls are logged but allowed through.
+
+## Budget Constraint (v0.6.0+)
+
+Clients may specify resource limits for execution.
+
+### Intent Fields
+
+```json
+"budget": {
+  "max_tokens": 4096,
+  "max_duration_ms": 30000
+}
+```
+
+| Field | Type | Range | Description |
+|-------|------|-------|-------------|
+| `max_tokens` | `int` | 1-1000000 | Max output tokens for provider call. |
+| `max_duration_ms` | `int` | 1000-300000 | Max execution wall clock (ms). |
+
+Values must be integers (floats are rejected).
+
+### DECISION Fields
+
+```json
+"enforced_budget": {
+  "max_tokens": 4096,
+  "max_duration_ms": 30000,
+  "source": "intent_exact"
+}
+```
+
+`source` is one of: `intent_exact` (client value used as-is), `intent_clamped` (client value clamped to runtime limit), `policy_default` (no client value, runtime default used).
+
+`effective_timeout = min(runtime_wall_clock_ms, client_max_duration_ms)`.
+
+### EXECUTION Fields
+
+```json
+"usage": {
+  "duration_ms": 1234
+}
+```
+
+## DECISION Payload (v0.6.0)
+
+DECISION events include normative fields for replay verification:
 
 ```json
 {
@@ -183,6 +267,8 @@ DECISION events include a `boundary` block for replay verification:
   "result": "ALLOW",
   "reasons": [...],
   "transforms": [...],
+  "permitted_tools": ["web.search", "code.execute"],
+  "enforced_budget": {"max_tokens": 4096, "max_duration_ms": 30000, "source": "intent_exact"},
   "boundary": {
     "context_config_digest": "sha256:...",
     "boundary_version": "1"
@@ -192,6 +278,6 @@ DECISION events include a `boundary` block for replay verification:
 }
 ```
 
-In 0.5.x, `context_digest` is the same digest as `assembly_digest` (context_spec + assembled_context). A provider payload digest is out of scope for 0.5.x.
+`permitted_tools` and `enforced_budget` are normative (included in decision digest).
 
-The `boundary.context_config_digest` pins the configuration that was used to make this decision.
+The `boundary.context_config_digest` pins the configuration used to make this decision. When context resolution is disabled, it is set to `"CONTEXT_RESOLUTION_DISABLED"`.
