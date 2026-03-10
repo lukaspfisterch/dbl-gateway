@@ -6,6 +6,18 @@ from typing import Any, Mapping, TypedDict
 
 INTERFACE_VERSION = 3
 
+CAPABILITIES_INTENT_TYPES = ("chat.message", "artifact.handle")
+SUPPORTED_TOOL_SCOPE = ("strict", "advisory")
+
+MAX_DECLARED_TOOLS = 20
+TOOL_NAME_PATTERN = r"^[a-z][a-z0-9_.]{0,63}$"
+
+BUDGET_FIELDS = ("max_tokens", "max_duration_ms")
+BUDGET_LIMITS = {
+    "max_tokens": {"min": 1, "max": 1_000_000},
+    "max_duration_ms": {"min": 1000, "max": 300_000},
+}
+
 
 class IntentPayload(TypedDict, total=False):
     stream_id: str
@@ -203,8 +215,8 @@ def _parse_declared_refs(raw: Any) -> list[dict[str, Any]] | None:
     return parsed
 
 
-_TOOL_NAME_RE = re.compile(r"^[a-z][a-z0-9_.]{0,63}$")
-_MAX_DECLARED_TOOLS = 20
+_TOOL_NAME_RE = re.compile(TOOL_NAME_PATTERN)
+_MAX_DECLARED_TOOLS = MAX_DECLARED_TOOLS
 
 
 def _parse_declared_tools(raw: Any) -> list[str] | None:
@@ -235,7 +247,7 @@ def _parse_tool_scope(raw: Any) -> str | None:
     if not isinstance(raw, str):
         raise ValueError("payload.tool_scope must be a string")
     value = raw.strip()
-    if value not in ("strict", "advisory"):
+    if value not in SUPPORTED_TOOL_SCOPE:
         raise ValueError("payload.tool_scope must be 'strict' or 'advisory'")
     return value
 
@@ -253,7 +265,9 @@ def _parse_budget(raw: Any) -> dict[str, int] | None:
             raise ValueError("budget.max_tokens must be an integer, not float")
         if not isinstance(max_tokens, int):
             raise ValueError("budget.max_tokens must be an integer")
-        if max_tokens < 1 or max_tokens > 1_000_000:
+        min_tokens = BUDGET_LIMITS["max_tokens"]["min"]
+        max_tokens_limit = BUDGET_LIMITS["max_tokens"]["max"]
+        if max_tokens < min_tokens or max_tokens > max_tokens_limit:
             raise ValueError("budget.max_tokens must be between 1 and 1000000")
         budget["max_tokens"] = max_tokens
     max_duration_ms = raw.get("max_duration_ms")
@@ -262,7 +276,9 @@ def _parse_budget(raw: Any) -> dict[str, int] | None:
             raise ValueError("budget.max_duration_ms must be an integer, not float")
         if not isinstance(max_duration_ms, int):
             raise ValueError("budget.max_duration_ms must be an integer")
-        if max_duration_ms < 1000 or max_duration_ms > 300_000:
+        min_duration = BUDGET_LIMITS["max_duration_ms"]["min"]
+        max_duration = BUDGET_LIMITS["max_duration_ms"]["max"]
+        if max_duration_ms < min_duration or max_duration_ms > max_duration:
             raise ValueError("budget.max_duration_ms must be between 1000 and 300000")
         budget["max_duration_ms"] = max_duration_ms
     if not budget:

@@ -1,4 +1,7 @@
 """Tests for wire_contract v3: tool gating and budget fields."""
+import json
+from pathlib import Path
+
 import pytest
 from dbl_gateway.wire_contract import (
     parse_intent_envelope,
@@ -180,3 +183,12 @@ def test_envelope_without_new_fields():
     assert result["payload"]["declared_tools"] is None
     assert result["payload"]["tool_scope"] is None
     assert result["payload"]["budget"] is None
+
+
+def test_capabilities_doc_matches_interface_version():
+    docs_path = Path(__file__).resolve().parents[1] / "docs" / f"capabilities.gateway.v{INTERFACE_VERSION}.json"
+    data = json.loads(docs_path.read_text(encoding="utf-8"))
+
+    expected = str(INTERFACE_VERSION)
+    assert str(data["interface_version"]) == expected
+    assert data["generated_from"]["wire_contract"] == f"v{expected}"

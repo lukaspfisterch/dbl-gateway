@@ -1,0 +1,46 @@
+{
+  "schema": "gateway.capabilities.v1",
+  "generated_at": "2026-03-05T20:44:38.539120+00:00",
+  "generated_from": {
+    "wire_contract": "v3",
+    "gateway_version": "0.6.0",
+    "sources": [
+      "src/dbl_gateway/wire_contract.py",
+      "src/dbl_gateway/contracts.py"
+    ]
+  },
+  "interface_version": 3,
+  "intents": {
+    "supported": [
+      "chat.message",
+      "artifact.handle"
+    ]
+  },
+  "tool_surface": {
+    "declared_tools": {
+      "max_items": 20,
+      "name_pattern": "^[a-z][a-z0-9_.]{0,63}$"
+    },
+    "tool_scope": {
+      "supported": [
+        "strict",
+        "advisory"
+      ],
+      "default_when_declared_tools_present": "strict"
+    }
+  },
+  "budget": {
+    "fields": {
+      "max_tokens": {
+        "type": "integer",
+        "min": 1,
+        "max": 1000000
+      },
+      "max_duration_ms": {
+        "type": "integer",
+        "min": 1000,
+        "max": 300000
+      }
+    }
+  }
+}
