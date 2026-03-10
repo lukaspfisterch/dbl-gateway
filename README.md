@@ -7,11 +7,9 @@
 When organizations deploy LLM systems, they quickly need to answer three questions:
 Who asked what, what was permitted, and what actually happened.
 
-dbl-gateway introduces a deterministic boundary layer between intent, policy,
-and execution for LLM calls.
+dbl-gateway introduces a deterministic boundary layer between intent, policy and execution for LLM calls.
 
-It accepts declared intents, applies policy, executes permitted calls, and
-records everything as an append-only event stream.
+This repository provides a reference implementation of the Deterministic Boundary Layer concept.
 
 Part of the [Deterministic Boundary Layer](https://github.com/lukaspfisterch/deterministic-boundary-layer) architecture.
 
