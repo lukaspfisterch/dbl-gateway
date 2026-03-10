@@ -1,9 +1,17 @@
 # dbl-gateway
 
-Deterministic execution boundary for LLM calls.
+[![pytest](https://github.com/lukaspfisterch/dbl-gateway/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lukaspfisterch/dbl-gateway/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/dbl-gateway.svg)](https://pypi.org/project/dbl-gateway/)
+[![Python >=3.11](https://img.shields.io/badge/python-%3E%3D3.11-3776AB.svg)](https://pypi.org/project/dbl-gateway/)
 
-Accepts declared intents, applies policy, executes permitted calls,
-and records everything as an append-only event stream.
+When organizations deploy LLM systems, they quickly need to answer three questions:
+Who asked what, what was permitted, and what actually happened.
+
+dbl-gateway introduces a deterministic boundary layer between intent, policy,
+and execution for LLM calls.
+
+It accepts declared intents, applies policy, executes permitted calls, and
+records everything as an append-only event stream.
 
 Part of the [Deterministic Boundary Layer](https://github.com/lukaspfisterch/deterministic-boundary-layer) architecture.
 
