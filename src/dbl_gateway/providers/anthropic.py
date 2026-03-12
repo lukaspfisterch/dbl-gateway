@@ -5,8 +5,23 @@ from typing import Any
 
 import httpx
 
+from .contract import ProviderCapabilities, ProviderFeatures, ProviderLimits
 from .errors import ProviderError
 from ..ports.execution_port import NormalizedResponse
+
+
+def get_capabilities() -> ProviderCapabilities:
+    return ProviderCapabilities(
+        provider_id="anthropic",
+        features=ProviderFeatures(streaming=False, tools=False, json_mode=False),
+        limits=ProviderLimits(
+            max_output_tokens=8192,
+            default_max_tokens=256,
+            timeout_seconds=60.0,
+        ),
+        requires_api_key=True,
+        execution_mode="http",
+    )
 
 
 def _max_tokens(default: int) -> int:

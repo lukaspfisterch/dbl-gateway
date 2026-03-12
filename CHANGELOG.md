@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.7.1 — Provider Contract Hardening
+
+**Axis 2: Formal provider capabilities contract.**
+- New `ProviderCapabilities` Pydantic schema with `ProviderFeatures`, `ProviderLimits`, and `ProviderProtocol`.
+- Every provider (anthropic, openai, ollama) exports `get_capabilities()` — all fields required, no silent defaults.
+- `execution_mode: Literal["http", "local", "rpc"]` declares transport for future provider diversity.
+- `PROVIDER_MODULES` registry in `providers/__init__.py` — single source of truth for name-to-module mapping.
+- `capabilities.py` refactored from owner to aggregator — reads from providers instead of hardcoding.
+- `execution_adapter_kl.py` uses shared registry instead of duplicated mapping.
+- Contract conformance tests: every registered provider validated against `ProviderCapabilities` schema.
+
 ## v0.7.0 — Policy Externalization
 
 **Axis 1: Zero policy decision logic in gateway.**

@@ -10,7 +10,7 @@ from typing import Any, Mapping, Sequence
 from dbl_core import normalize_trace
 
 from ..ports.execution_port import ExecutionPort, ExecutionResult, NormalizedResponse
-from ..providers import anthropic, openai, ollama
+from ..providers import PROVIDER_MODULES
 from ..providers.errors import ProviderError
 from ..capabilities import resolve_model, resolve_provider
 
@@ -145,13 +145,10 @@ def schedule_execution(coro: asyncio.Task | asyncio.Future | Any) -> None:
 
 
 def _select_provider(name: str):
-    if name == "openai":
-        return openai.execute
-    if name == "anthropic":
-        return anthropic.execute
-    if name == "ollama":
-        return ollama.execute
-    raise RuntimeError("unsupported provider")
+    mod = PROVIDER_MODULES.get(name)
+    if mod is None:
+        raise RuntimeError(f"unsupported provider: {name}")
+    return mod.execute
 
 
 def _run_kernel_sync(

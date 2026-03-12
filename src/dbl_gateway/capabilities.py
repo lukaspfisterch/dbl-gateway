@@ -11,6 +11,8 @@ _LOGGER = logging.getLogger(__name__)
 
 from pydantic import BaseModel
 
+from .providers import get_provider_capabilities
+from .providers.contract import ProviderCapabilities
 from .wire_contract import INTERFACE_VERSION
 
 # Global TTL cache for capabilities
@@ -83,12 +85,14 @@ def get_capabilities() -> dict[str, object]:
     providers: list[dict[str, Any]] = []
 
     if _get_openai_key():
-        models = [_model_entry(model_id, checked_at=checked_at) for model_id in _openai_models_all()]
+        caps = get_provider_capabilities("openai")
+        models = [_model_entry_from_provider(model_id, caps, checked_at) for model_id in _openai_models_all()]
         if models:
             providers.append({"id": "openai", "models": models})
 
     if _get_anthropic_key():
-        models = [_model_entry(model_id, checked_at=checked_at) for model_id in _anthropic_models_all()]
+        caps = get_provider_capabilities("anthropic")
+        models = [_model_entry_from_provider(model_id, caps, checked_at) for model_id in _anthropic_models_all()]
         if models:
             providers.append({"id": "anthropic", "models": models})
 
@@ -140,17 +144,15 @@ def resolve_provider(model_id: str) -> tuple[str | None, str | None]:
     return None, "model.unavailable"
 
 
-def _model_entry(model_id: str, *, checked_at: str) -> dict[str, object]:
+def _model_entry_from_provider(
+    model_id: str, caps: ProviderCapabilities, checked_at: str,
+) -> dict[str, object]:
     return {
         "id": model_id,
         "display_name": model_id.replace("-", " ").upper(),
-        "features": {
-            "streaming": False,
-            "tools": False,
-            "json_mode": False,
-        },
+        "features": caps.features.model_dump(),
         "limits": {
-            "max_output_tokens": 8192,
+            "max_output_tokens": caps.limits.max_output_tokens,
         },
         "health": {
             "status": "ok",
@@ -214,6 +216,7 @@ def _discover_ollama(checked_at: str) -> dict[str, Any] | None:
         base = f"http://{base}"
     _LOGGER.info("ollama discovery base_url=%s", base)
     try:
+        caps = get_provider_capabilities("ollama")
         with httpx.Client(timeout=2.0) as c:
             r = c.get(base.rstrip("/") + "/api/tags")
             _LOGGER.info("ollama tags status=%s", r.status_code)
@@ -224,22 +227,9 @@ def _discover_ollama(checked_at: str) -> dict[str, Any] | None:
             for t in tags:
                 name = str(t.get("name") or "")
                 if name:
-                    models.append({
-                        "id": name,
-                        "display_name": name,
-                        "features": {
-                            "streaming": False,
-                            "tools": False,
-                            "json_mode": False,
-                        },
-                        "limits": {
-                            "max_output_tokens": 4096,
-                        },
-                        "health": {
-                            "status": "ok",
-                            "checked_at": checked_at,
-                        }
-                    })
+                    entry = _model_entry_from_provider(name, caps, checked_at)
+                    entry["display_name"] = name  # ollama uses raw name
+                    models.append(entry)
             if not models:
                 return None
             return {"id": "ollama", "models": models}

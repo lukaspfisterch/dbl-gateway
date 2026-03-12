@@ -3,8 +3,24 @@ import json as _json
 import os
 from typing import Any
 import httpx
+from .contract import ProviderCapabilities, ProviderFeatures, ProviderLimits
 from .errors import ProviderError
 from ..ports.execution_port import NormalizedResponse
+
+
+def get_capabilities() -> ProviderCapabilities:
+    return ProviderCapabilities(
+        provider_id="ollama",
+        features=ProviderFeatures(streaming=False, tools=False, json_mode=False),
+        limits=ProviderLimits(
+            max_output_tokens=4096,
+            default_max_tokens=4096,
+            timeout_seconds=240.0,
+        ),
+        requires_api_key=False,
+        execution_mode="http",
+    )
+
 
 def _base_url() -> str:
     val = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST")

@@ -6,8 +6,23 @@ from typing import Any, Mapping, Sequence
 
 import httpx
 
+from .contract import ProviderCapabilities, ProviderFeatures, ProviderLimits
 from .errors import ProviderError
 from ..ports.execution_port import NormalizedResponse
+
+
+def get_capabilities() -> ProviderCapabilities:
+    return ProviderCapabilities(
+        provider_id="openai",
+        features=ProviderFeatures(streaming=False, tools=False, json_mode=False),
+        limits=ProviderLimits(
+            max_output_tokens=8192,
+            default_max_tokens=1024,
+            timeout_seconds=30.0,
+        ),
+        requires_api_key=True,
+        execution_mode="http",
+    )
 
 
 def _base_url() -> str:
