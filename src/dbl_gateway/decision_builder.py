@@ -13,16 +13,18 @@ def build_normative_decision(
     assembly_digest: str | None,
     context_digest: str | None,
     transforms: Sequence[Mapping[str, object]] | None = None,
+    intent_index: int | None = None,
 ) -> dict[str, object]:
     """Construct the normative decision payload used for digesting."""
     policy_id = decision.policy_id or "unknown"
     policy_version = decision.policy_version or "unknown"
     reasons = [{"code": code} for code in (decision.reason_codes or [])]
     norm_transforms = [dict(t) for t in (transforms or [])]
-    return {
+    normative: dict[str, object] = {
         "policy": {
             "policy_id": policy_id,
             "policy_version": policy_version,
+            "policy_config_digest": decision.policy_config_digest,
         },
         "assembly_digest": assembly_digest,
         "context_digest": context_digest,
@@ -32,3 +34,6 @@ def build_normative_decision(
         "permitted_tools": decision.permitted_tools,
         "enforced_budget": decision.enforced_budget,
     }
+    if intent_index is not None:
+        normative["intent_index"] = intent_index
+    return normative

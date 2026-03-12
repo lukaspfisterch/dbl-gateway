@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.8.1 — Chain-of-Record / Observability
+
+**Axis 4: Decision lineage, context release guard, policy config digest.**
+- `policy_config_digest` added to `DecisionResult` and normative DECISION payload — SHA256 of policy rules, computed by gateway.
+- `intent_index` in DECISION payload links each decision back to its originating INTENT event index.
+- Context Release Guard: PROOF event emitted between DECISION and EXECUTION, carrying `payload_digest` over the full provider release (messages + model + limits + tools).
+- EXECUTION payload includes `release_digest` referencing the PROOF event's `payload_digest` for lineage verification.
+- `compute_release_digest` helper in `digest.py` — deterministic SHA256 over canonical JSON of the release object.
+- Feature-gated via `GATEWAY_ENABLE_RELEASE_GUARD` env var (default ON).
+- `DecisionNormative` and `PolicyIdent` contracts extended for `policy_config_digest` and `intent_index`.
+
 ## v0.8.0 — Capabilities Self-Description
 
 **Axis 3: `GET /capabilities` becomes self-describing.**

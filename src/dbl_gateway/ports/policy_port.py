@@ -16,6 +16,7 @@ class DecisionResult:
     tools_denied: list[str] | None = None
     tools_denied_reason: str | None = None
     enforced_budget: dict[str, Any] | None = None
+    policy_config_digest: str | None = None
 
 
 class PolicyPort(Protocol):

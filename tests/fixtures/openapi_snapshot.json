@@ -1,6 +1,63 @@
 {
   "components": {
     "schemas": {
+      "CapabilitiesBudget": {
+        "properties": {
+          "fields": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CapabilitiesBudgetField"
+            },
+            "title": "Fields",
+            "type": "object"
+          }
+        },
+        "required": [
+          "fields"
+        ],
+        "title": "CapabilitiesBudget",
+        "type": "object"
+      },
+      "CapabilitiesBudgetField": {
+        "properties": {
+          "max": {
+            "title": "Max",
+            "type": "integer"
+          },
+          "min": {
+            "title": "Min",
+            "type": "integer"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "min",
+          "max"
+        ],
+        "title": "CapabilitiesBudgetField",
+        "type": "object"
+      },
+      "CapabilitiesDeclaredTools": {
+        "properties": {
+          "max_items": {
+            "title": "Max Items",
+            "type": "integer"
+          },
+          "name_pattern": {
+            "title": "Name Pattern",
+            "type": "string"
+          }
+        },
+        "required": [
+          "max_items",
+          "name_pattern"
+        ],
+        "title": "CapabilitiesDeclaredTools",
+        "type": "object"
+      },
       "CapabilitiesFeatures": {
         "properties": {
           "json_mode": {
@@ -40,6 +97,22 @@
           "checked_at"
         ],
         "title": "CapabilitiesHealth",
+        "type": "object"
+      },
+      "CapabilitiesIntents": {
+        "properties": {
+          "supported": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Supported",
+            "type": "array"
+          }
+        },
+        "required": [
+          "supported"
+        ],
+        "title": "CapabilitiesIntents",
         "type": "object"
       },
       "CapabilitiesLimits": {
@@ -108,6 +181,16 @@
       },
       "CapabilitiesResponse": {
         "properties": {
+          "budget": {
+            "$ref": "#/components/schemas/CapabilitiesBudget"
+          },
+          "gateway_version": {
+            "title": "Gateway Version",
+            "type": "string"
+          },
+          "intents": {
+            "$ref": "#/components/schemas/CapabilitiesIntents"
+          },
           "interface_version": {
             "title": "Interface Version",
             "type": "integer"
@@ -119,12 +202,24 @@
             "title": "Providers",
             "type": "array"
           },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          },
           "surfaces": {
             "$ref": "#/components/schemas/CapabilitiesSurfaces"
+          },
+          "tool_surface": {
+            "$ref": "#/components/schemas/CapabilitiesToolSurface"
           }
         },
         "required": [
+          "schema_version",
+          "gateway_version",
           "interface_version",
+          "intents",
+          "tool_surface",
+          "budget",
           "providers",
           "surfaces"
         ],
@@ -159,6 +254,43 @@
         "title": "CapabilitiesSurfaces",
         "type": "object"
       },
+      "CapabilitiesToolScope": {
+        "properties": {
+          "default_when_declared_tools_present": {
+            "title": "Default When Declared Tools Present",
+            "type": "string"
+          },
+          "supported": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Supported",
+            "type": "array"
+          }
+        },
+        "required": [
+          "supported",
+          "default_when_declared_tools_present"
+        ],
+        "title": "CapabilitiesToolScope",
+        "type": "object"
+      },
+      "CapabilitiesToolSurface": {
+        "properties": {
+          "declared_tools": {
+            "$ref": "#/components/schemas/CapabilitiesDeclaredTools"
+          },
+          "tool_scope": {
+            "$ref": "#/components/schemas/CapabilitiesToolScope"
+          }
+        },
+        "required": [
+          "declared_tools",
+          "tool_scope"
+        ],
+        "title": "CapabilitiesToolSurface",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -174,13 +306,6 @@
       },
       "ValidationError": {
         "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
           "loc": {
             "items": {
               "anyOf": [

@@ -24,7 +24,9 @@ from .adapters.execution_adapter_kl import KlExecutionAdapter
 from .adapters.policy_adapter_dbl_policy import DblPolicyAdapter, ObserverPolicy, _load_policy
 from .context_builder import build_context_with_refs, RefResolutionError
 from .config import get_context_config, context_resolution_enabled, get_job_runtime_config
+from .contracts import canonical_json_bytes
 from .decision_builder import build_normative_decision
+from .digest import compute_release_digest
 from .ports.execution_port import ExecutionResult
 from .rendering import render_provider_payload
 from .ports.policy_port import DecisionResult
@@ -485,6 +487,7 @@ async def _process_intent(
     trace_id: str,
 ) -> None:
     thread_id, turn_id, parent_turn_id = _anchors_for_event(intent_event)
+    intent_index: int | None = intent_event.get("index")
     decision_emitted = False
     assembly_digest: str | None = None
     context_digest: str | None = None
@@ -545,6 +548,7 @@ async def _process_intent(
                         transforms=[],
                         context_spec=None,
                         assembled_context=None,
+                        intent_index=intent_index,
                     ),
                 )
                 return
@@ -594,6 +598,7 @@ async def _process_intent(
                         transforms=[],
                         context_spec=None,
                         assembled_context=None,
+                        intent_index=intent_index,
                     ),
                 )
                 return
@@ -661,9 +666,36 @@ async def _process_intent(
                     transforms=context_transforms,
                     context_spec=context_spec,
                     assembled_context=assembled_context,
+                    intent_index=intent_index,
                 ),
             )
             return
+
+        # Compute policy config digest from policy rules (gateway owns this)
+        _policy_config_digest: str | None = None
+        try:
+            policy_obj = getattr(app.state.policy, "policy", None)
+            config_val = getattr(policy_obj, "config", None) if policy_obj else None
+            if config_val is not None:
+                _policy_config_digest = f"sha256:{__import__('hashlib').sha256(canonical_json_bytes(config_val)).hexdigest()}"
+        except Exception:
+            _LOGGER.debug("policy config digest computation skipped")
+
+        # Carry policy_config_digest into DecisionResult
+        if _policy_config_digest and decision.policy_config_digest is None:
+            decision = DecisionResult(
+                decision=decision.decision,
+                reason_codes=decision.reason_codes,
+                policy_id=decision.policy_id,
+                policy_version=decision.policy_version,
+                gate_event=decision.gate_event,
+                permitted_tools=decision.permitted_tools,
+                tool_scope_enforced=decision.tool_scope_enforced,
+                tools_denied=decision.tools_denied,
+                tools_denied_reason=decision.tools_denied_reason,
+                enforced_budget=decision.enforced_budget,
+                policy_config_digest=_policy_config_digest,
+            )
 
         requested_model = ""
         if isinstance(authoritative.get("payload"), Mapping):
@@ -703,6 +735,7 @@ async def _process_intent(
                 tools_denied=tools_denied,
                 tools_denied_reason=tools_denied_reason,
                 enforced_budget=enforced_budget,
+                policy_config_digest=decision.policy_config_digest,
             )
 
         app.state.store.append(
@@ -729,6 +762,7 @@ async def _process_intent(
                 transforms=context_transforms,
                 context_spec=context_spec,
                 assembled_context=assembled_context,
+                intent_index=intent_index,
             ),
         )
         decision_emitted = True
@@ -762,6 +796,39 @@ async def _process_intent(
             if decision.enforced_budget and decision.enforced_budget.get("max_duration_ms"):
                 effective_wall_clock_s = decision.enforced_budget["max_duration_ms"] // 1000
 
+            # --- Context Release Guard: PROOF event before execution ---
+            _release_digest: str | None = None
+            if _release_guard_enabled():
+                release_obj: dict[str, Any] = {
+                    "messages": model_messages or [],
+                    "model_id": resolved_model or "",
+                    "provider": provider or "",
+                }
+                if decision.permitted_tools is not None:
+                    release_obj["permitted_tools"] = sorted(decision.permitted_tools)
+                if decision.enforced_budget:
+                    release_obj["enforced_budget"] = decision.enforced_budget
+                _release_digest = compute_release_digest(release_obj)
+                app.state.store.append(
+                    kind="PROOF",
+                    thread_id=thread_id,
+                    turn_id=turn_id,
+                    parent_turn_id=parent_turn_id,
+                    lane=authoritative["lane"],
+                    actor="gateway",
+                    intent_type=authoritative["intent_type"],
+                    stream_id=authoritative["stream_id"],
+                    correlation_id=correlation_id,
+                    payload={
+                        "proof_type": "context_release_guard",
+                        "payload_digest": _release_digest,
+                        "model_id": resolved_model or "",
+                        "provider": provider or "",
+                        "message_count": len(model_messages or []),
+                        "_obs": {"trace_id": trace_id},
+                    },
+                )
+
             result = await app.state.execution.run(
                 intent_event,
                 model_messages=model_messages,
@@ -791,6 +858,7 @@ async def _process_intent(
                 resolved_model_id=resolved_model or None,
                 context_digest=assembly_digest,
                 boundary=boundary_context,
+                release_digest=_release_digest,
             )
         except Exception as exc:
             trace, trace_digest_value = make_trace_bundle(
@@ -880,6 +948,7 @@ async def _process_intent(
                 transforms=context_transforms,
                 context_spec=context_spec,
                 assembled_context=assembled_context,
+                intent_index=intent_index,
             ),
         )
 
@@ -900,12 +969,14 @@ def _decision_payload(
     context_spec: Mapping[str, Any] | None = None,
     assembled_context: Mapping[str, Any] | None = None,
     error_ref: str | None = None,
+    intent_index: int | None = None,
 ) -> dict[str, Any]:
     normative = build_normative_decision(
         decision,
         assembly_digest=assembly_digest,
         context_digest=context_digest,
         transforms=transforms,
+        intent_index=intent_index,
     )
     payload: dict[str, Any] = {
         "decision": decision.decision,
@@ -1000,11 +1071,14 @@ def _execution_payload(
     resolved_model_id: str | None,
     context_digest: str | None = None,
     boundary: Mapping[str, Any] | None = None,
+    release_digest: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "provider": result.provider,
         "model_id": result.model_id,
     }
+    if release_digest:
+        payload["release_digest"] = release_digest
     if requested_model_id:
         payload["requested_model_id"] = requested_model_id
     if resolved_model_id:
@@ -1069,6 +1143,10 @@ def _normalize_optional_str(value: str | None, name: str) -> str | None:
     if value.strip() == "":
         raise HTTPException(status_code=400, detail=f"{name} must be a non-empty string")
     return value.strip()
+
+
+def _release_guard_enabled() -> bool:
+    return os.getenv("GATEWAY_ENABLE_RELEASE_GUARD", "1").strip().lower() not in ("0", "false", "no")
 
 
 def _get_exec_mode() -> str:

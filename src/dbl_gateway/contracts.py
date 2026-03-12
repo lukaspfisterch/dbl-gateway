@@ -18,9 +18,10 @@ class EventEnvelope(TypedDict, total=False):
     _obs: dict[str, Any]
 
 
-class PolicyIdent(TypedDict):
+class PolicyIdent(TypedDict, total=False):
     policy_id: str
     policy_version: str
+    policy_config_digest: str | None
 
 
 class DecisionReason(TypedDict, total=False):
@@ -40,7 +41,7 @@ class BudgetConstraint(TypedDict, total=False):
     source: str
 
 
-class DecisionNormative(TypedDict):
+class DecisionNormative(TypedDict, total=False):
     policy: PolicyIdent
     assembly_digest: str | None
     context_digest: str | None
@@ -49,6 +50,7 @@ class DecisionNormative(TypedDict):
     transforms: list[DecisionTransform]
     permitted_tools: list[str] | None
     enforced_budget: BudgetConstraint | None
+    intent_index: int | None
 
 
 class ContextIdentity(TypedDict, total=False):
@@ -280,8 +282,15 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
         if isinstance(source, str) and source.strip():
             norm_enforced_budget["source"] = source.strip()
 
-    return {
-        "policy": {"policy_id": policy_id.strip(), "policy_version": policy_version.strip()},
+    policy_config_digest = policy.get("policy_config_digest")
+    policy_block: PolicyIdent = {
+        "policy_id": policy_id.strip(),
+        "policy_version": policy_version.strip(),
+        "policy_config_digest": policy_config_digest if isinstance(policy_config_digest, str) else None,
+    }
+
+    normalized: DecisionNormative = {
+        "policy": policy_block,
         "assembly_digest": assembly_digest_value,
         "context_digest": context_digest_value,
         "result": result,
@@ -290,6 +299,10 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
         "permitted_tools": norm_permitted_tools,
         "enforced_budget": norm_enforced_budget,
     }
+    intent_index = decision.get("intent_index")
+    if intent_index is not None and isinstance(intent_index, int):
+        normalized["intent_index"] = intent_index
+    return normalized
 
 
 def _normalize_declared_refs(refs: list[Mapping[str, Any]]) -> list[DeclaredRef]:

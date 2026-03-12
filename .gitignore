@@ -1,11 +1,12 @@
 # Local workflow
 inventory_*.md
-inventory_summary.json
+inventory_summary*.json
 agents.md
 git.md
 SESSION_NOTES.md
 .env
 env_loader.ps1
+tools/refresh_inventory.py
 
 # OS / editor
 Thumbs.db

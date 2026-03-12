@@ -14,7 +14,7 @@ from .contracts import (
     normalize_sha256_hex,
 )
 
-__all__ = ["event_digest", "v_digest", "v_digest_step"]
+__all__ = ["event_digest", "v_digest", "v_digest_step", "compute_release_digest"]
 
 
 def event_digest(kind: str, correlation_id: str, payload: dict[str, Any]) -> tuple[str, int]:
@@ -48,6 +48,12 @@ def v_digest_step(prev: str, idx: int, digest: str) -> str:
 
 def _v_seed() -> str:
     return "sha256:" + ("0" * 64)
+
+
+def compute_release_digest(release_obj: dict[str, Any]) -> str:
+    """Compute SHA256 digest over the full provider release payload (canonical JSON)."""
+    canonical_bytes = canonical_json_bytes(canonicalize_value(release_obj))
+    return f"sha256:{sha256(canonical_bytes).hexdigest()}"
 
 
 def _sha256_hex(data: bytes) -> str:
