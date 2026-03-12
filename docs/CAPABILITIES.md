@@ -4,12 +4,12 @@ Client-visible capabilities. Internal architecture is not described
 unless it affects wire behavior.
 
 ## Stable vs Variable
-- Stable: interface_version=3, ContextSpec schema ctxspec.2, ContextConfig schema v1, endpoint paths, tool_scope semantics, budget field schema.
+- Stable: interface_version=3, ContextSpec schema ctxspec.2, ContextConfig schema v1, endpoint paths, tool_scope semantics, budget field schema, event chain (INTENT -> DECISION -> PROOF -> EXECUTION).
 - Variable: provider list, model list, defaults, limits, policy version, and some failure codes may change with config/env.
 
 ## API Endpoints
 - `GET /healthz` — health check. Response `{status}`.
-- `GET /capabilities` — providers, models, and surfaces. Response `CapabilitiesResponse` (interface_version=3).
+- `GET /capabilities` — providers, models, and surfaces. Response `CapabilitiesResponse` (schema_version, gateway_version, interface_version=3).
 - `POST /ingress/intent` — ingest `IntentEnvelope` (interface_version=3). Returns accepted/queued + correlation_id + index.
 - `GET /snapshot` — event snapshot (limit/offset/stream_id/lane). Returns `SnapshotResponse`.
 - `GET /threads/{thread_id}/timeline` — grouped by turn; optionally include payloads.
@@ -48,11 +48,17 @@ unless it affects wire behavior.
 - When OFF: `declared_refs` stored but not resolved, `artifact.handle` rejected at ingress.
 - DECISION records `context_config_digest: "CONTEXT_RESOLUTION_DISABLED"` sentinel.
 
+## Chain-of-Record (v0.8.1)
+- DECISION includes `policy_config_digest` (SHA-256 of the policy rules) and `intent_index` (link to originating INTENT).
+- PROOF event emitted between DECISION and EXECUTION when `GATEWAY_ENABLE_RELEASE_GUARD` is ON (default). Contains `payload_digest` over the canonical JSON of the full provider release.
+- EXECUTION includes `release_digest` matching the preceding PROOF's `payload_digest`.
+- Chain: INTENT -> DECISION (intent_index, policy_config_digest) -> PROOF (payload_digest) -> EXECUTION (release_digest).
+
 ## Schemas
 - `IntentEnvelope` (interface_version=3).
 - `ContextSpec` schema `ctxspec.2`.
 - `ContextConfig` schema `v1` (config/context.schema.json).
-- `CapabilitiesResponse` (interface_version=3).
+- `CapabilitiesResponse` (schema_version=`gateway.capabilities.v1`, gateway_version, interface_version=3).
 
 ## Providers & Models
 - OpenAI: uses `OPENAI_CHAT_MODEL_IDS`/`OPENAI_MODEL_IDS`; responses via `OPENAI_RESPONSES_MODEL_IDS` (default `gpt-5.2`).

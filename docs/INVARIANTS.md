@@ -26,4 +26,18 @@ Invariants that the gateway maintains across all requests. Violations are bugs.
 
 ## Decision Normative Surface
 
-**I-NORM-1**: `permitted_tools` and `enforced_budget` are included in the normative decision digest. Changes to these fields produce a different digest.
+**I-NORM-1**: `permitted_tools`, `enforced_budget`, `policy_config_digest`, and `intent_index` are included in the normative decision digest. Changes to these fields produce a different digest.
+
+## Chain-of-Record (v0.8.1)
+
+**I-CHAIN-1**: Every DECISION event contains `intent_index` linking to its originating INTENT event index.
+
+**I-CHAIN-2**: When the release guard is enabled, a PROOF event with `proof_type: "context_release_guard"` is emitted between DECISION and EXECUTION.
+
+**I-CHAIN-3**: `EXECUTION.release_digest` matches the preceding `PROOF.payload_digest`. A replayer can verify that the executed payload matches what was recorded before execution.
+
+**I-CHAIN-4**: `policy_config_digest` is computed by the gateway over the policy rules object. Different policy configurations produce different digests.
+
+## Policy Externalization (v0.7.0)
+
+**I-POLICY-1**: The gateway contains zero policy decision logic. All decisions are delegated through `PolicyPort.decide()`.

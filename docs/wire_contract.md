@@ -255,13 +255,17 @@ Values must be integers (floats are rejected).
 }
 ```
 
-## DECISION Payload (v0.6.0)
+## DECISION Payload (v0.8.1)
 
 DECISION events include normative fields for replay verification:
 
 ```json
 {
-  "policy": {"policy_id": "...", "policy_version": "..."},
+  "policy": {
+    "policy_id": "...",
+    "policy_version": "...",
+    "policy_config_digest": "sha256:..."
+  },
   "assembly_digest": "sha256:...",
   "context_digest": "sha256:...",
   "result": "ALLOW",
@@ -269,6 +273,7 @@ DECISION events include normative fields for replay verification:
   "transforms": [...],
   "permitted_tools": ["web.search", "code.execute"],
   "enforced_budget": {"max_tokens": 4096, "max_duration_ms": 30000, "source": "intent_exact"},
+  "intent_index": 0,
   "boundary": {
     "context_config_digest": "sha256:...",
     "boundary_version": "1"
@@ -278,6 +283,32 @@ DECISION events include normative fields for replay verification:
 }
 ```
 
-`permitted_tools` and `enforced_budget` are normative (included in decision digest).
+All of `permitted_tools`, `enforced_budget`, `policy_config_digest`, and `intent_index` are normative (included in decision digest).
 
-The `boundary.context_config_digest` pins the configuration used to make this decision. When context resolution is disabled, it is set to `"CONTEXT_RESOLUTION_DISABLED"`.
+| Field | Since | Description |
+|-------|-------|-------------|
+| `policy.policy_config_digest` | v0.8.1 | SHA-256 of the policy rules, computed by the gateway |
+| `intent_index` | v0.8.1 | Index of the originating INTENT event (decision lineage) |
+| `boundary.context_config_digest` | v0.5.x | Pins the context configuration. `"CONTEXT_RESOLUTION_DISABLED"` when OFF |
+
+## PROOF Event: Context Release Guard (v0.8.1)
+
+Before execution, the gateway emits a PROOF event capturing a digest of the full provider payload:
+
+```json
+{
+  "proof_type": "context_release_guard",
+  "payload_digest": "sha256:...",
+  "model_id": "gpt-4o-mini",
+  "provider": "openai",
+  "message_count": 3
+}
+```
+
+The digest covers the canonical JSON of: `messages`, `model_id`, `provider`, `permitted_tools`, `enforced_budget`.
+
+Feature-gated via `GATEWAY_ENABLE_RELEASE_GUARD` (default ON).
+
+## EXECUTION Lineage (v0.8.1)
+
+EXECUTION events include `release_digest` which must match the preceding PROOF event's `payload_digest`. This creates a verifiable chain: INTENT -> DECISION -> PROOF -> EXECUTION.

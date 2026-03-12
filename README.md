@@ -7,26 +7,28 @@
 When organizations deploy LLM systems, they quickly need to answer three questions:
 Who asked what, what was permitted, and what actually happened.
 
-dbl-gateway introduces a deterministic boundary layer between intent, policy and execution for LLM calls.
-
-This repository provides a reference implementation of the Deterministic Boundary Layer concept.
+dbl-gateway is the execution boundary for the Deterministic Boundary Layer.
+It accepts declared intents, enforces policy decisions, and records everything
+as an append-only, digest-pinned event stream.
 
 Part of the [Deterministic Boundary Layer](https://github.com/lukaspfisterch/deterministic-boundary-layer) architecture.
 
 ## Model
 
-Every request passes through three surfaces:
+Every request passes through a deterministic event chain:
 
-    Intent  ->  Decision  ->  Execution
+    INTENT  ->  DECISION  ->  PROOF  ->  EXECUTION
 
-**Intent** accepts and validates the request.
-**Decision** evaluates policy and produces a normative verdict (ALLOW / DENY).
-**Execution** calls the provider and enforces tool and budget constraints.
+**INTENT** records what was asked.
+**DECISION** records what policy allowed (normative, digest-pinned).
+**PROOF** captures the context release guard -- a digest of the payload sent to the provider.
+**EXECUTION** records what the provider returned.
 
-Each surface emits one event. Events are append-only, linked by `correlation_id`,
+Events are append-only, linked by `correlation_id`,
 and digested with SHA-256 over canonical JSON.
 
 Only DECISION events are normative. Execution output never feeds back into policy.
+Policy logic lives in dbl-policy; the gateway only evaluates and enforces.
 
 ## Example
 
@@ -55,11 +57,12 @@ POST /ingress/intent
 }
 ```
 
-The gateway produces three events:
+The gateway produces up to four events:
 
     INTENT     what was asked
-    DECISION   what was allowed  (permitted_tools, enforced_budget)
-    EXECUTION  what happened     (model output, tool_calls, tool_blocked)
+    DECISION   what was allowed  (permitted_tools, enforced_budget, intent_index)
+    PROOF      what will be sent (context release guard, payload_digest)
+    EXECUTION  what happened     (model output, tool_calls, release_digest)
 
 Read them back:
 
@@ -92,8 +95,10 @@ dbl-gateway serve --host 127.0.0.1 --port 8010
 
 ## Providers
 
-OpenAI, Anthropic, and Ollama. Configured via environment variables,
-exposed through `GET /capabilities`.
+OpenAI, Anthropic, and Ollama. Each provider is a stateless adapter
+exposing `execute()` and `get_capabilities()` against a formal
+`ProviderCapabilities` schema. Runtime capabilities are self-describing
+via `GET /capabilities`.
 
 ## What This Is Not
 
@@ -101,8 +106,8 @@ exposed through `GET /capabilities`.
 - Not a workflow engine.
 - Not a chat UI.
 
-The gateway does not decide what to do. It decides whether a declared
-action may execute.
+The gateway does not decide what to do. It enforces whether a declared
+action may execute. Policy rules are defined externally in dbl-policy.
 
 ## Documentation
 
@@ -128,6 +133,7 @@ action may execute.
 
 ## Status
 
-**v0.8.0.** Self-describing capabilities. `GET /capabilities` returns the full
-contract (intents, tool rules, budget, providers, surfaces) in one call.
+**v0.8.1.** Chain-of-record with decision lineage (`intent_index`),
+context release guard (PROOF events), and policy config digest.
+Self-describing capabilities via `GET /capabilities`.
 Wire contract v3.

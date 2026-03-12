@@ -105,7 +105,7 @@ This ensures execution receives explicit, deterministic references (O_context) w
 | EXECUTION output content | Observational (Claim 4) |
 | `_obs` fields | Explicitly observational |
 
-> Note: A provider payload digest may be introduced in a future release to fingerprint the exact request sent to a specific provider. It is intentionally out of scope for 0.5.x.
+> Since v0.8.1, the Context Release Guard (PROOF event) captures a `payload_digest` over the canonical JSON of the full provider release (messages, model_id, provider, permitted_tools, enforced_budget). The EXECUTION event references this digest via `release_digest`. See [wire_contract.md](wire_contract.md) for details.
 
 ## Replay Modes
 
