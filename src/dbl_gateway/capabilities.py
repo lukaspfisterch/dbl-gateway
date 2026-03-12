@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.metadata
 from datetime import datetime, timezone
 import os
 import time
@@ -13,7 +14,23 @@ from pydantic import BaseModel
 
 from .providers import get_provider_capabilities
 from .providers.contract import ProviderCapabilities
-from .wire_contract import INTERFACE_VERSION
+from .wire_contract import (
+    BUDGET_LIMITS,
+    CAPABILITIES_INTENT_TYPES,
+    INTERFACE_VERSION,
+    MAX_DECLARED_TOOLS,
+    SUPPORTED_TOOL_SCOPE,
+    TOOL_NAME_PATTERN,
+)
+
+CAPABILITIES_SCHEMA_VERSION = "gateway.capabilities.v1"
+
+
+def _gateway_version() -> str:
+    try:
+        return importlib.metadata.version("dbl-gateway")
+    except importlib.metadata.PackageNotFoundError:
+        return "unknown"
 
 # Global TTL cache for capabilities
 # Structure: {"value": dict, "expires_at": float}
@@ -55,8 +72,42 @@ class CapabilitiesSurfaces(BaseModel):
     ingress_intent: bool
 
 
+class CapabilitiesIntents(BaseModel):
+    supported: list[str]
+
+
+class CapabilitiesDeclaredTools(BaseModel):
+    max_items: int
+    name_pattern: str
+
+
+class CapabilitiesToolScope(BaseModel):
+    supported: list[str]
+    default_when_declared_tools_present: str
+
+
+class CapabilitiesToolSurface(BaseModel):
+    declared_tools: CapabilitiesDeclaredTools
+    tool_scope: CapabilitiesToolScope
+
+
+class CapabilitiesBudgetField(BaseModel):
+    type: str
+    min: int
+    max: int
+
+
+class CapabilitiesBudget(BaseModel):
+    fields: dict[str, CapabilitiesBudgetField]
+
+
 class CapabilitiesResponse(BaseModel):
+    schema_version: str
+    gateway_version: str
     interface_version: int
+    intents: CapabilitiesIntents
+    tool_surface: CapabilitiesToolSurface
+    budget: CapabilitiesBudget
     providers: list[CapabilitiesProvider]
     surfaces: CapabilitiesSurfaces
 
@@ -101,7 +152,32 @@ def get_capabilities() -> dict[str, object]:
         providers.append(ollama_info)
 
     return {
+        "schema_version": CAPABILITIES_SCHEMA_VERSION,
+        "gateway_version": _gateway_version(),
         "interface_version": INTERFACE_VERSION,
+        "intents": {
+            "supported": list(CAPABILITIES_INTENT_TYPES),
+        },
+        "tool_surface": {
+            "declared_tools": {
+                "max_items": MAX_DECLARED_TOOLS,
+                "name_pattern": TOOL_NAME_PATTERN,
+            },
+            "tool_scope": {
+                "supported": list(SUPPORTED_TOOL_SCOPE),
+                "default_when_declared_tools_present": "strict",
+            },
+        },
+        "budget": {
+            "fields": {
+                name: {
+                    "type": "integer",
+                    "min": limits["min"],
+                    "max": limits["max"],
+                }
+                for name, limits in BUDGET_LIMITS.items()
+            },
+        },
         "providers": providers,
         "surfaces": {
             "tail": True,

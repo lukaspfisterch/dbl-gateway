@@ -128,5 +128,6 @@ action may execute.
 
 ## Status
 
-**v0.7.0.** Policy externalization complete. Core execution, policy gating,
-tool enforcement, and budget constraints are stable. Wire contract v3.
+**v0.8.0.** Self-describing capabilities. `GET /capabilities` returns the full
+contract (intents, tool rules, budget, providers, surfaces) in one call.
+Wire contract v3.

@@ -189,6 +189,5 @@ def test_capabilities_doc_matches_interface_version():
     docs_path = Path(__file__).resolve().parents[1] / "docs" / f"capabilities.gateway.v{INTERFACE_VERSION}.json"
     data = json.loads(docs_path.read_text(encoding="utf-8"))
 
-    expected = str(INTERFACE_VERSION)
-    assert str(data["interface_version"]) == expected
-    assert data["generated_from"]["wire_contract"] == f"v{expected}"
+    assert data["interface_version"] == INTERFACE_VERSION
+    assert data["schema_version"] == "gateway.capabilities.v1"

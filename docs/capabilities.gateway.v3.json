@@ -1,14 +1,6 @@
 {
-  "schema": "gateway.capabilities.v1",
-  "generated_at": "2026-03-05T20:44:38.539120+00:00",
-  "generated_from": {
-    "wire_contract": "v3",
-    "gateway_version": "0.7.1",
-    "sources": [
-      "src/dbl_gateway/wire_contract.py",
-      "src/dbl_gateway/contracts.py"
-    ]
-  },
+  "schema_version": "gateway.capabilities.v1",
+  "gateway_version": "0.8.0",
   "interface_version": 3,
   "intents": {
     "supported": [
@@ -42,5 +34,12 @@
         "max": 300000
       }
     }
-  }
+  },
+  "surfaces": {
+    "tail": true,
+    "snapshot": true,
+    "events": false,
+    "ingress_intent": true
+  },
+  "generated_at": "2026-03-12T11:25:02.424861+00:00"
 }

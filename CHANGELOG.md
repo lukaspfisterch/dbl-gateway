@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.8.0 — Capabilities Self-Description
+
+**Axis 3: `GET /capabilities` becomes self-describing.**
+- Response now includes wire contract info: `intents`, `tool_surface`, `budget` alongside runtime `providers`/`surfaces`.
+- Three version layers separated: `schema_version` (response shape), `interface_version` (wire contract), `gateway_version` (software release).
+- `generate_capabilities.py` rewritten as pure runtime snapshot — zero own logic, calls `get_capabilities()` and strips dynamic fields.
+- `docs/capabilities.gateway.v3.json` is now an exact snapshot of the runtime contract (minus providers).
+- Single source of truth: a client can discover everything from one `GET /capabilities` call.
+
 ## v0.7.1 — Provider Contract Hardening
 
 **Axis 2: Formal provider capabilities contract.**
