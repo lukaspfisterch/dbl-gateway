@@ -37,7 +37,20 @@ class ObserverPolicy:
 class DblPolicyAdapter(PolicyPort):
     policy: Policy | None = None
 
+    # Intent types that are metadata-only and bypass full policy evaluation.
+    _METADATA_ONLY_INTENTS: frozenset[str] = frozenset({"artifact.handle"})
+
     def decide(self, authoritative_input: Mapping[str, Any]) -> DecisionResult:
+        # Metadata-only intents get a deterministic ALLOW without full evaluation.
+        intent_type = authoritative_input.get("intent_type", "")
+        if intent_type in self._METADATA_ONLY_INTENTS:
+            return DecisionResult(
+                decision="ALLOW",
+                reason_codes=["HANDLE_METADATA_ONLY"],
+                policy_id="builtin",
+                policy_version="1",
+            )
+
         try:
             context = _build_policy_context(authoritative_input)
         except ContextShapeError:

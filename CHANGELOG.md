@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.0 — Policy Externalization
+
+**Axis 1: Zero policy decision logic in gateway.**
+- Moved `artifact.handle` metadata-only ALLOW rule from hardcoded bypass in `app.py` to `DblPolicyAdapter` in the policy layer.
+- Gateway now delegates all decisions through `PolicyPort.decide()`, including metadata-only intents.
+- `DblPolicyAdapter` defines `_METADATA_ONLY_INTENTS` for intent types that bypass full policy evaluation.
+- Success criterion met: dbl-policy can be replaced without changing `app.py`.
+
 ## v0.6.0 — Tool Gating, Budget Constraints & Context Gate
 
 **Breaking: Wire Contract v3**

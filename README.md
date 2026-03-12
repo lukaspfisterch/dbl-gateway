@@ -128,5 +128,5 @@ action may execute.
 
 ## Status
 
-**v0.6.0.** Core execution, policy gating, tool enforcement, and budget
-constraints are stable. Wire contract v3.
+**v0.7.0.** Policy externalization complete. Core execution, policy gating,
+tool enforcement, and budget constraints are stable. Wire contract v3.

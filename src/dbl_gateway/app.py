@@ -216,8 +216,9 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
                 content={"ok": False, "reason_code": "admission.invalid_parent", "detail": str(exc)},
             )
 
-        # Some intents are metadata-only and should not trigger policy decisions.
-        if intent_payload.get("intent_type") in {"artifact.handle"}:
+        # Metadata-only intents: delegate decision to policy, skip execution.
+        if authoritative["intent_type"] in {"artifact.handle"}:
+            decision = app.state.policy.decide(authoritative)
             app.state.store.append(
                 kind="DECISION",
                 thread_id=thread_id,
@@ -229,12 +230,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
                 stream_id=authoritative["stream_id"],
                 correlation_id=envelope["correlation_id"],
                 payload=_decision_payload(
-                    DecisionResult(
-                        decision="ALLOW",
-                        reason_codes=["HANDLE_METADATA_ONLY"],
-                        policy_id="builtin",
-                        policy_version="1",
-                    ),
+                    decision,
                     trace_id,
                     assembly_digest=None,
                     context_digest=None,
@@ -1351,7 +1347,7 @@ def _compute_permitted_tools(
     """Compute tool gating fields for DECISION payload.
 
     Returns (permitted_tools, tool_scope_enforced, tools_denied, tools_denied_reason).
-    For v0.6.0, gateway passes through declared_tools as permitted_tools.
+    For v0.7.0, gateway passes through declared_tools as permitted_tools.
     Policy can override via DecisionResult.permitted_tools in future versions.
     """
     if decision.decision != "ALLOW":

@@ -3,7 +3,7 @@
   "generated_at": "2026-03-05T20:44:38.539120+00:00",
   "generated_from": {
     "wire_contract": "v3",
-    "gateway_version": "0.6.0",
+    "gateway_version": "0.7.0",
     "sources": [
       "src/dbl_gateway/wire_contract.py",
       "src/dbl_gateway/contracts.py"
