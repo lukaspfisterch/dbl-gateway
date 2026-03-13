@@ -367,24 +367,26 @@ button:hover { background: #3a3a5a; }
     for (var i = 0; i < providers.length; i++) {
       var p = providers[i];
       html += '<div class="panel-section">';
-      html += '<div class="panel-section-title">' + esc(p.provider_id || "provider") + '</div>';
+      html += '<div class="panel-section-title">' + esc(p.id || "provider") + '</div>';
       var models = p.models || [];
       for (var j = 0; j < models.length; j++) {
         var m = models[j];
-        var badge = m.health === "ok"
+        var hs = (m.health && m.health.status) || "unknown";
+        var badge = hs === "ok"
           ? '<span class="panel-badge badge-ok">ok</span>'
-          : '<span class="panel-badge badge-error">' + esc(m.health || "?") + '</span>';
-        html += '<div class="panel-row"><span class="panel-label">' + esc(m.model_id || "") + '</span>' + badge + '</div>';
+          : '<span class="panel-badge badge-error">' + esc(hs) + '</span>';
+        html += '<div class="panel-row"><span class="panel-label">' + esc(m.id || "") + '</span>' + badge + '</div>';
       }
       html += '</div>';
     }
 
-    // Surfaces
-    var surfaces = caps.surfaces || [];
-    if (surfaces.length) {
+    // Surfaces (object: {tail: true, snapshot: true, ...})
+    var surfaces = caps.surfaces || {};
+    var activeSurfaces = Object.keys(surfaces).filter(function (k) { return surfaces[k]; });
+    if (activeSurfaces.length) {
       html += '<div class="panel-section">';
       html += '<div class="panel-section-title">Surfaces</div>';
-      html += '<div class="panel-row"><span class="panel-value">' + surfaces.map(function (s) { return esc(s.surface_id || s); }).join(", ") + '</span></div>';
+      html += '<div class="panel-row"><span class="panel-value">' + activeSurfaces.map(esc).join(", ") + '</span></div>';
       html += '</div>';
     }
 
