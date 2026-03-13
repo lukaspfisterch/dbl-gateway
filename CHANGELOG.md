@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.9.5 — Docker Demo Start
+
+**Observer demo runtime now has a clean containerized start path.**
+- Added `.env.example` as the minimal local template for Docker/local startup with one active provider or local Ollama.
+- Added `compose.yaml` for a single-command `docker compose up --build` entry path.
+- Added `run_demo.ps1` as a Windows convenience launcher: start container, wait briefly, open `/ui/`.
+- Fixed Python packaging so `dbl_gateway/static/index.html` is included in built wheels and in Docker-installed packages; `/ui/` now works from the container image.
+- Startup logging now emits an explicit browser-facing observer URL (`http://localhost:8010/ui/`) even when the server binds to `0.0.0.0`.
+- README refocused the top-level entry path around the one-command Docker start and moved the observer screenshot directly under that flow.
+
 ## v0.9.4 — Observer Runtime Demo
 
 **Observer runtime becomes a usable demo/playground, not just a viewer.**

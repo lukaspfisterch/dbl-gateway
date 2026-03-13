@@ -1,0 +1,9 @@
+services:
+  gateway:
+    build: .
+    ports:
+      - "8010:8010"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data

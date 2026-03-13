@@ -28,34 +28,29 @@ Only DECISION events are normative. Execution output never feeds back into polic
 
 ## Example
 
-```json
-POST /ingress/intent
-{
-  "interface_version": 3,
-  "correlation_id": "c-1",
-  "payload": {
-    "stream_id": "default",
-    "lane": "user",
-    "actor": "user@example.com",
-    "intent_type": "chat.message",
-    "thread_id": "t-1",
-    "turn_id": "turn-1",
-    "parent_turn_id": null,
-    "payload": {
-      "message": "hello",
-      "declared_tools": ["web.search"],
-      "tool_scope": "strict",
-      "budget": { "max_tokens": 1024 }
-    }
-  }
-}
+Send an intent through `POST /ingress/intent` and read events through
+`GET /tail?stream_id=default&since=0`.
+
+See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full envelope example.
+
+## One-Command Start
+
+Configure `.env` once from [​.env.example](.env.example), set one provider key
+or local Ollama, then start the gateway with:
+
+```bash
+docker compose up --build
 ```
 
-Read events:
+Open `http://localhost:8010/ui/` to watch the event chain in real time.
 
-```text
-GET /tail?stream_id=default&since=0
+On Windows, use:
+
+```powershell
+.\run_demo.ps1
 ```
+
+![Observer UI](pictures/demorun.png)
 
 ## Install
 
@@ -69,7 +64,21 @@ Or from source:
 pip install -e .
 ```
 
-## Run
+## Run With Docker
+
+```bash
+cp .env.example .env
+# add one provider key or configure local Ollama in .env
+docker compose up --build
+```
+
+Supports OpenAI, Anthropic, or local Ollama. One active provider is enough to
+run the gateway.
+
+`.env` stays local and should not be committed. Only `.env.example` belongs in
+the repository.
+
+## Run Locally
 
 ```bash
 export DBL_GATEWAY_DB=./data/trail.sqlite
@@ -82,12 +91,10 @@ dbl-gateway serve --host 127.0.0.1 --port 8010
 
 ## Observer
 
-The gateway includes a built-in observer at `/ui`.
+Open `/ui` to watch the event chain in real time.
 
-It visualizes the event stream, decision replay, chain verification, manual
-intent submission, and the integrated demo controller.
-
-![Observer UI](pictures/demorun.png)
+The built-in observer includes the event stream, decision replay, chain
+verification, manual intent submission, and the integrated demo controller.
 
 ## Discovery
 
@@ -116,5 +123,5 @@ See:
 
 ## Status
 
-**v0.9.4.** Observer runtime, discovery surfaces, decision replay, manual intent
-submission, and integrated demo control.
+**v0.9.5.** Observer runtime with discovery surfaces, integrated demo control,
+manual intent, and a one-command Docker start.

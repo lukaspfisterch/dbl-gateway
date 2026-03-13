@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dbl-gateway"
-version = "0.9.4"
+version = "0.9.5"
 description = "DBL Gateway"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
@@ -61,6 +61,9 @@ package-dir = { "" = "src" }
 where = ["src"]
 include = ["dbl_gateway*"]
 exclude = ["tests*", "docs*", "scripts*"]
+
+[tool.setuptools.package-data]
+dbl_gateway = ["static/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

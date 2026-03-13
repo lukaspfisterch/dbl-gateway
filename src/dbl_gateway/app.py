@@ -2047,6 +2047,10 @@ def main() -> None:
 
         os.environ["DBL_GATEWAY_DB"] = str(args.db)
     app = create_app()
+    browser_host = args.host
+    if browser_host in {"0.0.0.0", "::"}:
+        browser_host = "localhost"
+    _LOGGER.info('{"message":"startup.surface","observer_ui":"http://%s:%d/ui/"}', browser_host, args.port)
     uvicorn.run(app, host=args.host, port=args.port, reload=False)
 
 
