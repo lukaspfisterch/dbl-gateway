@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import time
@@ -21,7 +22,14 @@ from dbl_core.normalize.trace import sanitize_trace
 from dbl_core.events.trace_digest import trace_digest
 
 from .admission import admit_and_shape_intent, AdmissionFailure
-from .capabilities import CapabilitiesResponse, get_capabilities_cached, resolve_model, resolve_provider, get_capabilities
+from .capabilities import (
+    CapabilitiesResponse,
+    get_capabilities_cached,
+    get_surface_catalog,
+    resolve_model,
+    resolve_provider,
+    get_capabilities,
+)
 from .adapters.execution_adapter_kl import KlExecutionAdapter
 from .adapters.policy_adapter_dbl_policy import DblPolicyAdapter, ObserverPolicy, _load_policy
 from .context_builder import build_context_with_refs, RefResolutionError
@@ -260,6 +268,27 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         actor = await _require_actor(request)
         _require_role(actor, ["gateway.snapshot.read"])
         return await run_in_threadpool(get_capabilities_cached)
+
+    @app.get("/surfaces")
+    async def surfaces(request: Request) -> dict[str, object]:
+        actor = await _require_actor(request)
+        _require_role(actor, ["gateway.snapshot.read"])
+        caps = await run_in_threadpool(get_capabilities_cached)
+        return {
+            "gateway_version": caps.get("gateway_version"),
+            "interface_version": caps.get("interface_version"),
+            "surfaces": get_surface_catalog(),
+        }
+
+    @app.get("/intent-template")
+    async def intent_template(
+        request: Request,
+        intent_type: str = Query("chat.message"),
+        example: str = Query("minimal"),
+    ) -> dict[str, object]:
+        actor = await _require_actor(request)
+        _require_role(actor, ["gateway.snapshot.read"])
+        return _intent_template_payload(intent_type=intent_type, example=example)
 
     @app.post("/ingress/intent", response_model=dict[str, object])
     async def ingress_intent(request: Request, body: dict[str, Any] = Body(...)) -> JSONResponse:
@@ -1572,6 +1601,141 @@ def _demo_log(app: FastAPI, message: str, *, level: str = "info") -> None:
     )
     if len(logs) > 60:
         del logs[:-60]
+
+
+def _intent_template_payload(*, intent_type: str, example: str) -> dict[str, object]:
+    template_version = "1"
+
+    def envelope(
+        *,
+        intent_variant: str,
+        correlation_id: str,
+        actor: str,
+        turn_id: str,
+        payload: Mapping[str, Any],
+        requested_model_id: str = "gpt-4o-mini",
+        lane: str = "user_chat",
+        thread_id: str = "thread-1",
+        parent_turn_id: str | None = None,
+        intent_type_value: str = "chat.message",
+    ) -> dict[str, object]:
+        return {
+            "interface_version": 3,
+            "intent_variant": intent_variant,
+            "correlation_id": correlation_id,
+            "payload": {
+                "stream_id": "default",
+                "lane": lane,
+                "actor": actor,
+                "intent_type": intent_type_value,
+                "thread_id": thread_id,
+                "turn_id": turn_id,
+                "parent_turn_id": parent_turn_id,
+                "requested_model_id": requested_model_id,
+                "payload": dict(payload),
+            },
+        }
+
+    examples: dict[str, dict[str, object]] = {
+        "minimal": envelope(
+            intent_variant="minimal",
+            correlation_id="c-1",
+            actor="user@example.com",
+            turn_id="turn-1",
+            payload={"message": "hello gateway"},
+            intent_type_value="chat.message",
+        ),
+        "tools-budget": envelope(
+            intent_variant="tools-budget",
+            correlation_id="c-tools-1",
+            actor="user@example.com",
+            turn_id="turn-2",
+            parent_turn_id="turn-1",
+            payload={
+                "message": "Search the docs if needed, but stay within budget.",
+                "declared_tools": ["web.search"],
+                "tool_scope": "strict",
+                "budget": {"max_tokens": 512, "max_duration_ms": 8000},
+            },
+            intent_type_value="chat.message",
+        ),
+        "deny-demo": envelope(
+            intent_variant="deny-demo",
+            correlation_id="c-deny-1",
+            actor="demo-agent",
+            turn_id="turn-3",
+            parent_turn_id="turn-2",
+            payload={
+                "message": "This turn should fail governance shape validation.",
+                "inputs": {
+                    "principal_id": "demo-user",
+                    "extensions": {"note": "nested objects are not scalar"},
+                },
+            },
+            intent_type_value="chat.message",
+        ),
+        "artifact-handle": envelope(
+            intent_variant="artifact-handle",
+            correlation_id="c-artifact-1",
+            actor="user@example.com",
+            turn_id="turn-4",
+            payload={"message": "Inspect referenced artifact metadata."},
+            intent_type_value="artifact.handle",
+        ),
+    }
+
+    selected_intent = intent_type.strip() or "chat.message"
+    selected_example = example.strip() or "minimal"
+    key_map = {
+        ("chat.message", "minimal"): "minimal",
+        ("chat.message", "tools-budget"): "tools-budget",
+        ("chat.message", "deny-demo"): "deny-demo",
+        ("artifact.handle", "minimal"): "artifact-handle",
+        ("artifact.handle", "artifact-handle"): "artifact-handle",
+    }
+    selected_key = key_map.get((selected_intent, selected_example))
+    if selected_key is None:
+        raise HTTPException(
+            status_code=400,
+            detail="unsupported intent_type/example combination",
+        )
+
+    payload = {
+        "path": "/ingress/intent",
+        "target_endpoint": "/ingress/intent",
+        "method": "POST",
+        "content_type": "application/json",
+        "interface_version": 3,
+        "template_version": template_version,
+        "intent_type": selected_intent,
+        "example": selected_example,
+        "template": examples[selected_key],
+        "examples": {
+            "chat.message": {
+                "minimal": examples["minimal"],
+                "tools-budget": examples["tools-budget"],
+                "deny-demo": examples["deny-demo"],
+            },
+            "artifact.handle": {
+                "minimal": examples["artifact-handle"],
+            },
+        },
+        "notes": [
+            "Change correlation_id for each new intent.",
+            "Keep thread_id stable across a thread and increment turn_id per turn.",
+            "requested_model_id must resolve to an available model in GET /capabilities.",
+        ],
+    }
+    digest_source = {
+        "template_version": template_version,
+        "interface_version": payload["interface_version"],
+        "target_endpoint": payload["target_endpoint"],
+        "examples": payload["examples"],
+    }
+    payload["template_schema_digest"] = "sha256:" + hashlib.sha256(
+        canonical_json_bytes(digest_source)
+    ).hexdigest()
+    return payload
 
 
 async def _demo_status_payload(app: FastAPI) -> dict[str, Any]:

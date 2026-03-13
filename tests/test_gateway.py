@@ -676,6 +676,10 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert data["surfaces"]["snapshot"] is True
         assert data["surfaces"]["events"] is False
         assert data["surfaces"]["ingress_intent"] is True
+        catalog = data["surface_catalog"]
+        assert isinstance(catalog, list)
+        assert any(item["id"] == "surfaces" and item["path"] == "/surfaces" for item in catalog)
+        assert any(item["id"] == "ui_intent" and item["path"] == "/ui/intent" for item in catalog)
         providers = data["providers"]
         assert isinstance(providers, list)
         assert providers and providers[0]["id"] == "openai"
@@ -688,6 +692,67 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     model = run_with_client(app, scenario)
     assert "health" in model
+
+
+def test_surfaces_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    app = create_app(start_workers=True)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        resp = await client.get("/surfaces")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["interface_version"] == INTERFACE_VERSION
+        surfaces = data["surfaces"]
+        assert isinstance(surfaces, list)
+        assert any(item["id"] == "capabilities" and item["path"] == "/capabilities" for item in surfaces)
+        assert any(item["id"] == "ui_demo_start" and item["path"] == "/ui/demo/start" for item in surfaces)
+        assert any(item["id"] == "ui_tail" and item["auth"] == "none" for item in surfaces)
+
+    run_with_client(app, scenario)
+
+
+def test_intent_template_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    app = create_app(start_workers=True)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        resp = await client.get("/intent-template")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["path"] == "/ingress/intent"
+        assert data["target_endpoint"] == "/ingress/intent"
+        assert data["method"] == "POST"
+        assert data["interface_version"] == INTERFACE_VERSION
+        assert data["template_version"] == "1"
+        assert str(data["template_schema_digest"]).startswith("sha256:")
+        template = data["template"]
+        assert template["interface_version"] == INTERFACE_VERSION
+        assert template["intent_variant"] == "minimal"
+        assert template["payload"]["intent_type"] == "chat.message"
+        assert template["payload"]["payload"]["message"] == "hello gateway"
+        assert "chat.message" in data["examples"]
+        assert "artifact.handle" in data["examples"]
+        assert data["examples"]["chat.message"]["tools-budget"]["intent_variant"] == "tools-budget"
+
+        artifact = await client.get(
+            "/intent-template",
+            params={"intent_type": "artifact.handle", "example": "minimal"},
+        )
+        assert artifact.status_code == 200
+        artifact_data = artifact.json()
+        assert artifact_data["template_version"] == "1"
+        assert artifact_data["template_schema_digest"] == data["template_schema_digest"]
+        assert artifact_data["template"]["intent_variant"] == "artifact-handle"
+        assert artifact_data["template"]["payload"]["intent_type"] == "artifact.handle"
+
+        bad = await client.get(
+            "/intent-template",
+            params={"intent_type": "artifact.handle", "example": "tools-budget"},
+        )
+        assert bad.status_code == 400
+
+    run_with_client(app, scenario)
 
 
 def test_v_state_init_and_restart(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

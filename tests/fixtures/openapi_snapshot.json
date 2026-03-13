@@ -206,6 +206,13 @@
             "title": "Schema Version",
             "type": "string"
           },
+          "surface_catalog": {
+            "items": {
+              "$ref": "#/components/schemas/SurfaceDescriptor"
+            },
+            "title": "Surface Catalog",
+            "type": "array"
+          },
           "surfaces": {
             "$ref": "#/components/schemas/CapabilitiesSurfaces"
           },
@@ -221,7 +228,8 @@
           "tool_surface",
           "budget",
           "providers",
-          "surfaces"
+          "surfaces",
+          "surface_catalog"
         ],
         "title": "CapabilitiesResponse",
         "type": "object"
@@ -302,6 +310,47 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "SurfaceDescriptor": {
+        "properties": {
+          "auth": {
+            "title": "Auth",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "methods": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Methods",
+            "type": "array"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "plane": {
+            "title": "Plane",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "methods",
+          "auth",
+          "plane",
+          "description"
+        ],
+        "title": "SurfaceDescriptor",
         "type": "object"
       },
       "ValidationError": {
@@ -469,6 +518,58 @@
         "summary": "Ingress Intent"
       }
     },
+    "/intent-template": {
+      "get": {
+        "operationId": "intent_template_intent_template_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "intent_type",
+            "required": false,
+            "schema": {
+              "default": "chat.message",
+              "title": "Intent Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "example",
+            "required": false,
+            "schema": {
+              "default": "minimal",
+              "title": "Example",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Intent Template Intent Template Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Intent Template"
+      }
+    },
     "/snapshot": {
       "get": {
         "operationId": "snapshot_snapshot_get",
@@ -602,6 +703,26 @@
           }
         },
         "summary": "Status Surface"
+      }
+    },
+    "/surfaces": {
+      "get": {
+        "operationId": "surfaces_surfaces_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Surfaces Surfaces Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Surfaces"
       }
     },
     "/tail": {

@@ -3,6 +3,10 @@
 ## v0.9.4 — Observer Runtime Demo
 
 **Observer runtime becomes a usable demo/playground, not just a viewer.**
+- Explicit discovery surfaces added:
+  - `GET /surfaces` returns the callable surface catalog with path/method/auth/plane metadata.
+  - `GET /capabilities` now includes `surface_catalog` alongside the compact `surfaces` booleans.
+  - `GET /intent-template` returns valid example envelopes for self-teaching ingress discovery.
 - Integrated `Demo Agent` control in the built-in observer UI:
   - `GET /ui/demo/status`
   - `POST /ui/demo/start`

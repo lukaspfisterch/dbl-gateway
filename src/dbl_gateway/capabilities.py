@@ -72,6 +72,15 @@ class CapabilitiesSurfaces(BaseModel):
     ingress_intent: bool
 
 
+class SurfaceDescriptor(BaseModel):
+    id: str
+    path: str
+    methods: list[str]
+    auth: str
+    plane: str
+    description: str
+
+
 class CapabilitiesIntents(BaseModel):
     supported: list[str]
 
@@ -110,6 +119,7 @@ class CapabilitiesResponse(BaseModel):
     budget: CapabilitiesBudget
     providers: list[CapabilitiesProvider]
     surfaces: CapabilitiesSurfaces
+    surface_catalog: list[SurfaceDescriptor]
 
 
 def get_capabilities_cached() -> dict[str, object]:
@@ -185,7 +195,165 @@ def get_capabilities() -> dict[str, object]:
             "events": False,
             "ingress_intent": True,
         },
+        "surface_catalog": get_surface_catalog(),
     }
+
+
+def get_surface_catalog() -> list[dict[str, object]]:
+    return [
+        {
+            "id": "healthz",
+            "path": "/healthz",
+            "methods": ["GET"],
+            "auth": "required",
+            "plane": "runtime",
+            "description": "Health check for the gateway process.",
+        },
+        {
+            "id": "capabilities",
+            "path": "/capabilities",
+            "methods": ["GET"],
+            "auth": "required",
+            "plane": "discovery",
+            "description": "Self-description of the runtime contract, providers, and surfaces.",
+        },
+        {
+            "id": "surfaces",
+            "path": "/surfaces",
+            "methods": ["GET"],
+            "auth": "required",
+            "plane": "discovery",
+            "description": "Explicit catalog of callable gateway and observer surfaces.",
+        },
+        {
+            "id": "intent_template",
+            "path": "/intent-template",
+            "methods": ["GET"],
+            "auth": "required",
+            "plane": "discovery",
+            "description": "Self-teaching intent template and example envelopes.",
+        },
+        {
+            "id": "ingress_intent",
+            "path": "/ingress/intent",
+            "methods": ["POST"],
+            "auth": "required",
+            "plane": "intent",
+            "description": "Intent ingress surface for declared envelopes.",
+        },
+        {
+            "id": "snapshot",
+            "path": "/snapshot",
+            "methods": ["GET"],
+            "auth": "required",
+            "plane": "observation",
+            "description": "Snapshot of persisted events and rolling v_digest.",
+        },
+        {
+            "id": "tail",
+            "path": "/tail",
+            "methods": ["GET"],
+            "auth": "required",
+            "plane": "observation",
+            "description": "Authenticated SSE stream of event envelopes.",
+        },
+        {
+            "id": "thread_timeline",
+            "path": "/threads/{thread_id}/timeline",
+            "methods": ["GET"],
+            "auth": "required",
+            "plane": "observation",
+            "description": "Turn-grouped thread timeline for replay and inspection.",
+        },
+        {
+            "id": "status",
+            "path": "/status",
+            "methods": ["GET"],
+            "auth": "required",
+            "plane": "observation",
+            "description": "Projected runner state derived from events.",
+        },
+        {
+            "id": "execution_event",
+            "path": "/execution/event",
+            "methods": ["POST"],
+            "auth": "required",
+            "plane": "execution",
+            "description": "External execution submission surface when enabled.",
+        },
+        {
+            "id": "ui_root",
+            "path": "/ui/",
+            "methods": ["GET"],
+            "auth": "none",
+            "plane": "observer_ui",
+            "description": "Built-in observer UI.",
+        },
+        {
+            "id": "ui_tail",
+            "path": "/ui/tail",
+            "methods": ["GET"],
+            "auth": "none",
+            "plane": "observer_ui",
+            "description": "Auth-free SSE feed for the built-in observer.",
+        },
+        {
+            "id": "ui_capabilities",
+            "path": "/ui/capabilities",
+            "methods": ["GET"],
+            "auth": "none",
+            "plane": "observer_ui",
+            "description": "Observer proxy for capabilities.",
+        },
+        {
+            "id": "ui_snapshot",
+            "path": "/ui/snapshot",
+            "methods": ["GET"],
+            "auth": "none",
+            "plane": "observer_ui",
+            "description": "Observer proxy for latest snapshot state.",
+        },
+        {
+            "id": "ui_intent",
+            "path": "/ui/intent",
+            "methods": ["POST"],
+            "auth": "none",
+            "plane": "observer_ui",
+            "description": "Observer-side manual intent submission.",
+        },
+        {
+            "id": "ui_verify_chain",
+            "path": "/ui/verify-chain",
+            "methods": ["GET"],
+            "auth": "none",
+            "plane": "observer_ui",
+            "description": "Observer-triggered full-chain verification.",
+        },
+        {
+            "id": "ui_replay",
+            "path": "/ui/replay",
+            "methods": ["GET"],
+            "auth": "none",
+            "plane": "observer_ui",
+            "description": "Observer-triggered decision replay for a turn.",
+        },
+        {
+            "id": "ui_demo_status",
+            "path": "/ui/demo/status",
+            "methods": ["GET"],
+            "auth": "none",
+            "plane": "observer_ui",
+            "description": "Status surface for the integrated demo controller.",
+        },
+        {
+            "id": "ui_demo_start",
+            "path": "/ui/demo/start",
+            "methods": ["POST"],
+            "auth": "none",
+            "plane": "observer_ui",
+            "description": "Start surface for the integrated demo controller.",
+        },
+    ]
 
 
 def resolve_model(requested_model_id: str | None) -> tuple[str | None, str | None]:

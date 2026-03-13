@@ -56,9 +56,11 @@ def test_generated_snapshot_has_contract_fields(tmp_path: Path) -> None:
     assert "tool_surface" in data
     assert "budget" in data
     assert "surfaces" in data
+    assert "surface_catalog" in data
     # Runtime-dynamic fields stripped
     assert "providers" not in data
     # Contract structure
     assert isinstance(data["intents"]["supported"], list)
     assert isinstance(data["tool_surface"]["declared_tools"]["max_items"], int)
     assert isinstance(data["budget"]["fields"]["max_tokens"]["min"], int)
+    assert isinstance(data["surface_catalog"], list)

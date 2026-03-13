@@ -10,6 +10,8 @@ unless it affects wire behavior.
 ## API Endpoints
 - `GET /healthz` — health check. Response `{status}`.
 - `GET /capabilities` — providers, models, and surfaces. Response `CapabilitiesResponse` (schema_version, gateway_version, interface_version=3).
+- `GET /surfaces` — explicit discovery catalog of callable surfaces with path/method/auth metadata.
+- `GET /intent-template` — self-teaching example/template surface for valid intent envelopes.
 - `POST /ingress/intent` — ingest `IntentEnvelope` (interface_version=3). Returns accepted/queued + correlation_id + index.
 - `GET /snapshot` — event snapshot (limit/offset/stream_id/lane). Returns `SnapshotResponse`.
 - `GET /threads/{thread_id}/timeline` — grouped by turn; optionally include payloads.
@@ -31,6 +33,14 @@ unless it affects wire behavior.
 These `/ui/*` routes are read-only observer infrastructure. Verification logic
 and demo orchestration remain server-side; the browser only consumes events and
 returned observer status/results.
+
+## Surface Discovery
+- `surfaces` in `GET /capabilities` remains the compact compatibility view: booleans for major runtime surfaces.
+- `surface_catalog` in `GET /capabilities` is the richer machine-readable discovery list for clients.
+- `GET /surfaces` exposes the same catalog directly for agents that want discovery without the rest of the capability payload.
+- `GET /intent-template` publishes valid example envelopes so clients can discover not just where ingress is, but how to speak to it correctly.
+- Template payloads include `interface_version`, `intent_variant`, and `target_endpoint` so agents can bootstrap against the wire contract without guessing.
+- `template_version` and `template_schema_digest` let clients detect when the teaching surface has changed.
 
 ## Intents
 - `chat.message`: accepts `message` plus optional `inputs`, `declared_refs`, `context_mode/context_n`, `declared_tools`, `tool_scope`, `budget`.
