@@ -1,9 +1,47 @@
 # Demo
 
-The observer includes an integrated `Demo Agent` panel and the repository also
-ships a CLI demo agent.
+The gateway supports two demo modes: a zero-config stub demo that requires no
+external dependencies, and a live demo that uses a real provider.
 
-Both use the same scenario definition.
+## Zero-Config Stub Demo
+
+Run the full governance pipeline without any API keys:
+
+```bash
+# Docker
+docker compose --profile demo up --build
+
+# Local
+GATEWAY_DEMO_MODE=1 dbl-gateway serve
+
+# PowerShell
+$env:GATEWAY_DEMO_MODE="1"; dbl-gateway serve
+```
+
+Open `http://localhost:8010/ui/` and click **Start Demo**.
+
+The stub provider generates synthetic responses through the full
+INTENT, DECISION, PROOF, EXECUTION chain. The demo scenario includes an
+intentional DENY turn so the observer shows both allowed and denied paths.
+
+### Stub Modes
+
+Control via `STUB_MODE` env var:
+
+- `echo` (default) — mirrors the user message back. Predictable for contract
+  testing.
+- `scenario` — rotates through canned responses matching the governance-demo
+  steps. Deterministic by turn index, so replay produces identical output.
+
+### What Happens
+
+When `GATEWAY_DEMO_MODE=1`:
+
+- Stub provider auto-registers (no API keys checked).
+- Policy defaults to `dbl_policy.allow_all` when none is configured.
+- SQLite trail defaults to `data/demo-trail.sqlite`.
+- Inline decision processing is enabled (no work queue).
+- Startup log prints the browser entry path.
 
 ## Scenario
 
@@ -14,6 +52,9 @@ The default demo sequence is:
 3. tools-and-budget turn
 4. intentional deny
 5. recovery turn
+
+Both the UI demo controller and the CLI demo agent use the same scenario
+definition from `dbl_gateway.demo_agent`.
 
 ## UI Demo
 

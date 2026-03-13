@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.9.6 — Zero-Config Stub Demo
+
+**The gateway can now run a full governance demo without any API keys or external dependencies.**
+- New stub provider (`src/dbl_gateway/providers/stub.py`) with two modes:
+  - `echo` (default) — mirrors the user message back, predictable for contract testing.
+  - `scenario` — rotates through canned governance-demo responses, deterministic by turn index.
+- `GATEWAY_DEMO_MODE=1` activates zero-config operation:
+  - Stub provider auto-registers (no API keys checked).
+  - Policy defaults to `dbl_policy.allow_all` when none configured.
+  - SQLite trail defaults to `data/demo-trail.sqlite`.
+  - Inline decision processing enabled (no work queue needed).
+  - Startup log prints the browser entry path.
+- Stub provider follows the existing `ProviderCapabilities` contract (`requires_api_key: False`, `execution_mode: "local"`).
+- Capabilities discovery extended: stub models appear in `/capabilities` and `/ui/capabilities` when demo mode is active.
+- Provider resolution extended: `resolve_provider()` and `_allowed_model_ids()` include stub models in demo mode.
+- `compose.yaml` extended with a `demo` profile for `docker compose --profile demo up --build`.
+- Explicit registration pattern: stub is registered in `app.py` startup, not via import side-effect in `__init__.py`.
+- 11 new tests covering stub capabilities contract, echo mode, scenario mode, demo mode activation, and demo-off isolation.
+
 ## v0.9.5 — Docker Demo Start
 
 **Observer demo runtime now has a clean containerized start path.**

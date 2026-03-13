@@ -187,6 +187,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         _configure_logging()
+        _maybe_activate_demo_mode()
         _audit_env()
         policy = _load_policy_with_fallback()
         if policy is None:
@@ -1342,6 +1343,42 @@ def _audit_env() -> None:
         "REDIS_URL",
     ]:
         _LOGGER.info("  %s: %s", name, present(name))
+
+
+def _maybe_activate_demo_mode() -> None:
+    """Register stub provider and set demo defaults when GATEWAY_DEMO_MODE=1."""
+    demo = os.getenv("GATEWAY_DEMO_MODE", "").strip()
+    if demo not in ("1", "true", "yes"):
+        return
+
+    _LOGGER.info("DEMO MODE active")
+
+    # --- Register stub provider ---
+    from .providers import PROVIDER_MODULES
+    from .providers import stub
+
+    if "stub" not in PROVIDER_MODULES:
+        PROVIDER_MODULES["stub"] = stub
+        _LOGGER.info("  stub provider registered")
+
+    # --- Default policy to allow_all when none configured ---
+    if not os.getenv("DBL_GATEWAY_POLICY_MODULE", "").strip():
+        os.environ["DBL_GATEWAY_POLICY_MODULE"] = "dbl_policy.allow_all"
+        _LOGGER.info("  policy defaulted to dbl_policy.allow_all")
+
+    # --- Default DB path ---
+    if not os.getenv("DBL_GATEWAY_DB", "").strip():
+        os.environ["DBL_GATEWAY_DB"] = "data/demo-trail.sqlite"
+        _LOGGER.info("  DB defaulted to data/demo-trail.sqlite")
+
+    # --- Default inline decision (no work queue needed for demo) ---
+    if not os.getenv("DBL_GATEWAY_INLINE_DECISION", "").strip():
+        os.environ["DBL_GATEWAY_INLINE_DECISION"] = "1"
+        _LOGGER.info("  inline decision enabled")
+
+    stub_mode = os.getenv("STUB_MODE", "echo")
+    _LOGGER.info("  stub mode: %s", stub_mode)
+    _LOGGER.info("  -> Open http://localhost:8010/ui/")
 
 
 def _load_policy_with_fallback() -> object | None:

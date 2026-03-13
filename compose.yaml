@@ -7,3 +7,14 @@ services:
       - .env
     volumes:
       - ./data:/app/data
+
+  demo:
+    build: .
+    profiles: ["demo"]
+    ports:
+      - "8010:8010"
+    environment:
+      GATEWAY_DEMO_MODE: "1"
+      STUB_MODE: "scenario"
+    volumes:
+      - ./data:/app/data

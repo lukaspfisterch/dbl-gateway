@@ -161,6 +161,15 @@ def get_capabilities() -> dict[str, object]:
     if ollama_info:
         providers.append(ollama_info)
 
+    if _is_demo_mode():
+        caps = get_provider_capabilities("stub")
+        models = [
+            _model_entry_from_provider(mid, caps, checked_at)
+            for mid in _stub_models()
+        ]
+        if models:
+            providers.append({"id": "stub", "models": models})
+
     return {
         "schema_version": CAPABILITIES_SCHEMA_VERSION,
         "gateway_version": _gateway_version(),
@@ -385,6 +394,8 @@ def resolve_provider(model_id: str) -> tuple[str | None, str | None]:
         return "anthropic", None
     if model_id in _ollama_models_all():
         return "ollama", None
+    if _is_demo_mode() and model_id in _stub_models():
+        return "stub", None
     return None, "model.unavailable"
 
 
@@ -412,6 +423,8 @@ def _allowed_model_ids() -> list[str]:
     if _get_anthropic_key():
         models.extend(_anthropic_models_all())
     models.extend(_ollama_models_all())
+    if _is_demo_mode():
+        models.extend(_stub_models())
     return _dedupe(models)
 
 
@@ -509,6 +522,16 @@ def _parse_csv(name: str) -> list[str]:
     if not raw:
         return []
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _is_demo_mode() -> bool:
+    return os.getenv("GATEWAY_DEMO_MODE", "").strip() in ("1", "true", "yes")
+
+
+def _stub_models() -> list[str]:
+    from .providers.stub import STUB_MODEL_IDS
+
+    return list(STUB_MODEL_IDS)
 
 
 def _dedupe(items: list[str]) -> list[str]:

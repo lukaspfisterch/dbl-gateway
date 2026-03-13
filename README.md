@@ -33,6 +33,25 @@ Send an intent through `POST /ingress/intent` and read events through
 
 See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full envelope example.
 
+## Zero-Config Demo
+
+No API keys, no `.env` editing. See the full governance pipeline in 60 seconds:
+
+```bash
+docker compose --profile demo up --build
+```
+
+Open `http://localhost:8010/ui/` and click **Start Demo**.
+
+Or locally:
+
+```bash
+GATEWAY_DEMO_MODE=1 dbl-gateway serve
+```
+
+The stub provider generates synthetic responses through the full
+INTENT, DECISION, PROOF, EXECUTION chain.
+
 ## One-Command Start
 
 Configure `.env` once from [​.env.example](.env.example), set one provider key
@@ -123,5 +142,5 @@ See:
 
 ## Status
 
-**v0.9.5.** Observer runtime with discovery surfaces, integrated demo control,
-manual intent, and a one-command Docker start.
+**v0.9.6.** Zero-config stub demo, observer runtime with discovery surfaces,
+integrated demo control, manual intent, and a one-command Docker start.
