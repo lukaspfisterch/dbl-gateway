@@ -94,8 +94,8 @@ docker compose up --build
 Supports OpenAI, Anthropic, or local Ollama. One active provider is enough to
 run the gateway.
 
-`.env` stays local and should not be committed. Only `.env.example` belongs in
-the repository.
+`.env` is local and must not be committed. Copy `.env.example` and configure it
+for your environment.
 
 ## Run Locally
 
