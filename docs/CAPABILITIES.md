@@ -48,7 +48,7 @@ unless it affects wire behavior.
 - When OFF: `declared_refs` stored but not resolved, `artifact.handle` rejected at ingress.
 - DECISION records `context_config_digest: "CONTEXT_RESOLUTION_DISABLED"` sentinel.
 
-## Chain-of-Record (v0.8.1)
+## Chain-of-Record (v0.9.0)
 - DECISION includes `policy_config_digest` (SHA-256 of the policy rules) and `intent_index` (link to originating INTENT).
 - PROOF event emitted between DECISION and EXECUTION when `GATEWAY_ENABLE_RELEASE_GUARD` is ON (default). Contains `payload_digest` over the canonical JSON of the full provider release.
 - EXECUTION includes `release_digest` matching the preceding PROOF's `payload_digest`.

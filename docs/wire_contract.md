@@ -255,7 +255,7 @@ Values must be integers (floats are rejected).
 }
 ```
 
-## DECISION Payload (v0.8.1)
+## DECISION Payload (v0.9.0)
 
 DECISION events include normative fields for replay verification:
 
@@ -291,7 +291,7 @@ All of `permitted_tools`, `enforced_budget`, `policy_config_digest`, and `intent
 | `intent_index` | v0.8.1 | Index of the originating INTENT event (decision lineage) |
 | `boundary.context_config_digest` | v0.5.x | Pins the context configuration. `"CONTEXT_RESOLUTION_DISABLED"` when OFF |
 
-## PROOF Event: Context Release Guard (v0.8.1)
+## PROOF Event: Context Release Guard (v0.9.0)
 
 Before execution, the gateway emits a PROOF event capturing a digest of the full provider payload:
 
@@ -309,6 +309,6 @@ The digest covers the canonical JSON of: `messages`, `model_id`, `provider`, `pe
 
 Feature-gated via `GATEWAY_ENABLE_RELEASE_GUARD` (default ON).
 
-## EXECUTION Lineage (v0.8.1)
+## EXECUTION Lineage (v0.9.0)
 
 EXECUTION events include `release_digest` which must match the preceding PROOF event's `payload_digest`. This creates a verifiable chain: INTENT -> DECISION -> PROOF -> EXECUTION.

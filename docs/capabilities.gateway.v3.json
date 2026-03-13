@@ -1,6 +1,6 @@
 {
   "schema_version": "gateway.capabilities.v1",
-  "gateway_version": "0.8.0",
+  "gateway_version": "0.9.0",
   "interface_version": 3,
   "intents": {
     "supported": [

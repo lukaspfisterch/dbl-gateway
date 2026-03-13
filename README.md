@@ -133,7 +133,6 @@ action may execute. Policy rules are defined externally in dbl-policy.
 
 ## Status
 
-**v0.8.1.** Chain-of-record with decision lineage (`intent_index`),
-context release guard (PROOF events), and policy config digest.
-Self-describing capabilities via `GET /capabilities`.
-Wire contract v3.
+**v0.9.0.** Substrate-axiom enforcement (A1 append-only stream, A5 turn-local order, A3/A4 governance-input purity),
+plus chain-of-record lineage (`intent_index`), context release guard (PROOF events), and policy config digest.
+Self-describing capabilities via `GET /capabilities`. Wire contract v3.

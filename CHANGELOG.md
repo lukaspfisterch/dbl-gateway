@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.0 — Substrate Axiom Enforcement
+
+**Axiom-level runtime enforcement in the gateway core.**
+- Enforced A1 (append-only stream semantics) and A5 (turn-local order: DECISION before EXECUTION) directly in persistence/runtime paths.
+- Enforced A3/A4 governance-input purity before policy evaluation: policy inputs are validated against the authoritative key set and exclude observational fields.
+- Updated invariant documentation to align implementation-level guarantees with substrate axioms.
+- Refreshed tests and OpenAPI snapshot for the enforced behavior.
+
 ## v0.8.1 — Chain-of-Record / Observability
 
 **Axis 4: Decision lineage, context release guard, policy config digest.**

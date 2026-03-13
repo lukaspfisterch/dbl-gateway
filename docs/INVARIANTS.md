@@ -42,7 +42,7 @@ These invariants enforce the formal axioms from the DBL paper. They are the foun
 
 **I-NORM-1**: `permitted_tools`, `enforced_budget`, `policy_config_digest`, and `intent_index` are included in the normative decision digest. Changes to these fields produce a different digest.
 
-## Chain-of-Record (v0.8.1)
+## Chain-of-Record (v0.9.0)
 
 **I-CHAIN-1**: Every DECISION event contains `intent_index` linking to its originating INTENT event index.
 
