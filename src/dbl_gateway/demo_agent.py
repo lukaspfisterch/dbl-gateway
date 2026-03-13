@@ -8,7 +8,7 @@ from typing import Any, Mapping
 DEMO_SCENARIO_NAME = "governance-demo"
 DEMO_SCENARIO_VERSION = "1"
 DEMO_SCENARIO_DESCRIPTION = (
-    "Deterministic governance demonstration: 3 ALLOW turns -> 1 intentional DENY -> recovery."
+    "Governance demonstration: 3 ALLOW turns -> 1 intentional DENY -> recovery."
 )
 
 

@@ -266,6 +266,27 @@ class TestUiSnapshotProxy:
         asyncio.run(_with_client(app, check))
 
 
+class TestUiIntentProxy:
+    """Tests for the auth-free manual intent proxy."""
+
+    def test_ui_intent_no_auth(self) -> None:
+        """POST /ui/intent accepts a valid envelope without auth headers."""
+        app = _make_app()
+
+        async def check(client: httpx.AsyncClient) -> None:
+            resp = await client.post("/ui/intent", json=_intent_envelope("hello from ui"))
+            assert resp.status_code == 202
+            data = resp.json()
+            assert data["accepted"] is True
+            assert data["correlation_id"] == "c-1"
+
+            snap = await client.get("/ui/snapshot")
+            assert snap.status_code == 200
+            assert snap.json()["length"] >= 1
+
+        asyncio.run(_with_client(app, check))
+
+
 class TestUiVerificationProxy:
     """Tests for the verification proxy endpoints."""
 
@@ -372,6 +393,15 @@ class TestUiDemoProxy:
 
         async def check(client: httpx.AsyncClient) -> None:
             monkeypatch.setattr(type(app.state.execution), "run", fake_run)
+            store: SQLiteStore = app.state.store
+            for idx in range(110):
+                _append_test_event(
+                    store,
+                    "INTENT",
+                    correlation_id=f"seed-{idx}",
+                    thread_id=f"seed-thread-{idx}",
+                    turn_id=f"seed-turn-{idx}",
+                )
             app.state.demo_agent["step_delay_s"] = 0.0
             app.state.demo_agent["turn_timeout_s"] = 2.0
             app.state.demo_agent["poll_interval_s"] = 0.01
@@ -424,5 +454,6 @@ class TestObserverHtml:
             assert resp.status_code == 200
             assert "text/html" in resp.headers.get("content-type", "")
             assert "Event Observer" in resp.text
+            assert "Manual Intent" in resp.text
 
         asyncio.run(_with_client(app, check))

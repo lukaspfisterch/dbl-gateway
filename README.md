@@ -117,7 +117,7 @@ Three-zone layout:
 - **Verify** — current `v_digest`, event count, last DECISION metadata, active chain verification, and per-turn decision replay.
 - **Event Stream** — chronological turn-grouped event timeline with click selection.
 - **Inspector** — event detail, turn-local view, and raw JSON for the selected event.
-- **Demo Agent** — integrated controller for a deterministic demo scenario.
+- **Demo Agent** — integrated controller for a demo scenario.
 
 Events are grouped by turn (`correlation_id`), color-coded by kind, and show
 delta-time between events in the same turn.
@@ -128,13 +128,15 @@ read-only observer routes:
 - `GET /ui/tail` — SSE event stream for the observer.
 - `GET /ui/capabilities` — provider and surface summary.
 - `GET /ui/snapshot` — latest `v_digest` and event count.
+- `POST /ui/intent` — manual intent submission from the observer.
 - `GET /ui/verify-chain` — full-chain `v_digest` recomputation and match/mismatch result.
 - `GET /ui/replay?thread_id=...&turn_id=...` — decision replay for one turn.
+- `GET /ui/demo/status` / `POST /ui/demo/start` — integrated demo controller.
 
 Workflow:
 
 1. Open `/ui`.
-2. Click `Start Demo` to run the built-in deterministic scenario, or send an intent manually.
+2. Click `Start Demo` to run the built-in scenario, or send an intent manually.
 3. Click any event row to open the inspector.
 4. Click `Verify Chain` in the Verify panel to recompute the full chain.
 5. Replay a selected `DECISION` from the inspector to compare stored vs recomputed decision digests.
@@ -145,7 +147,11 @@ All `/ui/*` routes are read-only observer infrastructure and require no authenti
 
 The observer now includes a right-side `Demo Agent` panel with a `Start Demo`
 button. When at least one provider/model is healthy in `GET /capabilities`,
-the integrated controller runs a deterministic scenario directly from the UI.
+the integrated controller runs a scenario directly from the UI.
+
+It also includes a left-side `Manual Intent` panel for sending a valid minimal
+intent directly from the browser or copying ready-to-run `curl` / PowerShell
+commands for terminal use.
 
 Scenario:
 
@@ -199,9 +205,9 @@ action may execute. Policy rules are defined externally in dbl-policy.
 
 ## Status
 
-**v0.9.3.** Observer UI with active verification and integrated demo control:
-semantic panels, stream inspector, full-chain `v_digest` recomputation,
-per-turn decision replay, and deterministic demo orchestration from the browser.
+**v0.9.4.** Observer UI as runtime demo/playground:
+semantic panels, stream inspector, manual intent submission, full-chain
+`v_digest` recomputation, per-turn decision replay, and integrated demo control.
 Substrate-axiom enforcement (A1 append-only, A5 turn-local order, A3/A4 governance-input purity).
 Chain-of-record lineage, context release guard, policy config digest.
 Self-describing capabilities via `GET /capabilities`. Wire contract v3.

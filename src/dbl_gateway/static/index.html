@@ -128,6 +128,52 @@ header h1 {
   gap: 8px;
   margin-top: 12px;
 }
+.manual-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+.field-label {
+  display: block;
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 4px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.field-input,
+.field-textarea {
+  width: 100%;
+  background: #111122;
+  color: #d6d6eb;
+  border: 1px solid #303056;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+.field-input:focus,
+.field-textarea:focus {
+  outline: none;
+  border-color: #4a6aff;
+  box-shadow: 0 0 0 1px #4a6aff33;
+}
+.field-textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+.manual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.snippet-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.manual-status {
+  min-height: 20px;
+}
 .btn-primary {
   background: #315aff;
   border-color: #4568ff;
@@ -427,6 +473,9 @@ header h1 {
   .detail-grid {
     grid-template-columns: 1fr;
   }
+  .manual-grid {
+    grid-template-columns: 1fr;
+  }
   .turn-event {
     grid-template-columns: 50px 90px 1fr;
   }
@@ -547,6 +596,40 @@ button:hover { background: #3a3a5a; }
     <div id="chain-result"></div>
     <div id="replay-result"></div>
   </div>
+  <div class="panel" id="panel-manual-intent">
+    <div class="panel-title">Manual Intent</div>
+    <div class="demo-lead">Send a valid intent yourself or copy a command snippet for your own terminal.</div>
+    <div class="manual-form">
+      <div>
+        <label class="field-label" for="manual-message">Message</label>
+        <textarea class="field-textarea" id="manual-message">Hello from the observer UI.</textarea>
+      </div>
+      <div class="manual-grid">
+        <div>
+          <label class="field-label" for="manual-actor">Actor</label>
+          <input class="field-input" id="manual-actor" type="text" value="observer-user">
+        </div>
+        <div>
+          <label class="field-label" for="manual-thread">Thread</label>
+          <input class="field-input" id="manual-thread" type="text" value="observer-thread">
+        </div>
+      </div>
+      <div class="snippet-actions">
+        <button class="btn-primary" id="manual-send">Send</button>
+        <button class="btn-sm" id="manual-copy-curl">Copy curl</button>
+        <button class="btn-sm" id="manual-copy-powershell">Copy PowerShell</button>
+      </div>
+      <div class="manual-status" id="manual-status"></div>
+      <div>
+        <div class="field-label">Linux / macOS</div>
+        <pre class="detail-code" id="manual-curl"></pre>
+      </div>
+      <div>
+        <div class="field-label">PowerShell</div>
+        <pre class="detail-code" id="manual-powershell"></pre>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div id="workspace">
@@ -576,7 +659,7 @@ button:hover { background: #3a3a5a; }
   <div class="panel">
     <div class="panel-title">Demo Agent</div>
     <div class="demo-lead" id="demo-description">
-      Deterministic governance demonstration loading&hellip;
+      Governance demonstration loading&hellip;
     </div>
     <div class="demo-actions">
       <button class="btn-primary" id="demo-start">Start Demo</button>
@@ -622,6 +705,15 @@ button:hover { background: #3a3a5a; }
   var demoStatus = document.getElementById("demo-status");
   var demoLog = document.getElementById("demo-log");
   var demoStart = document.getElementById("demo-start");
+  var manualMessage = document.getElementById("manual-message");
+  var manualActor = document.getElementById("manual-actor");
+  var manualThread = document.getElementById("manual-thread");
+  var manualSend = document.getElementById("manual-send");
+  var manualCopyCurl = document.getElementById("manual-copy-curl");
+  var manualCopyPowershell = document.getElementById("manual-copy-powershell");
+  var manualStatus = document.getElementById("manual-status");
+  var manualCurl = document.getElementById("manual-curl");
+  var manualPowershell = document.getElementById("manual-powershell");
 
   // Turn tracking for grouping and delta-time
   var lastCorrelationId = null;
@@ -721,7 +813,7 @@ button:hover { background: #3a3a5a; }
   }
 
   function renderDemoStatus(data) {
-    demoDescription.textContent = data.scenario_description || "Deterministic demo scenario";
+    demoDescription.textContent = data.scenario_description || "Governance demo scenario";
 
     var metaHtml = "";
     metaHtml += '<div class="demo-status-line"><span class="demo-status-label">Gateway URL</span><span class="demo-status-value">' + esc(window.location.origin) + '</span></div>';
@@ -786,6 +878,111 @@ button:hover { background: #3a3a5a; }
       .catch(function () {
         demoStart.disabled = false;
         demoStart.textContent = "Start Demo";
+      });
+  }
+
+  function shellSingleQuote(value) {
+    return String(value || "").replace(/'/g, "'\"'\"'");
+  }
+
+  function powershellSingleQuote(value) {
+    return String(value || "").replace(/'/g, "''");
+  }
+
+  function manualEnvelope() {
+    var actor = (manualActor.value || "").trim() || "observer-user";
+    var threadId = (manualThread.value || "").trim() || "observer-thread";
+    var message = (manualMessage.value || "").trim() || "Hello from the observer UI.";
+    return {
+      interface_version: 3,
+      correlation_id: "observer-" + Date.now(),
+      payload: {
+        stream_id: "default",
+        lane: "observer",
+        actor: actor,
+        intent_type: "chat.message",
+        thread_id: threadId,
+        turn_id: "turn-" + Date.now(),
+        parent_turn_id: null,
+        requested_model_id: "gpt-4o-mini",
+        payload: {
+          message: message
+        }
+      }
+    };
+  }
+
+  function manualCommands() {
+    var envelope = manualEnvelope();
+    var payload = JSON.stringify(envelope);
+    return {
+      envelope: envelope,
+      curl: "curl -X POST " + window.location.origin + "/ingress/intent \\\n"
+        + "  -H \"Content-Type: application/json\" \\\n"
+        + "  -d '" + shellSingleQuote(payload) + "'",
+      powershell: "Invoke-RestMethod `\n"
+        + "  -Uri " + window.location.origin + "/ingress/intent `\n"
+        + "  -Method POST `\n"
+        + "  -ContentType \"application/json\" `\n"
+        + "  -Body '" + powershellSingleQuote(payload) + "'"
+    };
+  }
+
+  function setManualStatus(level, message) {
+    if (!message) {
+      manualStatus.innerHTML = "";
+      return;
+    }
+    var badgeClass = level === "error" ? "badge-error" : (level === "warn" ? "badge-warn" : "badge-ok");
+    manualStatus.innerHTML = '<span class="panel-badge ' + badgeClass + '">' + esc(message) + '</span>';
+  }
+
+  function renderManualIntent() {
+    var commands = manualCommands();
+    manualCurl.textContent = commands.curl;
+    manualPowershell.textContent = commands.powershell;
+  }
+
+  function copyText(value, label) {
+    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+      setManualStatus("warn", label + " copy unavailable");
+      return;
+    }
+    navigator.clipboard.writeText(value)
+      .then(function () {
+        setManualStatus("ok", label + " copied");
+      })
+      .catch(function () {
+        setManualStatus("error", label + " copy failed");
+      });
+  }
+
+  function sendManualIntent() {
+    var commands = manualCommands();
+    manualSend.disabled = true;
+    setManualStatus("warn", "sending intent");
+    fetch("/ui/intent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(commands.envelope)
+    })
+      .then(function (r) {
+        return r.json().then(function (data) {
+          return { ok: r.ok, status: r.status, data: data };
+        });
+      })
+      .then(function (result) {
+        if (!result.ok) {
+          setManualStatus("error", result.data.detail || ("send failed (" + result.status + ")"));
+          return;
+        }
+        setManualStatus("ok", "accepted #" + result.data.index + " " + shortDigest(result.data.correlation_id, 14));
+      })
+      .catch(function () {
+        setManualStatus("error", "send failed");
+      })
+      .finally(function () {
+        manualSend.disabled = false;
       });
   }
 
@@ -1306,6 +1503,16 @@ button:hover { background: #3a3a5a; }
     }
   });
   demoStart.addEventListener("click", startDemo);
+  manualSend.addEventListener("click", sendManualIntent);
+  manualCopyCurl.addEventListener("click", function () {
+    copyText(manualCommands().curl, "curl");
+  });
+  manualCopyPowershell.addEventListener("click", function () {
+    copyText(manualCommands().powershell, "PowerShell");
+  });
+  manualMessage.addEventListener("input", renderManualIntent);
+  manualActor.addEventListener("input", renderManualIntent);
+  manualThread.addEventListener("input", renderManualIntent);
   for (var i = 0; i < inspectorTabs.length; i++) {
     inspectorTabs[i].addEventListener("click", function () {
       setInspectorTab(this.getAttribute("data-tab"));
@@ -1316,6 +1523,7 @@ button:hover { background: #3a3a5a; }
   loadCapabilities();
   loadDemoStatus();
   refreshVerify();
+  renderManualIntent();
   setInterval(refreshVerify, 5000);
   setInterval(loadDemoStatus, 1500);
 

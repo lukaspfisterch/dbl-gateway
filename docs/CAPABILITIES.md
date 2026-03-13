@@ -22,10 +22,11 @@ unless it affects wire behavior.
 - `GET /ui/tail` — auth-free SSE stream for browser `EventSource`.
 - `GET /ui/capabilities` — auth-free observer proxy for capabilities.
 - `GET /ui/snapshot` — auth-free observer proxy for the latest `v_digest` and event count.
+- `POST /ui/intent` — auth-free observer proxy for manual intent submission from the UI.
 - `GET /ui/verify-chain` — auth-free full-chain `v_digest` recomputation and match/mismatch report.
 - `GET /ui/replay?thread_id=...&turn_id=...` — auth-free decision replay for one turn.
-- `GET /ui/demo/status` — auth-free status for the integrated deterministic demo controller.
-- `POST /ui/demo/start` — auth-free start trigger for the integrated deterministic demo controller.
+- `GET /ui/demo/status` — auth-free status for the integrated demo controller.
+- `POST /ui/demo/start` — auth-free start trigger for the integrated demo controller.
 
 These `/ui/*` routes are read-only observer infrastructure. Verification logic
 and demo orchestration remain server-side; the browser only consumes events and

@@ -1,24 +1,37 @@
 # Changelog
 
+## v0.9.4 — Observer Runtime Demo
+
+**Observer runtime becomes a usable demo/playground, not just a viewer.**
+- Integrated `Demo Agent` control in the built-in observer UI:
+  - `GET /ui/demo/status`
+  - `POST /ui/demo/start`
+- Shared demo scenario module introduced so the browser-triggered controller and CLI demo script use the same turn sequence.
+- Bottom inspector added to the event observer with `Event`, `Turn`, and `Raw` views.
+- Manual intent panel added to the observer UI:
+  - `POST /ui/intent` added as an auth-free observer proxy for valid `IntentEnvelope` submission
+  - generated `curl` and PowerShell snippets stay valid for direct `/ingress/intent` use
+- Demo turn tracking fixed to check the concrete thread/turn timeline instead of a bounded global snapshot window, preventing false timeout failures on larger trails.
+- Observer SSE polling tuned for smoother turn-by-turn arrival in the UI.
+- Request logging now suppresses high-frequency observer polling routes by default to keep terminal output readable during demos.
+- Observer UI tests expanded for `/ui/intent` and for integrated demo success with a trail containing more than 100 preexisting events.
+
 ## v0.9.3 — Active Verification
 
 **Phase 3: Browser-triggered verification on top of the semantic observer panels.**
 - `GET /ui/verify-chain` added as an auth-free observer route: recomputes the full `v_digest` chain from persisted events and compares it to the rolling store state.
 - `GET /ui/replay` added as an auth-free observer route: replays a single turn decision by `thread_id` + `turn_id` and returns digest match/mismatch details.
-- `GET /ui/demo/status` and `POST /ui/demo/start` added as auth-free observer routes for the integrated deterministic demo controller.
 - Observer UI Verify panel now supports active verification:
   - `Verify Chain` button shows `VALID` / `MISMATCH` for the full chain.
   - Selecting a `DECISION` in the inspector triggers server-side replay and shows per-turn verification status.
   - Mismatch output includes stored vs recomputed digest values for triage.
 - Observer UI layout extended beyond the semantic panels:
   - event stream selection opens a bottom inspector with `Event`, `Turn`, and `Raw` views.
-  - right-side `Demo Agent` panel starts a reproducible scripted scenario from the browser.
-- Shared demo scenario module introduced so the browser-triggered controller and CLI demo script produce the same turn sequence.
 - Replay path aligned with runtime reality:
   - replay uses the gateway's configured policy adapter, not a fresh default adapter.
   - replay digest recomputation now includes `intent_index`, matching stored normative DECISION digests.
 - Store adapter/port extended so UI verification can call `recompute_v_digest()` through the app state abstraction.
-- Observer UI tests expanded with auth-free coverage for chain verification, successful replay, missing-turn replay failure, and integrated demo start/status behavior.
+- Observer UI tests expanded with auth-free coverage for chain verification, successful replay, and missing-turn replay failure.
 
 ## v0.9.2 — Semantic Panels
 

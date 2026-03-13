@@ -90,6 +90,31 @@ def _parse_lane_filter(lanes: str | None) -> set[str] | None:
     return result or None
 
 
+def _sse_poll_interval_s() -> float:
+    raw = os.getenv("DBL_GATEWAY_SSE_POLL_INTERVAL_S", "").strip()
+    if raw:
+        try:
+            value = float(raw)
+            if value >= 0.01:
+                return value
+        except ValueError:
+            pass
+    return 0.1
+
+
+def _should_log_request(path: str, method: str) -> bool:
+    verbose_ui = os.getenv("DBL_GATEWAY_LOG_UI_POLLING", "").strip().lower()
+    if verbose_ui in {"1", "true", "yes"}:
+        return True
+    if method.upper() != "GET":
+        return True
+    return path not in {
+        "/ui/capabilities",
+        "/ui/demo/status",
+        "/ui/snapshot",
+    }
+
+
 async def _sse_event_stream(
     store: Any,
     stream_id: str | None,
@@ -109,7 +134,7 @@ async def _sse_event_stream(
         )
         events = snap.get("events", [])
         if not events:
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(_sse_poll_interval_s())
             continue
         max_index = cursor - 1
         for event in events:
@@ -211,14 +236,15 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         response = await call_next(request)
         response.headers["x-request-id"] = request_id
         latency_ms = int((time.monotonic() - start) * 1000)
-        _LOGGER.info(
-            '{"message":"request.completed","request_id":"%s","method":"%s","path":"%s","status_code":%d,"latency_ms":%d}',
-            request_id,
-            request.method,
-            request.url.path,
-            response.status_code,
-            latency_ms,
-        )
+        if _should_log_request(request.url.path, request.method):
+            _LOGGER.info(
+                '{"message":"request.completed","request_id":"%s","method":"%s","path":"%s","status_code":%d,"latency_ms":%d}',
+                request_id,
+                request.method,
+                request.url.path,
+                response.status_code,
+                latency_ms,
+            )
         return response
 
     @app.get("/", include_in_schema=False)
@@ -235,7 +261,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         _require_role(actor, ["gateway.snapshot.read"])
         return await run_in_threadpool(get_capabilities_cached)
 
-    @app.post("/ingress/intent")
+    @app.post("/ingress/intent", response_model=dict[str, object])
     async def ingress_intent(request: Request, body: dict[str, Any] = Body(...)) -> JSONResponse:
         actor = await _require_actor(request)
         _require_role(actor, ["gateway.intent.write"])
@@ -419,6 +445,15 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
     ) -> dict[str, object]:
         """Snapshot proxy for observer UI — no auth."""
         return app.state.store.snapshot(limit=limit, offset=offset, stream_id=stream_id)
+
+    @app.post("/ui/intent", include_in_schema=False)
+    async def ui_intent(body: dict[str, Any] = Body(...)) -> JSONResponse:
+        """Intent ingest proxy for the observer UI — no auth."""
+        try:
+            envelope = parse_intent_envelope(body)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return await _ingest_envelope(app, envelope, uuid.uuid4().hex)
 
     @app.get("/ui/verify-chain", include_in_schema=False)
     async def ui_verify_chain(
@@ -1623,8 +1658,9 @@ async def _run_demo_agent(app: FastAPI) -> None:
 
             decision = await _wait_for_demo_turn(
                 app,
+                thread_id=thread_id,
+                turn_id=turn_id,
                 correlation_id=correlation_id,
-                stream_id="default",
                 timeout_s=turn_timeout_s,
                 poll_interval=poll_interval_s,
             )
@@ -1647,15 +1683,19 @@ async def _run_demo_agent(app: FastAPI) -> None:
 async def _wait_for_demo_turn(
     app: FastAPI,
     *,
+    thread_id: str,
+    turn_id: str,
     correlation_id: str,
-    stream_id: str,
     timeout_s: float,
     poll_interval: float,
 ) -> str:
     started = time.monotonic()
     while (time.monotonic() - started) < timeout_s:
-        snap = app.state.store.snapshot(limit=100, offset=0, stream_id=stream_id)
-        events = [event for event in snap.get("events", []) if event.get("correlation_id") == correlation_id]
+        events = [
+            event
+            for event in app.state.store.timeline(thread_id=thread_id, include_payload=True)
+            if event.get("turn_id") == turn_id and event.get("correlation_id") == correlation_id
+        ]
         decision = None
         for event in events:
             if event.get("kind") == "DECISION":

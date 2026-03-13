@@ -44,7 +44,8 @@ Open the built-in observer UI at `http://127.0.0.1:8010/ui` to watch events in r
 The Verify panel now supports active browser-triggered verification:
 - `Verify Chain` recomputes the full `v_digest` chain server-side.
 - The inspector replays a selected `DECISION` turn server-side and reports digest match/mismatch.
-- The right-side `Demo Agent` panel can run the deterministic demo scenario directly from the UI.
+- The right-side `Demo Agent` panel can run the demo scenario directly from the UI.
+- The left-side `Manual Intent` panel can send a valid minimal intent directly from the UI.
 
 ## Send an intent
 
@@ -122,7 +123,17 @@ now one click:
 3. Watch the scripted turn sequence appear in the stream
 4. Inspect events or replay the selected `DECISION`
 
-The integrated demo controller runs a deterministic scenario:
+## Send a manual intent from the UI
+
+The observer includes a `Manual Intent` panel with:
+
+1. a message field plus `actor` / `thread` inputs
+2. a `Send` button that posts a valid envelope to `POST /ui/intent`
+3. generated `curl` and PowerShell snippets for direct `/ingress/intent` testing
+
+This is the simplest way to move from the scripted demo into your own ad hoc turns.
+
+The integrated demo controller runs a scenario:
 
 1. normal turn
 2. follow-up turn

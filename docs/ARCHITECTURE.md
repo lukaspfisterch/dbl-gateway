@@ -149,7 +149,7 @@ across implementations.
 Observer verification:
 - Full-chain verification recomputes `v_digest` server-side from persisted events.
 - Decision replay recomputes one normative DECISION digest server-side from stored turn artifacts.
-- The browser only triggers these checks, starts the deterministic demo scenario,
+- The browser only triggers these checks, starts the demo scenario,
   and renders the returned match/mismatch or run-status state.
 
 ---
