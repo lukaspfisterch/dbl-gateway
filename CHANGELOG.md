@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.9.2 — Semantic Panels
+
+**Phase 2: Three sidebar panels alongside the event stream.**
+- Two-column grid layout: 280px sidebar + event stream.
+- **Agent Activity** panel — per-turn phase tracking from SSE, last event per kind, turn count.
+- **Capabilities** panel — one-time fetch from `/ui/capabilities`, shows gateway version, providers, model health, surfaces.
+- **Verify** panel — periodic (5s) + manual refresh from `/ui/snapshot`, shows `v_digest` (truncated with tooltip), event count, last DECISION metadata.
+- `GET /ui/capabilities` — auth-free proxy with `Cache-Control: max-age=30`.
+- `GET /ui/snapshot` — auth-free proxy (limit capped at 100).
+- Both new routes excluded from OpenAPI schema.
+- 3 new test classes: capabilities proxy, snapshot proxy, comprehensive OpenAPI exclusion check for all `/ui/*` routes.
+
 ## v0.9.1 — Event Observer UI
 
 **Phase 1: Pure event observer served by the gateway itself.**

@@ -110,10 +110,16 @@ No separate frontend, no frameworks — a single HTML file that connects via SSE
 http://127.0.0.1:8010/ui
 ```
 
+Two-column layout: sidebar with three semantic panels, main area with the event stream.
+
+- **Agent Activity** — live phase tracking per turn, last event per kind, turn count.
+- **Capabilities** — gateway version, providers, model health, surfaces.
+- **Verify** — current `v_digest`, event count, last DECISION metadata.
+
 Events are grouped by turn (`correlation_id`), color-coded by kind, and show
 delta-time between events in the same turn.
 
-The `/ui/tail` proxy requires no authentication — it is read-only infrastructure.
+All `/ui/*` routes are read-only infrastructure and require no authentication.
 
 ## What This Is Not
 
@@ -148,7 +154,7 @@ action may execute. Policy rules are defined externally in dbl-policy.
 
 ## Status
 
-**v0.9.1.** Built-in event observer UI at `/ui`. Substrate-axiom enforcement
-(A1 append-only, A5 turn-local order, A3/A4 governance-input purity).
+**v0.9.2.** Observer UI with semantic panels (activity, capabilities, verify).
+Substrate-axiom enforcement (A1 append-only, A5 turn-local order, A3/A4 governance-input purity).
 Chain-of-record lineage, context release guard, policy config digest.
 Self-describing capabilities via `GET /capabilities`. Wire contract v3.

@@ -12,16 +12,17 @@ body {
   font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
   font-size: 14px;
   height: 100vh;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  grid-template-rows: auto 1fr auto;
 }
 header {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
   border-bottom: 1px solid #2a2a4a;
-  flex-shrink: 0;
 }
 .header-left {
   display: flex;
@@ -53,8 +54,88 @@ header h1 {
 }
 .status-dot.live { background: #4aff9e; }
 .status-dot.error { background: #ff4a4a; }
+
+/* Sidebar */
+#sidebar {
+  overflow-y: auto;
+  border-right: 1px solid #2a2a4a;
+  padding: 0;
+}
+.panel {
+  border-bottom: 1px solid #2a2a4a;
+  padding: 12px 16px;
+}
+.panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #666;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.panel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.panel-label { color: #666; }
+.panel-value { color: #a0a0c0; }
+.panel-value.phase { font-weight: 700; }
+.phase-IDLE      { color: #666; }
+.phase-INTENT    { color: #4a9eff; }
+.phase-DECISION  { color: #4aff9e; }
+.phase-PROOF     { color: #b44aff; }
+.phase-EXECUTION { color: #ff9e4a; }
+.panel-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.badge-ok    { background: #4aff9e22; color: #4aff9e; border: 1px solid #4aff9e44; }
+.badge-error { background: #ff4a4a22; color: #ff4a4a; border: 1px solid #ff4a4a44; }
+.digest {
+  color: #555;
+  font-size: 11px;
+  cursor: default;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+  display: inline-block;
+}
+.panel-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #222244;
+}
+.panel-section-title {
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.btn-sm {
+  background: #2a2a4a;
+  color: #a0a0c0;
+  border: 1px solid #3a3a5a;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+.btn-sm:hover { background: #3a3a5a; }
+
+/* Event stream */
 #event-log {
-  flex: 1;
   overflow-y: auto;
   padding: 4px 0;
 }
@@ -105,12 +186,12 @@ header h1 {
 }
 .event-dt.slow { color: #ff9e4a; }
 footer {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 8px 20px;
   border-top: 1px solid #2a2a4a;
-  flex-shrink: 0;
 }
 .count { color: #555; font-size: 12px; }
 button {
@@ -150,6 +231,56 @@ button:hover { background: #3a3a5a; }
   </div>
 </header>
 
+<div id="sidebar">
+  <!-- Agent Activity panel -->
+  <div class="panel" id="panel-activity">
+    <div class="panel-title">Agent Activity</div>
+    <div class="panel-row">
+      <span class="panel-label">Phase</span>
+      <span class="panel-value phase phase-IDLE" id="act-phase">IDLE</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">Last INTENT</span>
+      <span class="panel-value" id="act-intent">&mdash;</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">Last DECISION</span>
+      <span class="panel-value" id="act-decision">&mdash;</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">Last PROOF</span>
+      <span class="panel-value" id="act-proof">&mdash;</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">Last EXECUTION</span>
+      <span class="panel-value" id="act-execution">&mdash;</span>
+    </div>
+    <div class="panel-row">
+      <span class="panel-label">Turns</span>
+      <span class="panel-value" id="act-turns">0</span>
+    </div>
+  </div>
+
+  <!-- Capabilities panel -->
+  <div class="panel" id="panel-capabilities">
+    <div class="panel-title">Capabilities</div>
+    <div id="caps-content">
+      <div class="panel-row"><span class="panel-label">Loading&hellip;</span></div>
+    </div>
+  </div>
+
+  <!-- Verify panel -->
+  <div class="panel" id="panel-verify">
+    <div class="panel-title">
+      <span>Verify</span>
+      <button class="btn-sm" onclick="refreshVerify()">Refresh</button>
+    </div>
+    <div id="verify-content">
+      <div class="panel-row"><span class="panel-label">Loading&hellip;</span></div>
+    </div>
+  </div>
+</div>
+
 <div id="event-log">
   <div class="empty-state" id="empty-state">Waiting for events&hellip;</div>
 </div>
@@ -174,6 +305,155 @@ button:hover { background: #3a3a5a; }
   var lastCorrelationId = null;
   var turnTimestamps = {};  // correlation_id -> { first: Date, last: Date }
 
+  // ── Agent Activity state ────────────────────────────────────────
+  var activity = {
+    currentCorrelationId: null,
+    currentPhase: "IDLE",
+    turnCount: 0,
+    seenCorrelations: {},
+    lastByKind: {}
+  };
+
+  function updateActivity(evt) {
+    var cid = evt.correlation_id || "";
+    activity.lastByKind[evt.kind] = evt;
+    if (cid && !activity.seenCorrelations[cid]) {
+      activity.seenCorrelations[cid] = true;
+      activity.turnCount++;
+    }
+    activity.currentCorrelationId = cid;
+    activity.currentPhase = evt.kind;
+    renderActivity();
+  }
+
+  function renderActivity() {
+    var phaseEl = document.getElementById("act-phase");
+    phaseEl.textContent = activity.currentPhase;
+    phaseEl.className = "panel-value phase phase-" + activity.currentPhase;
+
+    var kinds = ["INTENT", "DECISION", "PROOF", "EXECUTION"];
+    var ids   = ["act-intent", "act-decision", "act-proof", "act-execution"];
+    for (var i = 0; i < kinds.length; i++) {
+      var el = document.getElementById(ids[i]);
+      var last = activity.lastByKind[kinds[i]];
+      el.textContent = last ? "#" + last.index : "\u2014";
+    }
+
+    document.getElementById("act-turns").textContent = activity.turnCount;
+  }
+
+  // ── Capabilities (one-time fetch) ───────────────────────────────
+  function loadCapabilities() {
+    fetch("/ui/capabilities")
+      .then(function (r) { return r.json(); })
+      .then(function (caps) { renderCapabilities(caps); })
+      .catch(function () {
+        document.getElementById("caps-content").innerHTML =
+          '<div class="panel-row"><span class="panel-label">Unavailable</span></div>';
+      });
+  }
+
+  function renderCapabilities(caps) {
+    var html = "";
+    if (caps.gateway_version) {
+      html += row("Gateway", caps.gateway_version);
+    }
+    if (caps.interface_version != null) {
+      html += row("Interface", "v" + caps.interface_version);
+    }
+
+    // Providers
+    var providers = caps.providers || [];
+    for (var i = 0; i < providers.length; i++) {
+      var p = providers[i];
+      html += '<div class="panel-section">';
+      html += '<div class="panel-section-title">' + esc(p.provider_id || "provider") + '</div>';
+      var models = p.models || [];
+      for (var j = 0; j < models.length; j++) {
+        var m = models[j];
+        var badge = m.health === "ok"
+          ? '<span class="panel-badge badge-ok">ok</span>'
+          : '<span class="panel-badge badge-error">' + esc(m.health || "?") + '</span>';
+        html += '<div class="panel-row"><span class="panel-label">' + esc(m.model_id || "") + '</span>' + badge + '</div>';
+      }
+      html += '</div>';
+    }
+
+    // Surfaces
+    var surfaces = caps.surfaces || [];
+    if (surfaces.length) {
+      html += '<div class="panel-section">';
+      html += '<div class="panel-section-title">Surfaces</div>';
+      html += '<div class="panel-row"><span class="panel-value">' + surfaces.map(function (s) { return esc(s.surface_id || s); }).join(", ") + '</span></div>';
+      html += '</div>';
+    }
+
+    document.getElementById("caps-content").innerHTML = html;
+  }
+
+  function row(label, value) {
+    return '<div class="panel-row"><span class="panel-label">' + esc(label) + '</span><span class="panel-value">' + esc(value) + '</span></div>';
+  }
+
+  function esc(s) {
+    var d = document.createElement("span");
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // ── Verify (periodic + manual) ─────────────────────────────────
+  var lastDecisionFromSSE = null;
+
+  function trackDecision(evt) {
+    if (evt.kind === "DECISION") {
+      lastDecisionFromSSE = evt;
+    }
+  }
+
+  window.refreshVerify = function () {
+    fetch("/ui/snapshot?limit=1&offset=0")
+      .then(function (r) { return r.json(); })
+      .then(function (snap) { renderVerify(snap); })
+      .catch(function () {
+        document.getElementById("verify-content").innerHTML =
+          '<div class="panel-row"><span class="panel-label">Unavailable</span></div>';
+      });
+  };
+
+  function renderVerify(snap) {
+    var html = "";
+
+    // v_digest
+    var vd = snap.v_digest || "";
+    var vdShort = vd.length > 20 ? vd.substring(0, 20) + "\u2026" : vd;
+    html += '<div class="panel-row"><span class="panel-label">v_digest</span><span class="digest" title="' + esc(vd) + '">' + esc(vdShort) + '</span></div>';
+
+    // event count
+    var evtCount = snap.length != null ? snap.length : (snap.events ? snap.events.length : "?");
+    html += row("Events", evtCount);
+
+    // Last decision info from SSE
+    if (lastDecisionFromSSE) {
+      html += '<div class="panel-section">';
+      html += '<div class="panel-section-title">Last Decision</div>';
+      html += row("Index", "#" + lastDecisionFromSSE.index);
+
+      var payload = lastDecisionFromSSE.payload || {};
+      if (payload.policy_config_digest) {
+        var pcd = payload.policy_config_digest;
+        var pcdShort = pcd.length > 20 ? pcd.substring(0, 20) + "\u2026" : pcd;
+        html += '<div class="panel-row"><span class="panel-label">policy_config</span><span class="digest" title="' + esc(pcd) + '">' + esc(pcdShort) + '</span></div>';
+      }
+      if (lastDecisionFromSSE.intent_index != null) {
+        html += row("intent_index", lastDecisionFromSSE.intent_index);
+      }
+      html += '</div>';
+    }
+
+    document.getElementById("verify-content").innerHTML = html;
+  }
+
+  // ── Status ──────────────────────────────────────────────────────
   function setStatus(text, state) {
     statusText.textContent = text;
     statusDot.className = "status-dot " + state;
@@ -183,11 +463,16 @@ button:hover { background: #3a3a5a; }
     countEl.textContent = count + " event" + (count !== 1 ? "s" : "");
   }
 
+  // ── Event stream ────────────────────────────────────────────────
   function appendEvent(evt) {
     if (emptyState) {
       emptyState.remove();
       emptyState = null;
     }
+
+    // Update sidebar panels
+    updateActivity(evt);
+    trackDecision(evt);
 
     var cid = evt.correlation_id || "";
     var now = new Date();
@@ -208,8 +493,8 @@ button:hover { background: #3a3a5a; }
     var dt = now - turnTimestamps[cid].last;
     turnTimestamps[cid].last = now;
 
-    var row = document.createElement("div");
-    row.className = "event-row" + (isChild ? " turn-child" : "");
+    var r = document.createElement("div");
+    r.className = "event-row" + (isChild ? " turn-child" : "");
 
     // #index
     var idx = document.createElement("span");
@@ -251,13 +536,13 @@ button:hover { background: #3a3a5a; }
       if (dt > 2000) dtEl.classList.add("slow");
     }
 
-    row.appendChild(idx);
-    row.appendChild(kind);
-    row.appendChild(intentType);
-    row.appendChild(corr);
-    row.appendChild(dtEl);
-    row.appendChild(actor);
-    log.appendChild(row);
+    r.appendChild(idx);
+    r.appendChild(kind);
+    r.appendChild(intentType);
+    r.appendChild(corr);
+    r.appendChild(dtEl);
+    r.appendChild(actor);
+    log.appendChild(r);
 
     lastCorrelationId = cid;
     count++;
@@ -271,7 +556,16 @@ button:hover { background: #3a3a5a; }
     count = 0;
     lastCorrelationId = null;
     turnTimestamps = {};
+    activity = {
+      currentCorrelationId: null,
+      currentPhase: "IDLE",
+      turnCount: 0,
+      seenCorrelations: {},
+      lastByKind: {}
+    };
+    lastDecisionFromSSE = null;
     updateCount();
+    renderActivity();
     emptyState = document.createElement("div");
     emptyState.className = "empty-state";
     emptyState.id = "empty-state";
@@ -279,6 +573,7 @@ button:hover { background: #3a3a5a; }
     log.appendChild(emptyState);
   };
 
+  // ── SSE connection ──────────────────────────────────────────────
   function connect() {
     setStatus("Connecting", "");
     var es = new EventSource("/ui/tail");
@@ -301,7 +596,12 @@ button:hover { background: #3a3a5a; }
     };
   }
 
+  // ── Init ────────────────────────────────────────────────────────
   connect();
+  loadCapabilities();
+  refreshVerify();
+  setInterval(refreshVerify, 5000);
+
 })();
 </script>
 </body>

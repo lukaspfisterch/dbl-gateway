@@ -1,4 +1,4 @@
-"""Tests for Phase 1 Observer UI: /ui/tail proxy and static mount."""
+"""Tests for Observer UI: /ui/tail, /ui/capabilities, /ui/snapshot proxies and static mount."""
 from __future__ import annotations
 
 import asyncio
@@ -201,17 +201,54 @@ class TestUiTailProxy:
         asyncio.run(_with_client(app, check))
 
 
-class TestUiTailNotInOpenAPI:
-    """The /ui/tail proxy must not appear in the OpenAPI schema."""
+class TestUiCapabilitiesProxy:
+    """Tests for the /ui/capabilities proxy endpoint."""
 
-    def test_ui_tail_excluded_from_schema(self) -> None:
+    def test_ui_capabilities_no_auth(self) -> None:
+        """GET /ui/capabilities returns 200 with JSON, no auth required."""
+        app = _make_app()
+
+        async def check(client: httpx.AsyncClient) -> None:
+            resp = await client.get("/ui/capabilities")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "gateway_version" in data or "interface_version" in data
+            assert resp.headers.get("cache-control") == "max-age=30"
+
+        asyncio.run(_with_client(app, check))
+
+
+class TestUiSnapshotProxy:
+    """Tests for the /ui/snapshot proxy endpoint."""
+
+    def test_ui_snapshot_no_auth(self) -> None:
+        """GET /ui/snapshot returns 200 with v_digest, no auth required."""
+        app = _make_app()
+
+        async def check(client: httpx.AsyncClient) -> None:
+            store: SQLiteStore = app.state.store
+            _append_test_event(store, "INTENT")
+
+            resp = await client.get("/ui/snapshot")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "v_digest" in data
+
+        asyncio.run(_with_client(app, check))
+
+
+class TestUiRoutesNotDocumented:
+    """All /ui/* routes must be excluded from the OpenAPI schema."""
+
+    def test_ui_routes_not_in_openapi(self) -> None:
         app = _make_app()
 
         async def check(client: httpx.AsyncClient) -> None:
             resp = await client.get("/openapi.json")
             schema = resp.json()
             paths = schema.get("paths", {})
-            assert "/ui/tail" not in paths
+            ui_paths = [p for p in paths if p.startswith("/ui")]
+            assert ui_paths == [], f"UI routes leaked into OpenAPI: {ui_paths}"
 
         asyncio.run(_with_client(app, check))
 

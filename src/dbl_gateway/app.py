@@ -553,6 +553,21 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
             _sse_event_stream(app.state.store, norm_stream, since, lane_filter, request.is_disconnected),
         )
 
+    @app.get("/ui/capabilities", include_in_schema=False)
+    async def ui_capabilities() -> JSONResponse:
+        """Capabilities proxy for observer UI — no auth."""
+        data = get_capabilities_cached()
+        return JSONResponse(data, headers={"Cache-Control": "max-age=30"})
+
+    @app.get("/ui/snapshot", include_in_schema=False)
+    async def ui_snapshot(
+        stream_id: str = Query("default"),
+        limit: int = Query(1, ge=1, le=100),
+        offset: int = Query(0, ge=0),
+    ) -> dict[str, object]:
+        """Snapshot proxy for observer UI — no auth."""
+        return app.state.store.snapshot(limit=limit, offset=offset, stream_id=stream_id)
+
     _static_dir = Path(__file__).parent / "static"
     if _static_dir.is_dir():
         from starlette.staticfiles import StaticFiles
