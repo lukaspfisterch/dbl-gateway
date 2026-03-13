@@ -43,7 +43,8 @@ curl http://127.0.0.1:8010/capabilities
 Open the built-in observer UI at `http://127.0.0.1:8010/ui` to watch events in real-time.
 The Verify panel now supports active browser-triggered verification:
 - `Verify Chain` recomputes the full `v_digest` chain server-side.
-- Clicking a `DECISION` row replays that turn server-side and reports digest match/mismatch.
+- The inspector replays a selected `DECISION` turn server-side and reports digest match/mismatch.
+- The right-side `Demo Agent` panel can run the deterministic demo scenario directly from the UI.
 
 ## Send an intent
 
@@ -106,11 +107,30 @@ Then:
 1. Click `Verify Chain` in the Verify panel.
 2. Expect `Chain: VALID` when the rolling digest matches a full recomputation.
 3. Click the `DECISION` event row.
-4. Expect `Decision #N: VALID` when replay reproduces the stored DECISION digest.
+4. Use the inspector to replay the selected `DECISION`.
+5. Expect `Decision #N: VALID` when replay reproduces the stored DECISION digest.
 
 If verification fails, the panel shows the stored and recomputed digests for comparison.
 
-## Run the demo agent
+## Run the integrated demo
+
+If at least one provider is active in `GET /capabilities`, the simplest demo is
+now one click:
+
+1. Open `http://127.0.0.1:8010/ui`
+2. Press `Start Demo` in the `Demo Agent` panel
+3. Watch the scripted turn sequence appear in the stream
+4. Inspect events or replay the selected `DECISION`
+
+The integrated demo controller runs a deterministic scenario:
+
+1. normal turn
+2. follow-up turn
+3. tool-and-budget turn
+4. intentional governance-shape deny
+5. recovery turn
+
+## Run the CLI demo agent
 
 If at least one provider is active in `GET /capabilities`, you can drive the
 observer without manual `curl` calls:

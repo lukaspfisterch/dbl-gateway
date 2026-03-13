@@ -24,9 +24,12 @@ unless it affects wire behavior.
 - `GET /ui/snapshot` — auth-free observer proxy for the latest `v_digest` and event count.
 - `GET /ui/verify-chain` — auth-free full-chain `v_digest` recomputation and match/mismatch report.
 - `GET /ui/replay?thread_id=...&turn_id=...` — auth-free decision replay for one turn.
+- `GET /ui/demo/status` — auth-free status for the integrated deterministic demo controller.
+- `POST /ui/demo/start` — auth-free start trigger for the integrated deterministic demo controller.
 
 These `/ui/*` routes are read-only observer infrastructure. Verification logic
-remains server-side; the browser only consumes events and verification results.
+and demo orchestration remain server-side; the browser only consumes events and
+returned observer status/results.
 
 ## Intents
 - `chat.message`: accepts `message` plus optional `inputs`, `declared_refs`, `context_mode/context_n`, `declared_tools`, `tool_scope`, `budget`.

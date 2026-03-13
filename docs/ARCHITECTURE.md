@@ -11,6 +11,8 @@ Each surface has a single responsibility. No surface can see the internals
 of another. The event stream records what happened at every boundary crossing.
 The built-in observer UI is a read-only consumer of this stream; it never owns
 verification logic or recomputes digests in the browser.
+The integrated demo controller is also observer-only infrastructure: it emits
+scripted intents but does not add a new execution surface or policy layer.
 
 Policy logic is external (dbl-policy). The gateway evaluates and enforces
 decisions; it does not define policy rules.
@@ -147,7 +149,8 @@ across implementations.
 Observer verification:
 - Full-chain verification recomputes `v_digest` server-side from persisted events.
 - Decision replay recomputes one normative DECISION digest server-side from stored turn artifacts.
-- The browser only triggers these checks and renders the returned match/mismatch state.
+- The browser only triggers these checks, starts the deterministic demo scenario,
+  and renders the returned match/mismatch or run-status state.
 
 ---
 

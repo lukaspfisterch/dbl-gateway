@@ -28,6 +28,7 @@ from .context_builder import build_context_with_refs, RefResolutionError
 from .config import get_context_config, context_resolution_enabled, get_job_runtime_config
 from .contracts import canonical_json_bytes
 from .decision_builder import build_normative_decision
+from .demo_agent import DEMO_SCENARIO_DESCRIPTION, DEMO_SCENARIO_NAME, DEMO_SCENARIO_VERSION, active_provider_model, build_envelope, default_steps, scenario_metadata
 from .digest import compute_release_digest
 from .ports.execution_port import ExecutionResult
 from .rendering import render_provider_payload
@@ -164,6 +165,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         app.state.execution = KlExecutionAdapter()
         app.state.work_queue = work_queue
         app.state.worker_tasks: list[asyncio.Task] = []
+        app.state.demo_agent = _new_demo_state()
         app.state.start_time = time.monotonic()
         if start_workers and work_queue is not None:
             worker = asyncio.create_task(_work_queue_loop(app, work_queue))
@@ -171,6 +173,13 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         try:
             yield
         finally:
+            demo_task = getattr(app.state, "demo_agent", {}).get("task")
+            if demo_task is not None:
+                demo_task.cancel()
+                try:
+                    await demo_task
+                except asyncio.CancelledError:
+                    pass
             for task in getattr(app.state, "worker_tasks", []):
                 task.cancel()
             for task in getattr(app.state, "worker_tasks", []):
@@ -227,7 +236,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         return await run_in_threadpool(get_capabilities_cached)
 
     @app.post("/ingress/intent")
-    async def ingress_intent(request: Request, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    async def ingress_intent(request: Request, body: dict[str, Any] = Body(...)) -> JSONResponse:
         actor = await _require_actor(request)
         _require_role(actor, ["gateway.intent.write"])
         try:
@@ -236,164 +245,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         trace_id = uuid.uuid4().hex
-        intent_payload = envelope["payload"]
-        raw_payload = intent_payload["payload"]
-        payload_for_shape = dict(raw_payload)
-        payload_for_shape.update(_shape_identity(intent_payload))
-        outer_inputs = intent_payload.get("inputs")
-        if isinstance(outer_inputs, Mapping):
-            payload_for_shape["inputs"] = dict(outer_inputs)
-        # Transfer declared_refs from intent_payload to shaped payload
-        if intent_payload.get("declared_refs"):
-            payload_for_shape["declared_refs"] = intent_payload["declared_refs"]
-        # Transfer tool gating and budget fields
-        if intent_payload.get("declared_tools") is not None:
-            payload_for_shape["declared_tools"] = intent_payload["declared_tools"]
-        if intent_payload.get("tool_scope") is not None:
-            payload_for_shape["tool_scope"] = intent_payload["tool_scope"]
-        if intent_payload.get("budget") is not None:
-            payload_for_shape["budget"] = intent_payload["budget"]
-        # Feature gate: reject artifact.handle when context resolution is OFF
-        if intent_payload.get("intent_type") == "artifact.handle" and not context_resolution_enabled():
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "ok": False,
-                    "reason_code": "intent_type.disabled",
-                    "detail": "artifact.handle requires GATEWAY_ENABLE_CONTEXT_RESOLUTION=true",
-                },
-            )
-        shaped_payload = _shape_payload(intent_payload["intent_type"], payload_for_shape)
-        try:
-            admission_record = admit_and_shape_intent(
-                {
-                    "correlation_id": envelope["correlation_id"],
-                    "deterministic": {
-                        "stream_id": intent_payload["stream_id"],
-                        "lane": intent_payload["lane"],
-                        "actor": intent_payload["actor"],
-                        "intent_type": intent_payload["intent_type"],
-                        "payload": shaped_payload,
-                    },
-                    "observational": {},
-                },
-                raw_payload=payload_for_shape,
-            )
-        except AdmissionFailure as exc:
-            return JSONResponse(
-                status_code=400,
-                content={"ok": False, "reason_code": exc.reason_code, "detail": exc.detail},
-            )
-        authoritative = _thaw_json(admission_record.deterministic)
-        authoritative["correlation_id"] = admission_record.correlation_id
-        if intent_payload.get("requested_model_id"):
-            authoritative["payload"]["requested_model_id"] = intent_payload["requested_model_id"]
-        if isinstance(outer_inputs, Mapping) and isinstance(authoritative.get("payload"), Mapping):
-            payload_map = dict(authoritative["payload"])
-            payload_map.setdefault("inputs", dict(outer_inputs))
-            authoritative["payload"] = payload_map
-        _attach_obs_trace_id(authoritative["payload"], trace_id)
-        thread_id, turn_id, parent_turn_id = _require_anchors(authoritative.get("payload", {}))
-        try:
-            intent_event = app.state.store.append(
-                kind="INTENT",
-                thread_id=thread_id,
-                turn_id=turn_id,
-                parent_turn_id=parent_turn_id,
-                lane=authoritative["lane"],
-                actor=authoritative["actor"],
-                intent_type=authoritative["intent_type"],
-                stream_id=authoritative["stream_id"],
-                correlation_id=envelope["correlation_id"],
-                payload=authoritative["payload"],
-            )
-        except ParentValidationError as exc:
-            return JSONResponse(
-                status_code=400,
-                content={"ok": False, "reason_code": "admission.invalid_parent", "detail": str(exc)},
-            )
-
-        # Metadata-only intents: delegate decision to policy, skip execution.
-        if authoritative["intent_type"] in {"artifact.handle"}:
-            _assert_governance_input(authoritative)
-            decision = app.state.policy.decide(authoritative)
-            app.state.store.append(
-                kind="DECISION",
-                thread_id=thread_id,
-                turn_id=turn_id,
-                parent_turn_id=parent_turn_id,
-                lane=authoritative["lane"],
-                actor="policy",
-                intent_type=authoritative["intent_type"],
-                stream_id=authoritative["stream_id"],
-                correlation_id=envelope["correlation_id"],
-                payload=_decision_payload(
-                    decision,
-                    trace_id,
-                    assembly_digest=None,
-                    context_digest=None,
-                    error_ref=None,
-                    context_config_digest=None,
-                    boundary=None,
-                    requested_model_id=None,
-                    resolved_model_id=None,
-                    provider=None,
-                    transforms=[],
-                    context_spec=None,
-                    assembled_context=None,
-                ),
-            )
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "accepted": True,
-                    "stream_id": authoritative["stream_id"],
-                    "index": intent_event["index"],
-                    "correlation_id": envelope["correlation_id"],
-                    "queued": False,
-                },
-            )
-
-        inline_flag = os.getenv("DBL_GATEWAY_INLINE_DECISION", "").strip().lower()
-        if inline_flag in {"1", "true", "yes"} or (
-            os.getenv("PYTEST_CURRENT_TEST") and inline_flag not in {"0", "false", "no"}
-        ):
-            await _process_intent(app, intent_event, envelope["correlation_id"], trace_id)
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "accepted": True,
-                    "stream_id": authoritative["stream_id"],
-                    "index": intent_event["index"],
-                    "correlation_id": envelope["correlation_id"],
-                    "queued": False,
-                },
-            )
-
-        work_queue = getattr(app.state, "work_queue", None)
-        if work_queue is None:
-            return JSONResponse(
-                status_code=503,
-                content={"accepted": False, "reason_code": "workers.stopped", "detail": "work queue unavailable"},
-            )
-        try:
-            work_queue.put_nowait((intent_event, envelope["correlation_id"], trace_id))
-        except asyncio.QueueFull:
-            return JSONResponse(
-                status_code=503,
-                content={"accepted": False, "reason_code": "queue.full", "detail": "work queue full"},
-            )
-
-        return JSONResponse(
-            status_code=202,
-            content={
-                "accepted": True,
-                "stream_id": authoritative["stream_id"],
-                "index": intent_event["index"],
-                "correlation_id": envelope["correlation_id"],
-                "queued": True,
-            },
-        )
+        return await _ingest_envelope(app, envelope, trace_id)
 
     @app.get("/snapshot")
     async def snapshot(
@@ -616,6 +468,38 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
                 {"error": exc.reason, "detail": exc.detail},
                 status_code=422,
             )
+
+    @app.get("/ui/demo/status", include_in_schema=False)
+    async def ui_demo_status() -> JSONResponse:
+        """Status proxy for the integrated demo agent — no auth."""
+        return JSONResponse(await _demo_status_payload(app))
+
+    @app.post("/ui/demo/start", include_in_schema=False)
+    async def ui_demo_start() -> JSONResponse:
+        """Start the integrated demo scenario — no auth."""
+        demo = app.state.demo_agent
+        if demo.get("running"):
+            return JSONResponse(await _demo_status_payload(app), status_code=409)
+
+        capabilities = get_capabilities_cached()
+        active = active_provider_model(capabilities)
+        if active is None:
+            return JSONResponse(
+                {
+                    **await _demo_status_payload(app),
+                    "error": "demo.provider_unavailable",
+                    "detail": "No active provider/model found in GET /capabilities",
+                },
+                status_code=422,
+            )
+
+        demo["running"] = True
+        demo["completed_at"] = None
+        demo["last_error"] = None
+        demo["logs"] = []
+        task = asyncio.create_task(_run_demo_agent(app))
+        demo["task"] = task
+        return JSONResponse(await _demo_status_payload(app), status_code=202)
 
     _static_dir = Path(__file__).parent / "static"
     if _static_dir.is_dir():
@@ -1321,6 +1205,17 @@ def _work_queue_max() -> int:
     return 100
 
 
+def _float_env(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if value >= 0 else default
+
+
 async def _work_queue_loop(app: FastAPI, work_queue: asyncio.Queue) -> None:
     try:
         while True:
@@ -1608,6 +1503,327 @@ def _compute_enforced_budget(
         enforced["max_duration_ms"] = runtime_ms
         enforced["source"] = "policy_default"
     return enforced if enforced else None
+
+
+def _new_demo_state() -> dict[str, Any]:
+    return {
+        "running": False,
+        "task": None,
+        "thread_id": None,
+        "provider": None,
+        "model": None,
+        "started_at": None,
+        "completed_at": None,
+        "current_step_index": None,
+        "current_step_name": None,
+        "last_error": None,
+        "last_run_id": None,
+        "logs": [],
+        "step_delay_s": _float_env("DBL_GATEWAY_UI_DEMO_STEP_DELAY_S", 1.5),
+        "turn_timeout_s": _float_env("DBL_GATEWAY_UI_DEMO_TURN_TIMEOUT_S", 20.0),
+        "poll_interval_s": _float_env("DBL_GATEWAY_UI_DEMO_POLL_INTERVAL_S", 0.25),
+    }
+
+
+def _demo_log(app: FastAPI, message: str, *, level: str = "info") -> None:
+    demo = app.state.demo_agent
+    logs = demo.setdefault("logs", [])
+    logs.append(
+        {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "level": level,
+            "message": message,
+        }
+    )
+    if len(logs) > 60:
+        del logs[:-60]
+
+
+async def _demo_status_payload(app: FastAPI) -> dict[str, Any]:
+    capabilities = get_capabilities_cached()
+    active = active_provider_model(capabilities)
+    demo = app.state.demo_agent
+    metadata = scenario_metadata(step_delay=float(demo.get("step_delay_s") or 0.0))
+    return {
+        "scenario_name": DEMO_SCENARIO_NAME,
+        "scenario_version": DEMO_SCENARIO_VERSION,
+        "scenario_description": DEMO_SCENARIO_DESCRIPTION,
+        "steps": metadata["steps"],
+        "running": bool(demo.get("running")),
+        "thread_id": demo.get("thread_id"),
+        "provider": demo.get("provider"),
+        "model": demo.get("model"),
+        "started_at": demo.get("started_at"),
+        "completed_at": demo.get("completed_at"),
+        "current_step_index": demo.get("current_step_index"),
+        "current_step_name": demo.get("current_step_name"),
+        "last_error": demo.get("last_error"),
+        "last_run_id": demo.get("last_run_id"),
+        "logs": list(demo.get("logs") or []),
+        "active_provider": active[0] if active else None,
+        "active_model": active[1] if active else None,
+        "step_delay_s": demo.get("step_delay_s"),
+        "can_start": not bool(demo.get("running")) and active is not None,
+    }
+
+
+async def _run_demo_agent(app: FastAPI) -> None:
+    demo = app.state.demo_agent
+    capabilities = get_capabilities_cached()
+    active = active_provider_model(capabilities)
+    if active is None:
+        demo["last_error"] = "demo.provider_unavailable"
+        return
+
+    provider_id, model_id = active
+    run_id = uuid.uuid4().hex
+    thread_id = f"demo-thread-{run_id[:8]}"
+    step_delay = float(demo.get("step_delay_s") or 0.0)
+    turn_timeout_s = float(demo.get("turn_timeout_s") or 20.0)
+    poll_interval_s = float(demo.get("poll_interval_s") or 0.25)
+    steps = default_steps(step_delay=step_delay)
+
+    demo["running"] = True
+    demo["thread_id"] = thread_id
+    demo["provider"] = provider_id
+    demo["model"] = model_id
+    demo["started_at"] = datetime.now(timezone.utc).isoformat()
+    demo["completed_at"] = None
+    demo["current_step_index"] = None
+    demo["current_step_name"] = None
+    demo["last_error"] = None
+    demo["last_run_id"] = run_id
+    demo["logs"] = []
+    _demo_log(app, f"Run {run_id[:8]} started on {provider_id}/{model_id}")
+
+    parent_turn_id: str | None = None
+    try:
+        for idx, step in enumerate(steps, start=1):
+            turn_id = f"turn-{idx}"
+            demo["current_step_index"] = idx
+            demo["current_step_name"] = step.name
+            _demo_log(app, f"Step {idx}/{len(steps)} {step.name}: {step.description}")
+
+            envelope = build_envelope(
+                step=step,
+                requested_model_id=model_id,
+                stream_id="default",
+                lane="demo",
+                actor="demo-agent",
+                thread_id=thread_id,
+                turn_id=turn_id,
+                parent_turn_id=parent_turn_id,
+            )
+            response = await _ingest_envelope(app, envelope, uuid.uuid4().hex)
+            payload = json.loads(response.body.decode("utf-8"))
+            if response.status_code >= 400:
+                raise RuntimeError(payload.get("detail") or payload.get("reason_code") or "demo ingress failed")
+            correlation_id = str(payload.get("correlation_id") or envelope["correlation_id"])
+            _demo_log(app, f"accepted turn {turn_id} correlation_id={correlation_id}")
+
+            decision = await _wait_for_demo_turn(
+                app,
+                correlation_id=correlation_id,
+                stream_id="default",
+                timeout_s=turn_timeout_s,
+                poll_interval=poll_interval_s,
+            )
+            _demo_log(app, f"turn {turn_id} result={decision}")
+            parent_turn_id = turn_id
+            await asyncio.sleep(max(0.0, step.pause_s))
+    except Exception as exc:
+        demo["last_error"] = str(exc)
+        _demo_log(app, f"demo failed: {exc}", level="error")
+    finally:
+        demo["running"] = False
+        demo["task"] = None
+        demo["current_step_index"] = None
+        demo["current_step_name"] = None
+        demo["completed_at"] = datetime.now(timezone.utc).isoformat()
+        if demo.get("last_error") is None:
+            _demo_log(app, "demo completed")
+
+
+async def _wait_for_demo_turn(
+    app: FastAPI,
+    *,
+    correlation_id: str,
+    stream_id: str,
+    timeout_s: float,
+    poll_interval: float,
+) -> str:
+    started = time.monotonic()
+    while (time.monotonic() - started) < timeout_s:
+        snap = app.state.store.snapshot(limit=100, offset=0, stream_id=stream_id)
+        events = [event for event in snap.get("events", []) if event.get("correlation_id") == correlation_id]
+        decision = None
+        for event in events:
+            if event.get("kind") == "DECISION":
+                payload = event.get("payload") or {}
+                decision = str(payload.get("result") or payload.get("decision") or "")
+        if decision == "DENY":
+            return "DENY"
+        if any(event.get("kind") == "EXECUTION" for event in events):
+            return decision or "ALLOW"
+        await asyncio.sleep(poll_interval)
+    raise RuntimeError(f"turn timeout for correlation_id={correlation_id}")
+
+
+async def _ingest_envelope(app: FastAPI, envelope: Mapping[str, Any], trace_id: str) -> JSONResponse:
+    intent_payload = envelope["payload"]
+    raw_payload = intent_payload["payload"]
+    payload_for_shape = dict(raw_payload)
+    payload_for_shape.update(_shape_identity(intent_payload))
+    outer_inputs = intent_payload.get("inputs")
+    if isinstance(outer_inputs, Mapping):
+        payload_for_shape["inputs"] = dict(outer_inputs)
+    if intent_payload.get("declared_refs"):
+        payload_for_shape["declared_refs"] = intent_payload["declared_refs"]
+    if intent_payload.get("declared_tools") is not None:
+        payload_for_shape["declared_tools"] = intent_payload["declared_tools"]
+    if intent_payload.get("tool_scope") is not None:
+        payload_for_shape["tool_scope"] = intent_payload["tool_scope"]
+    if intent_payload.get("budget") is not None:
+        payload_for_shape["budget"] = intent_payload["budget"]
+    if intent_payload.get("intent_type") == "artifact.handle" and not context_resolution_enabled():
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "reason_code": "intent_type.disabled",
+                "detail": "artifact.handle requires GATEWAY_ENABLE_CONTEXT_RESOLUTION=true",
+            },
+        )
+    shaped_payload = _shape_payload(intent_payload["intent_type"], payload_for_shape)
+    try:
+        admission_record = admit_and_shape_intent(
+            {
+                "correlation_id": envelope["correlation_id"],
+                "deterministic": {
+                    "stream_id": intent_payload["stream_id"],
+                    "lane": intent_payload["lane"],
+                    "actor": intent_payload["actor"],
+                    "intent_type": intent_payload["intent_type"],
+                    "payload": shaped_payload,
+                },
+                "observational": {},
+            },
+            raw_payload=payload_for_shape,
+        )
+    except AdmissionFailure as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "reason_code": exc.reason_code, "detail": exc.detail},
+        )
+    authoritative = _thaw_json(admission_record.deterministic)
+    authoritative["correlation_id"] = admission_record.correlation_id
+    if intent_payload.get("requested_model_id"):
+        authoritative["payload"]["requested_model_id"] = intent_payload["requested_model_id"]
+    if isinstance(outer_inputs, Mapping) and isinstance(authoritative.get("payload"), Mapping):
+        payload_map = dict(authoritative["payload"])
+        payload_map.setdefault("inputs", dict(outer_inputs))
+        authoritative["payload"] = payload_map
+    _attach_obs_trace_id(authoritative["payload"], trace_id)
+    thread_id, turn_id, parent_turn_id = _require_anchors(authoritative.get("payload", {}))
+    try:
+        intent_event = app.state.store.append(
+            kind="INTENT",
+            thread_id=thread_id,
+            turn_id=turn_id,
+            parent_turn_id=parent_turn_id,
+            lane=authoritative["lane"],
+            actor=authoritative["actor"],
+            intent_type=authoritative["intent_type"],
+            stream_id=authoritative["stream_id"],
+            correlation_id=envelope["correlation_id"],
+            payload=authoritative["payload"],
+        )
+    except ParentValidationError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "reason_code": "admission.invalid_parent", "detail": str(exc)},
+        )
+
+    if authoritative["intent_type"] in {"artifact.handle"}:
+        _assert_governance_input(authoritative)
+        decision = app.state.policy.decide(authoritative)
+        app.state.store.append(
+            kind="DECISION",
+            thread_id=thread_id,
+            turn_id=turn_id,
+            parent_turn_id=parent_turn_id,
+            lane=authoritative["lane"],
+            actor="policy",
+            intent_type=authoritative["intent_type"],
+            stream_id=authoritative["stream_id"],
+            correlation_id=envelope["correlation_id"],
+            payload=_decision_payload(
+                decision,
+                trace_id,
+                assembly_digest=None,
+                context_digest=None,
+                error_ref=None,
+                context_config_digest=None,
+                boundary=None,
+                requested_model_id=None,
+                resolved_model_id=None,
+                provider=None,
+                transforms=[],
+                context_spec=None,
+                assembled_context=None,
+            ),
+        )
+        return JSONResponse(
+            status_code=202,
+            content={
+                "accepted": True,
+                "stream_id": authoritative["stream_id"],
+                "index": intent_event["index"],
+                "correlation_id": envelope["correlation_id"],
+                "queued": False,
+            },
+        )
+
+    inline_flag = os.getenv("DBL_GATEWAY_INLINE_DECISION", "").strip().lower()
+    if inline_flag in {"1", "true", "yes"} or (
+        os.getenv("PYTEST_CURRENT_TEST") and inline_flag not in {"0", "false", "no"}
+    ):
+        await _process_intent(app, intent_event, envelope["correlation_id"], trace_id)
+        return JSONResponse(
+            status_code=202,
+            content={
+                "accepted": True,
+                "stream_id": authoritative["stream_id"],
+                "index": intent_event["index"],
+                "correlation_id": envelope["correlation_id"],
+                "queued": False,
+            },
+        )
+
+    work_queue = getattr(app.state, "work_queue", None)
+    if work_queue is None:
+        return JSONResponse(
+            status_code=503,
+            content={"accepted": False, "reason_code": "workers.stopped", "detail": "work queue unavailable"},
+        )
+    try:
+        work_queue.put_nowait((intent_event, envelope["correlation_id"], trace_id))
+    except asyncio.QueueFull:
+        return JSONResponse(
+            status_code=503,
+            content={"accepted": False, "reason_code": "queue.full", "detail": "work queue full"},
+        )
+
+    return JSONResponse(
+        status_code=202,
+        content={
+            "accepted": True,
+            "stream_id": authoritative["stream_id"],
+            "index": intent_event["index"],
+            "correlation_id": envelope["correlation_id"],
+            "queued": True,
+        },
+    )
 
 
 def main() -> None:

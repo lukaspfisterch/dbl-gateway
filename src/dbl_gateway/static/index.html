@@ -13,7 +13,7 @@ body {
   font-size: 14px;
   height: 100vh;
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
   grid-template-rows: auto 1fr auto;
 }
 header {
@@ -61,9 +61,80 @@ header h1 {
   border-right: 1px solid #2a2a4a;
   padding: 0;
 }
+#demo-panel {
+  overflow-y: auto;
+  border-left: 1px solid #2a2a4a;
+  padding: 0;
+}
+#workspace {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 0;
+}
+#workspace.with-inspector {
+  grid-template-rows: minmax(0, 1fr) minmax(260px, 34vh);
+}
 .panel {
   border-bottom: 1px solid #2a2a4a;
   padding: 12px 16px;
+}
+.demo-lead {
+  color: #8f8fb4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.demo-status-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 12px;
+}
+.demo-status-label {
+  color: #666;
+}
+.demo-status-value {
+  color: #c2c2de;
+  text-align: right;
+}
+.demo-log {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.demo-log-item {
+  border: 1px solid #27274a;
+  border-radius: 8px;
+  background: #15152b;
+  padding: 8px 10px;
+}
+.demo-log-ts {
+  color: #666;
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+.demo-log-msg {
+  color: #b7b7d4;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.demo-log-item.error {
+  border-color: #6a3030;
+  background: #281515;
+}
+.demo-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.btn-primary {
+  background: #315aff;
+  border-color: #4568ff;
+  color: #f6f8ff;
+}
+.btn-primary:hover {
+  background: #4568ff;
 }
 .panel-title {
   font-size: 11px;
@@ -143,6 +214,7 @@ header h1 {
 #event-log {
   overflow-y: auto;
   padding: 4px 0;
+  min-height: 0;
 }
 .turn-sep {
   height: 1px;
@@ -161,11 +233,13 @@ header h1 {
 .event-row.turn-child {
   padding-left: 32px;
 }
-/* Clickable DECISION rows */
+/* Clickable event rows */
 .event-row.clickable { cursor: pointer; }
 .event-row.clickable:hover { background: #1a2a3a; }
+.event-row.selected { background: #24304f; }
 /* Turn highlight during replay verification */
 .event-row.turn-highlight { background: #1a2a3a; }
+.event-row.selected.turn-highlight { background: #24304f; }
 .event-idx {
   color: #555;
   text-align: right;
@@ -193,6 +267,173 @@ header h1 {
   font-variant-numeric: tabular-nums;
 }
 .event-dt.slow { color: #ff9e4a; }
+#inspector {
+  min-height: 0;
+  overflow: hidden;
+  border-top: 1px solid #2a2a4a;
+  display: none;
+  background: linear-gradient(180deg, #171730 0%, #141428 100%);
+}
+#workspace.with-inspector #inspector {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px 8px;
+}
+.inspector-title-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.inspector-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #8888aa;
+}
+.inspector-subtitle {
+  color: #666;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inspector-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 16px 10px;
+  border-bottom: 1px solid #2a2a4a;
+}
+.tab-btn {
+  background: transparent;
+  border: 1px solid #34345a;
+  color: #7d7da0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+.tab-btn.active {
+  color: #d5d5ea;
+  border-color: #4a6aff;
+  background: #4a6aff1f;
+}
+.inspector-content {
+  overflow-y: auto;
+  padding: 14px 16px 16px;
+}
+.inspector-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #555;
+  font-size: 13px;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+}
+.detail-card {
+  border: 1px solid #26264a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #16162d;
+  min-width: 0;
+}
+.detail-card.wide {
+  grid-column: 1 / -1;
+}
+.detail-card-title {
+  font-size: 10px;
+  color: #6f6f94;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 8px;
+}
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.detail-key {
+  color: #666;
+  flex: 0 0 auto;
+}
+.detail-value {
+  color: #b7b7d4;
+  text-align: right;
+  min-width: 0;
+  word-break: break-word;
+}
+.detail-code {
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #111122;
+  border: 1px solid #232342;
+  color: #c9c9df;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.turn-list {
+  display: grid;
+  gap: 8px;
+}
+.turn-event {
+  display: grid;
+  grid-template-columns: 58px 96px 1fr 88px;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #27274a;
+  background: #15152b;
+}
+.turn-event.selected {
+  border-color: #4562ff;
+  background: #19213d;
+}
+.turn-event-meta {
+  color: #77779b;
+  font-size: 11px;
+  text-align: right;
+}
+@media (max-width: 980px) {
+  body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  }
+  #sidebar {
+    border-right: none;
+    border-bottom: 1px solid #2a2a4a;
+  }
+  #demo-panel {
+    border-left: none;
+    border-top: 1px solid #2a2a4a;
+  }
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .turn-event {
+    grid-template-columns: 50px 90px 1fr;
+  }
+  .turn-event-meta {
+    display: none;
+  }
+}
 footer {
   grid-column: 1 / -1;
   display: flex;
@@ -213,6 +454,20 @@ button {
   cursor: pointer;
 }
 button:hover { background: #3a3a5a; }
+.tab-btn {
+  background: transparent;
+  border: 1px solid #34345a;
+  color: #7d7da0;
+  padding: 4px 10px;
+}
+.tab-btn:hover {
+  background: #242446;
+}
+.tab-btn.active {
+  color: #d5d5ea;
+  border-color: #4a6aff;
+  background: #4a6aff1f;
+}
 .empty-state {
   display: flex;
   align-items: center;
@@ -294,8 +549,51 @@ button:hover { background: #3a3a5a; }
   </div>
 </div>
 
-<div id="event-log">
-  <div class="empty-state" id="empty-state">Waiting for events&hellip;</div>
+<div id="workspace">
+  <div id="event-log">
+    <div class="empty-state" id="empty-state">Waiting for events&hellip;</div>
+  </div>
+  <div id="inspector">
+    <div class="inspector-header">
+      <div class="inspector-title-block">
+        <div class="inspector-title">Inspector</div>
+        <div class="inspector-subtitle" id="inspector-subtitle">No event selected</div>
+      </div>
+      <div class="panel-title-buttons">
+        <button class="btn-sm" id="inspector-replay" style="display:none">Replay Decision</button>
+        <button class="btn-sm" id="inspector-close">Close</button>
+      </div>
+    </div>
+    <div class="inspector-tabs">
+      <button class="tab-btn active" data-tab="event">Event</button>
+      <button class="tab-btn" data-tab="turn">Turn</button>
+      <button class="tab-btn" data-tab="raw">Raw</button>
+    </div>
+    <div class="inspector-content" id="inspector-content"></div>
+  </div>
+</div>
+<div id="demo-panel">
+  <div class="panel">
+    <div class="panel-title">Demo Agent</div>
+    <div class="demo-lead" id="demo-description">
+      Deterministic governance demonstration loading&hellip;
+    </div>
+    <div class="demo-actions">
+      <button class="btn-primary" id="demo-start">Start Demo</button>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">Scenario</div>
+    <div id="demo-meta"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">Run Status</div>
+    <div id="demo-status"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">Run Log</div>
+    <div id="demo-log"></div>
+  </div>
 </div>
 
 <footer>
@@ -313,6 +611,17 @@ button:hover { background: #3a3a5a; }
   var statusText = document.getElementById("status-text");
   var countEl = document.getElementById("event-count");
   var count = 0;
+  var workspace = document.getElementById("workspace");
+  var inspectorContent = document.getElementById("inspector-content");
+  var inspectorSubtitle = document.getElementById("inspector-subtitle");
+  var inspectorReplay = document.getElementById("inspector-replay");
+  var inspectorClose = document.getElementById("inspector-close");
+  var inspectorTabs = Array.prototype.slice.call(document.querySelectorAll(".tab-btn"));
+  var demoDescription = document.getElementById("demo-description");
+  var demoMeta = document.getElementById("demo-meta");
+  var demoStatus = document.getElementById("demo-status");
+  var demoLog = document.getElementById("demo-log");
+  var demoStart = document.getElementById("demo-start");
 
   // Turn tracking for grouping and delta-time
   var lastCorrelationId = null;
@@ -320,6 +629,8 @@ button:hover { background: #3a3a5a; }
 
   // Event row registry for turn highlighting
   var eventRows = [];  // { row: HTMLElement, evt: object }
+  var selectedEvent = null;
+  var selectedTab = "event";
 
   // ── Agent Activity state ────────────────────────────────────────
   var activity = {
@@ -409,6 +720,75 @@ button:hover { background: #3a3a5a; }
     document.getElementById("caps-content").innerHTML = html;
   }
 
+  function renderDemoStatus(data) {
+    demoDescription.textContent = data.scenario_description || "Deterministic demo scenario";
+
+    var metaHtml = "";
+    metaHtml += '<div class="demo-status-line"><span class="demo-status-label">Gateway URL</span><span class="demo-status-value">' + esc(window.location.origin) + '</span></div>';
+    metaHtml += '<div class="demo-status-line"><span class="demo-status-label">Provider</span><span class="demo-status-value">' + esc(data.provider || data.active_provider || "\u2014") + '</span></div>';
+    metaHtml += '<div class="demo-status-line"><span class="demo-status-label">Model</span><span class="demo-status-value">' + esc(data.model || data.active_model || "\u2014") + '</span></div>';
+    metaHtml += '<div class="demo-status-line"><span class="demo-status-label">Script Version</span><span class="demo-status-value">' + esc((data.scenario_name || "demo") + ".v" + (data.scenario_version || "?")) + '</span></div>';
+    demoMeta.innerHTML = metaHtml;
+
+    var statusHtml = "";
+    statusHtml += '<div class="demo-status-line"><span class="demo-status-label">State</span><span class="demo-status-value">' + (data.running ? '<span class="panel-badge badge-warn">RUNNING</span>' : '<span class="panel-badge badge-ok">READY</span>') + '</span></div>';
+    statusHtml += '<div class="demo-status-line"><span class="demo-status-label">Thread</span><span class="demo-status-value">' + esc(data.thread_id || "\u2014") + '</span></div>';
+    statusHtml += '<div class="demo-status-line"><span class="demo-status-label">Step</span><span class="demo-status-value">' + esc(data.current_step_name || "\u2014") + '</span></div>';
+    statusHtml += '<div class="demo-status-line"><span class="demo-status-label">Started</span><span class="demo-status-value">' + esc(data.started_at || "\u2014") + '</span></div>';
+    if (data.last_error) {
+      statusHtml += '<div class="demo-status-line"><span class="demo-status-label">Error</span><span class="demo-status-value">' + esc(data.last_error) + '</span></div>';
+    }
+    if (data.steps && data.steps.length) {
+      statusHtml += '<div class="panel-section"><div class="panel-section-title">Script</div>';
+      for (var i = 0; i < data.steps.length; i++) {
+        var step = data.steps[i];
+        statusHtml += '<div class="demo-status-line"><span class="demo-status-label">' + esc((i + 1) + ". " + step.name) + '</span><span class="demo-status-value">' + esc(step.expected || "") + '</span></div>';
+      }
+      statusHtml += '</div>';
+    }
+    demoStatus.innerHTML = statusHtml;
+
+    var logs = data.logs || [];
+    if (!logs.length) {
+      demoLog.innerHTML = '<div class="inspector-empty" style="height:auto; padding:8px 0">No demo run yet.</div>';
+    } else {
+      var logHtml = '<div class="demo-log">';
+      for (var j = logs.length - 1; j >= 0; j--) {
+        var entry = logs[j];
+        logHtml += '<div class="demo-log-item' + (entry.level === "error" ? ' error' : '') + '">';
+        logHtml += '<div class="demo-log-ts">' + esc(entry.ts || "") + '</div>';
+        logHtml += '<div class="demo-log-msg">' + esc(entry.message || "") + '</div>';
+        logHtml += '</div>';
+      }
+      logHtml += '</div>';
+      demoLog.innerHTML = logHtml;
+    }
+
+    demoStart.disabled = !data.can_start;
+    demoStart.textContent = data.running ? "Demo Running" : "Start Demo";
+  }
+
+  function loadDemoStatus() {
+    fetch("/ui/demo/status")
+      .then(function (r) { return r.json(); })
+      .then(function (data) { renderDemoStatus(data); })
+      .catch(function () {
+        demoStatus.innerHTML = '<div class="demo-status-line"><span class="demo-status-label">State</span><span class="panel-badge badge-error">Unavailable</span></div>';
+      });
+  }
+
+  function startDemo() {
+    demoStart.disabled = true;
+    demoStart.textContent = "Starting...";
+    fetch("/ui/demo/start", { method: "POST" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { renderDemoStatus(data); })
+      .catch(function () {
+        demoStart.disabled = false;
+        demoStart.textContent = "Start Demo";
+      });
+  }
+
   function row(label, value) {
     return '<div class="panel-row"><span class="panel-label">' + esc(label) + '</span><span class="panel-value">' + esc(value) + '</span></div>';
   }
@@ -417,6 +797,219 @@ button:hover { background: #3a3a5a; }
     var d = document.createElement("span");
     d.textContent = s;
     return d.innerHTML;
+  }
+
+  function shortDigest(value, limit) {
+    var text = String(value || "");
+    if (!text) return "\u2014";
+    return text.length > limit ? text.substring(0, limit) + "\u2026" : text;
+  }
+
+  function codeBlock(value) {
+    return '<pre class="detail-code">' + esc(value) + '</pre>';
+  }
+
+  function jsonBlock(value) {
+    return codeBlock(JSON.stringify(value, null, 2));
+  }
+
+  function detailRow(label, value) {
+    return '<div class="detail-row"><span class="detail-key">' + esc(label) + '</span><span class="detail-value">' + esc(value == null ? "\u2014" : String(value)) + '</span></div>';
+  }
+
+  function digestRow(label, value) {
+    return '<div class="detail-row"><span class="detail-key">' + esc(label) + '</span><span class="detail-value" title="' + esc(value || "") + '">' + esc(shortDigest(value, 32)) + '</span></div>';
+  }
+
+  function detailCard(title, body, wide) {
+    return '<div class="detail-card' + (wide ? ' wide' : '') + '"><div class="detail-card-title">' + esc(title) + '</div>' + body + '</div>';
+  }
+
+  function eventByCorrelation(correlationId) {
+    return eventRows
+      .map(function (entry) { return entry.evt; })
+      .filter(function (evt) { return evt.correlation_id === correlationId; })
+      .sort(function (a, b) { return (a.index || 0) - (b.index || 0); });
+  }
+
+  function eventDelayText(events, idx) {
+    if (idx <= 0) return "\u2014";
+    var prev = events[idx - 1]._observedAtMs;
+    var current = events[idx]._observedAtMs;
+    if (typeof prev !== "number" || typeof current !== "number") return "\u2014";
+    var delta = current - prev;
+    if (delta < 1000) return "\u0394" + delta + "ms";
+    return "\u0394" + (delta / 1000).toFixed(1) + "s";
+  }
+
+  function setInspectorTab(tab) {
+    selectedTab = tab;
+    for (var i = 0; i < inspectorTabs.length; i++) {
+      inspectorTabs[i].classList.toggle("active", inspectorTabs[i].getAttribute("data-tab") === tab);
+    }
+    renderInspector();
+  }
+
+  function clearRowSelection() {
+    for (var i = 0; i < eventRows.length; i++) {
+      eventRows[i].row.classList.remove("selected");
+    }
+  }
+
+  function setSelectedRow(evt) {
+    clearRowSelection();
+    for (var i = 0; i < eventRows.length; i++) {
+      if (eventRows[i].evt === evt) {
+        eventRows[i].row.classList.add("selected");
+        break;
+      }
+    }
+  }
+
+  function closeInspector() {
+    selectedEvent = null;
+    clearRowSelection();
+    highlightTurn(null);
+    workspace.classList.remove("with-inspector");
+    inspectorSubtitle.textContent = "No event selected";
+    inspectorReplay.style.display = "none";
+    inspectorContent.innerHTML = '<div class="inspector-empty">Select an event in the stream to inspect it.</div>';
+  }
+
+  function selectEvent(evt, tab) {
+    selectedEvent = evt;
+    if (tab) selectedTab = tab;
+    setSelectedRow(evt);
+    highlightTurn(evt.correlation_id);
+    workspace.classList.add("with-inspector");
+    renderInspector();
+  }
+
+  function renderInspector() {
+    if (!selectedEvent) {
+      closeInspector();
+      return;
+    }
+    var evt = selectedEvent;
+    inspectorSubtitle.textContent = "#" + evt.index + " " + evt.kind + " \u00b7 " + (evt.intent_type || "unknown") + " \u00b7 " + shortDigest(evt.correlation_id, 12);
+    inspectorReplay.style.display = evt.kind === "DECISION" ? "inline-block" : "none";
+    for (var i = 0; i < inspectorTabs.length; i++) {
+      inspectorTabs[i].classList.toggle("active", inspectorTabs[i].getAttribute("data-tab") === selectedTab);
+    }
+    if (selectedTab === "turn") {
+      inspectorContent.innerHTML = renderTurnInspector(evt);
+    } else if (selectedTab === "raw") {
+      inspectorContent.innerHTML = detailCard("Raw Event", jsonBlock(evt), true);
+    } else {
+      inspectorContent.innerHTML = renderEventInspector(evt);
+    }
+  }
+
+  function renderEventInspector(evt) {
+    var payload = evt.payload || {};
+    var common = "";
+    common += detailRow("Index", "#" + evt.index);
+    common += detailRow("Kind", evt.kind || "\u2014");
+    common += detailRow("Intent", evt.intent_type || "\u2014");
+    common += detailRow("Actor", evt.actor || "\u2014");
+    common += detailRow("Thread", evt.thread_id || "\u2014");
+    common += detailRow("Turn", evt.turn_id || "\u2014");
+    common += detailRow("Parent Turn", evt.parent_turn_id || "\u2014");
+    common += detailRow("Correlation", evt.correlation_id || "\u2014");
+    common += detailRow("Lane", evt.lane || "\u2014");
+    common += detailRow("Stream", evt.stream_id || "\u2014");
+
+    var hashes = "";
+    hashes += digestRow("Event Digest", evt.digest);
+    hashes += digestRow("Assembly Digest", payload.assembly_digest);
+    hashes += digestRow("Context Digest", payload.context_digest);
+    hashes += digestRow("Payload Digest", payload.payload_digest);
+    hashes += digestRow("Release Digest", payload.release_digest);
+    if (payload.policy && payload.policy.policy_config_digest) {
+      hashes += digestRow("Policy Config", payload.policy.policy_config_digest);
+    }
+    if (payload.boundary && payload.boundary.context_config_digest) {
+      hashes += digestRow("Context Config", payload.boundary.context_config_digest);
+    }
+
+    var summary = "";
+    if (evt.kind === "INTENT") {
+      summary += detailRow("Message", payload.message || "\u2014");
+      summary += detailRow("Declared Tools", (payload.declared_tools || []).join(", ") || "\u2014");
+      summary += detailRow("Tool Scope", payload.tool_scope || "\u2014");
+      if (payload.budget) {
+        summary += detailRow("Budget", JSON.stringify(payload.budget));
+      }
+    } else if (evt.kind === "DECISION") {
+      summary += detailRow("Result", payload.result || payload.decision || "\u2014");
+      summary += detailRow("Policy ID", payload.policy_id || (payload.policy && payload.policy.policy_id) || "\u2014");
+      summary += detailRow("Policy Version", payload.policy_version || (payload.policy && payload.policy.policy_version) || "\u2014");
+      summary += detailRow("Reason Codes", (payload.reason_codes || []).join(", ") || "\u2014");
+      summary += detailRow("Intent Index", payload.intent_index != null ? "#" + payload.intent_index : "\u2014");
+      summary += detailRow("Permitted Tools", (payload.permitted_tools || []).join(", ") || "\u2014");
+      if (payload.enforced_budget) {
+        summary += detailRow("Enforced Budget", JSON.stringify(payload.enforced_budget));
+      }
+    } else if (evt.kind === "PROOF") {
+      summary += detailRow("Proof Type", payload.proof_type || "context_release_guard");
+      summary += detailRow("Provider", payload.provider || "\u2014");
+      summary += detailRow("Model", payload.model_id || "\u2014");
+    } else if (evt.kind === "EXECUTION") {
+      summary += detailRow("Provider", payload.provider || "\u2014");
+      summary += detailRow("Model", payload.model_id || "\u2014");
+      summary += detailRow("Error", payload.error || "\u2014");
+      summary += detailRow("Tool Calls", JSON.stringify(payload.tool_calls || []));
+      summary += detailRow("Usage", JSON.stringify(payload.usage || {}));
+    }
+
+    var body = '<div class="detail-grid">';
+    body += detailCard("Event", common, false);
+    body += detailCard("Hashes & Digests", hashes, false);
+    body += detailCard("Kind Detail", summary || detailRow("Value", "\u2014"), false);
+    body += detailCard("Payload", jsonBlock(payload), true);
+    body += '</div>';
+    return body;
+  }
+
+  function renderTurnInspector(evt) {
+    var events = eventByCorrelation(evt.correlation_id);
+    var html = '<div class="detail-grid">';
+    var meta = "";
+    meta += detailRow("Correlation", evt.correlation_id || "\u2014");
+    meta += detailRow("Thread", evt.thread_id || "\u2014");
+    meta += detailRow("Turn", evt.turn_id || "\u2014");
+    meta += detailRow("Events", events.length);
+    html += detailCard("Turn", meta, false);
+
+    var decision = null;
+    for (var i = 0; i < events.length; i++) {
+      if (events[i].kind === "DECISION") decision = events[i];
+    }
+    var outcome = "";
+    if (decision) {
+      var dp = decision.payload || {};
+      outcome += detailRow("Decision", dp.result || dp.decision || "\u2014");
+      outcome += detailRow("Reasons", (dp.reason_codes || []).join(", ") || "\u2014");
+      outcome += digestRow("Decision Digest", decision.digest);
+    } else {
+      outcome += detailRow("Decision", "\u2014");
+    }
+    html += detailCard("Outcome", outcome, false);
+
+    var timeline = '<div class="turn-list">';
+    for (var j = 0; j < events.length; j++) {
+      var turnEvt = events[j];
+      timeline += '<div class="turn-event' + (turnEvt === selectedEvent ? ' selected' : '') + '">';
+      timeline += '<div class="turn-event-meta">#' + esc(turnEvt.index) + '</div>';
+      timeline += '<span class="event-kind kind-' + esc(turnEvt.kind || "UNKNOWN") + '">' + esc(turnEvt.kind || "UNKNOWN") + '</span>';
+      timeline += '<div><div>' + esc(turnEvt.actor || "\u2014") + '</div><div class="event-corr">' + esc(shortDigest(turnEvt.digest, 18)) + '</div></div>';
+      timeline += '<div class="turn-event-meta">' + esc(eventDelayText(events, j)) + '</div>';
+      timeline += '</div>';
+    }
+    timeline += '</div>';
+    html += detailCard("Turn Timeline", timeline, true);
+    html += '</div>';
+    return html;
   }
 
   // ── Verify (periodic + manual) ─────────────────────────────────
@@ -507,9 +1100,6 @@ button:hover { background: #3a3a5a; }
     var turnId = evt.turn_id;
     if (!threadId || !turnId) return;
 
-    // Highlight turn events
-    highlightTurn(evt.correlation_id);
-
     var el = document.getElementById("replay-result");
     el.innerHTML = '<div class="panel-section"><div class="panel-section-title">Decision Replay</div><div class="panel-row"><span class="panel-label">Replaying #' + evt.index + '&hellip;</span></div></div>';
 
@@ -591,17 +1181,15 @@ button:hover { background: #3a3a5a; }
     }
     var dt = now - turnTimestamps[cid].last;
     turnTimestamps[cid].last = now;
+    evt._observedAtMs = now.getTime();
 
     var r = document.createElement("div");
     r.className = "event-row" + (isChild ? " turn-child" : "");
 
-    // Make DECISION rows clickable for replay
-    if (evt.kind === "DECISION") {
-      r.classList.add("clickable");
-      r.addEventListener("click", (function (e) {
-        return function () { replayDecision(e); };
-      })(evt));
-    }
+    r.classList.add("clickable");
+    r.addEventListener("click", (function (e) {
+      return function () { selectEvent(e, "event"); };
+    })(evt));
 
     // #index
     var idx = document.createElement("span");
@@ -679,6 +1267,7 @@ button:hover { background: #3a3a5a; }
     renderActivity();
     document.getElementById("chain-result").innerHTML = "";
     document.getElementById("replay-result").innerHTML = "";
+    closeInspector();
     emptyState = document.createElement("div");
     emptyState.className = "empty-state";
     emptyState.id = "empty-state";
@@ -710,10 +1299,25 @@ button:hover { background: #3a3a5a; }
   }
 
   // ── Init ────────────────────────────────────────────────────────
+  inspectorClose.addEventListener("click", closeInspector);
+  inspectorReplay.addEventListener("click", function () {
+    if (selectedEvent && selectedEvent.kind === "DECISION") {
+      replayDecision(selectedEvent);
+    }
+  });
+  demoStart.addEventListener("click", startDemo);
+  for (var i = 0; i < inspectorTabs.length; i++) {
+    inspectorTabs[i].addEventListener("click", function () {
+      setInspectorTab(this.getAttribute("data-tab"));
+    });
+  }
+  closeInspector();
   connect();
   loadCapabilities();
+  loadDemoStatus();
   refreshVerify();
   setInterval(refreshVerify, 5000);
+  setInterval(loadDemoStatus, 1500);
 
 })();
 </script>

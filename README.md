@@ -110,11 +110,14 @@ No separate frontend, no frameworks — a single HTML file that connects via SSE
 http://127.0.0.1:8010/ui
 ```
 
-Two-column layout: sidebar with three semantic panels, main area with the event stream.
+Three-zone layout:
 
 - **Agent Activity** — live phase tracking per turn, last event per kind, turn count.
 - **Capabilities** — gateway version, providers, model health, surfaces.
 - **Verify** — current `v_digest`, event count, last DECISION metadata, active chain verification, and per-turn decision replay.
+- **Event Stream** — chronological turn-grouped event timeline with click selection.
+- **Inspector** — event detail, turn-local view, and raw JSON for the selected event.
+- **Demo Agent** — integrated controller for a deterministic demo scenario.
 
 Events are grouped by turn (`correlation_id`), color-coded by kind, and show
 delta-time between events in the same turn.
@@ -131,23 +134,20 @@ read-only observer routes:
 Workflow:
 
 1. Open `/ui`.
-2. Send an intent.
-3. Click `Verify Chain` in the Verify panel to recompute the full chain.
-4. Click a `DECISION` event row to replay that turn and compare stored vs recomputed decision digests.
+2. Click `Start Demo` to run the built-in deterministic scenario, or send an intent manually.
+3. Click any event row to open the inspector.
+4. Click `Verify Chain` in the Verify panel to recompute the full chain.
+5. Replay a selected `DECISION` from the inspector to compare stored vs recomputed decision digests.
 
 All `/ui/*` routes are read-only observer infrastructure and require no authentication.
 
 ### Demo Agent
 
-For a live demo, run the bundled demo agent after the gateway is up and at least
-one provider is active in `GET /capabilities`:
+The observer now includes a right-side `Demo Agent` panel with a `Start Demo`
+button. When at least one provider/model is healthy in `GET /capabilities`,
+the integrated controller runs a deterministic scenario directly from the UI.
 
-```bash
-./.venv/bin/python scripts/demo_agent.py --base-url http://127.0.0.1:8010
-```
-
-The script acts as a visible actor (`demo-agent`) and sends a small balanced
-sequence of turns:
+Scenario:
 
 - normal turn
 - follow-up turn
@@ -155,9 +155,16 @@ sequence of turns:
 - intentional governance-shape deny
 - recovery turn
 
-It prints what it is doing, posts each intent to `/ingress/intent`, and watches
-the resulting turn events so the terminal output, gateway, and `/ui` stream stay
-in sync during the demo.
+For terminal-driven demos, the bundled CLI agent is still available after the
+gateway is up and at least one provider is active:
+
+```bash
+./.venv/bin/python scripts/demo_agent.py --base-url http://127.0.0.1:8010
+```
+
+Both paths use the same scenario definition and actor (`demo-agent`) so the
+gateway, stream, inspector, and verification surfaces all show the same
+reproducible sequence.
 
 ## What This Is Not
 
@@ -192,8 +199,9 @@ action may execute. Policy rules are defined externally in dbl-policy.
 
 ## Status
 
-**v0.9.3.** Observer UI with active verification: semantic panels, full-chain `v_digest`
-recomputation, and per-turn decision replay from the browser.
+**v0.9.3.** Observer UI with active verification and integrated demo control:
+semantic panels, stream inspector, full-chain `v_digest` recomputation,
+per-turn decision replay, and deterministic demo orchestration from the browser.
 Substrate-axiom enforcement (A1 append-only, A5 turn-local order, A3/A4 governance-input purity).
 Chain-of-record lineage, context release guard, policy config digest.
 Self-describing capabilities via `GET /capabilities`. Wire contract v3.

@@ -11,6 +11,7 @@ import pytest
 from starlette.requests import Request
 
 from dbl_gateway.app import create_app
+from dbl_gateway.ports.execution_port import ExecutionResult
 from dbl_gateway.store.sqlite import SQLiteStore
 from dbl_gateway.wire_contract import INTERFACE_VERSION
 
@@ -313,6 +314,85 @@ class TestUiVerificationProxy:
             data = replay.json()
             assert data["error"] in {"decision.not_found", "intent.not_found"}
             assert "detail" in data
+
+        asyncio.run(_with_client(app, check))
+
+
+class TestUiDemoProxy:
+    """Tests for the integrated UI demo controller."""
+
+    def test_ui_demo_status_no_auth(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        app = _make_app()
+        monkeypatch.setattr(
+            "dbl_gateway.app.get_capabilities_cached",
+            lambda: {
+                "providers": [
+                    {
+                        "id": "openai",
+                        "models": [{"id": "gpt-4o-mini", "health": {"status": "ok"}}],
+                    }
+                ]
+            },
+        )
+
+        async def check(client: httpx.AsyncClient) -> None:
+            resp = await client.get("/ui/demo/status")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["scenario_name"] == "governance-demo"
+            assert data["active_provider"] == "openai"
+            assert data["active_model"] == "gpt-4o-mini"
+            assert data["can_start"] is True
+
+        asyncio.run(_with_client(app, check))
+
+    def test_ui_demo_start_no_auth(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        app = _make_app()
+        monkeypatch.setattr(
+            "dbl_gateway.app.get_capabilities_cached",
+            lambda: {
+                "providers": [
+                    {
+                        "id": "openai",
+                        "models": [{"id": "gpt-4o-mini", "health": {"status": "ok"}}],
+                    }
+                ]
+            },
+        )
+
+        async def fake_run(self: Any, intent_event: Any, **_: Any) -> ExecutionResult:
+            return ExecutionResult(
+                output_text="ok",
+                provider="openai",
+                model_id="gpt-4o-mini",
+                trace={"trace_id": "demo-trace"},
+                trace_digest="sha256:" + ("1" * 64),
+                usage={"duration_ms": 10},
+            )
+
+        async def check(client: httpx.AsyncClient) -> None:
+            monkeypatch.setattr(type(app.state.execution), "run", fake_run)
+            app.state.demo_agent["step_delay_s"] = 0.0
+            app.state.demo_agent["turn_timeout_s"] = 2.0
+            app.state.demo_agent["poll_interval_s"] = 0.01
+
+            started = await client.post("/ui/demo/start")
+            assert started.status_code == 202
+            started_data = started.json()
+            assert started_data["running"] is True
+
+            for _ in range(120):
+                status = await client.get("/ui/demo/status")
+                data = status.json()
+                if data["running"] is False and data["completed_at"] is not None:
+                    assert data["last_error"] is None
+                    assert data["provider"] == "openai"
+                    assert data["model"] == "gpt-4o-mini"
+                    assert any("demo completed" in entry["message"] for entry in data["logs"])
+                    return
+                await asyncio.sleep(0.05)
+
+            raise AssertionError("demo run did not complete")
 
         asyncio.run(_with_client(app, check))
 
