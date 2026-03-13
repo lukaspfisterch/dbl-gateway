@@ -29,6 +29,17 @@ cat events.jsonl | ensdg --mode replay --digest
 
 Compare digests across systems to assert normative equivalence.
 
+## Observer UI verification
+
+For gateway-local operational checks, the built-in observer at `/ui` exposes
+two auth-free verification routes:
+
+- `GET /ui/verify-chain` recomputes the full event-chain `v_digest` and compares it to the rolling store digest.
+- `GET /ui/replay?thread_id=...&turn_id=...` replays one decision turn and compares recomputed vs stored DECISION digests.
+
+These routes are operational diagnostics for the gateway itself. `ensdg` remains
+the external reference oracle for cross-system validation and invariant checking.
+
 Example input:
 
 ```json
@@ -49,4 +60,3 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Get-Content $Path | ensdg --mode validate --digest
 ```
-

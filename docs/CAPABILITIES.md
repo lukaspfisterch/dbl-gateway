@@ -17,6 +17,17 @@ unless it affects wire behavior.
 - `GET /status` — projected runner state `{phase, runner_status, t_index, note}`.
 - `POST /execution/event` — submit external execution result (only if exec_mode=external).
 
+## Observer UI Endpoints
+- `GET /ui/` — built-in single-file observer UI.
+- `GET /ui/tail` — auth-free SSE stream for browser `EventSource`.
+- `GET /ui/capabilities` — auth-free observer proxy for capabilities.
+- `GET /ui/snapshot` — auth-free observer proxy for the latest `v_digest` and event count.
+- `GET /ui/verify-chain` — auth-free full-chain `v_digest` recomputation and match/mismatch report.
+- `GET /ui/replay?thread_id=...&turn_id=...` — auth-free decision replay for one turn.
+
+These `/ui/*` routes are read-only observer infrastructure. Verification logic
+remains server-side; the browser only consumes events and verification results.
+
 ## Intents
 - `chat.message`: accepts `message` plus optional `inputs`, `declared_refs`, `context_mode/context_n`, `declared_tools`, `tool_scope`, `budget`.
 - `artifact.handle`: metadata-only, does not trigger decision by default; content fetch is gated. Rejected when `GATEWAY_ENABLE_CONTEXT_RESOLUTION` is OFF.

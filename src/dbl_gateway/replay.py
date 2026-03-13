@@ -110,6 +110,7 @@ def replay_decision_for_turn(
         assembly_digest=computed_context_digest,
         context_digest=context_digest_value,
         transforms=transform_list,
+        intent_index=_as_int(decision_payload.get("intent_index")),
     )
     recomputed_decision_digest = decision_digest(normative)
     stored_decision_digest = decision_event.get("digest") if isinstance(decision_event.get("digest"), str) else ""
@@ -147,6 +148,14 @@ def _policy_from_payload(decision_payload: Mapping[str, Any]) -> Mapping[str, st
             out["policy_version"] = policy_version
         return out
     return {}
+
+
+def _as_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    return None
 
 
 def _authoritative_from_event(intent_event: Mapping[str, Any], correlation_id: str) -> dict[str, Any]:

@@ -568,6 +568,55 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         """Snapshot proxy for observer UI — no auth."""
         return app.state.store.snapshot(limit=limit, offset=offset, stream_id=stream_id)
 
+    @app.get("/ui/verify-chain", include_in_schema=False)
+    async def ui_verify_chain(
+        stream_id: str = Query("default"),
+    ) -> dict[str, object]:
+        """Recompute v_digest from all events and compare to rolling digest."""
+        store = app.state.store
+        snap = store.snapshot(limit=1, offset=0, stream_id=stream_id)
+        rolling = snap.get("v_digest", "")
+        event_count = snap.get("length", 0)
+        recomputed = store.recompute_v_digest()
+        return {
+            "rolling_digest": rolling,
+            "recomputed_digest": recomputed,
+            "match": rolling == recomputed,
+            "event_count": event_count,
+            "warning": "large event store" if event_count > 10000 else None,
+        }
+
+    @app.get("/ui/replay", include_in_schema=False)
+    async def ui_replay(
+        thread_id: str = Query(...),
+        turn_id: str = Query(...),
+    ) -> JSONResponse:
+        """Replay a decision for a specific turn — no auth."""
+        from .replay import DecisionReplayError, replay_decision_for_turn
+
+        store = app.state.store
+        try:
+            result = replay_decision_for_turn(
+                store,
+                thread_id=thread_id,
+                turn_id=turn_id,
+                policy=app.state.policy,
+            )
+            return JSONResponse({
+                "match": result.recomputed_decision_digest == result.stored_decision_digest,
+                "recomputed_digest": result.recomputed_decision_digest,
+                "stored_digest": result.stored_decision_digest,
+                "assembly_digest": result.assembly_digest,
+                "context_digest": result.context_digest,
+                "decision_index": result.decision_event.get("index"),
+                "intent_index": result.intent_event.get("index"),
+            })
+        except DecisionReplayError as exc:
+            return JSONResponse(
+                {"error": exc.reason, "detail": exc.detail},
+                status_code=422,
+            )
+
     _static_dir = Path(__file__).parent / "static"
     if _static_dir.is_dir():
         from starlette.staticfiles import StaticFiles

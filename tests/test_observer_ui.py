@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -11,12 +12,15 @@ from starlette.requests import Request
 
 from dbl_gateway.app import create_app
 from dbl_gateway.store.sqlite import SQLiteStore
+from dbl_gateway.wire_contract import INTERFACE_VERSION
 
 
 @pytest.fixture(autouse=True)
-def _env(monkeypatch: pytest.MonkeyPatch) -> None:
+def _env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("DBL_GATEWAY_AUTH_MODE", "dev")
     monkeypatch.setenv("DBL_GATEWAY_INLINE_DECISION", "1")
+    monkeypatch.setenv("GATEWAY_ENABLE_CONTEXT_RESOLUTION", "1")
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
 
 
 def _make_app() -> Any:
@@ -49,6 +53,30 @@ def _append_test_event(
     )
     defaults.update(overrides)
     return store.append(**defaults)
+
+
+def _intent_envelope(
+    message: object,
+    *,
+    correlation_id: str = "c-1",
+    thread_id: str = "thread-1",
+    turn_id: str = "turn-1",
+) -> dict[str, object]:
+    return {
+        "interface_version": INTERFACE_VERSION,
+        "correlation_id": correlation_id,
+        "payload": {
+            "stream_id": "default",
+            "lane": "user_chat",
+            "actor": "user",
+            "intent_type": "chat.message",
+            "thread_id": thread_id,
+            "turn_id": turn_id,
+            "parent_turn_id": None,
+            "requested_model_id": "gpt-4o-mini",
+            "payload": {"message": message},
+        },
+    }
 
 
 def _get_ui_tail_route(app: Any) -> Any:
@@ -233,6 +261,58 @@ class TestUiSnapshotProxy:
             assert resp.status_code == 200
             data = resp.json()
             assert "v_digest" in data
+
+        asyncio.run(_with_client(app, check))
+
+
+class TestUiVerificationProxy:
+    """Tests for the verification proxy endpoints."""
+
+    def test_ui_verify_chain_no_auth(self) -> None:
+        """GET /ui/verify-chain returns a matching recomputed digest without auth."""
+        app = _make_app()
+
+        async def check(client: httpx.AsyncClient) -> None:
+            resp = await client.post("/ingress/intent", json=_intent_envelope("hello verify"))
+            assert resp.status_code == 202
+
+            verify = await client.get("/ui/verify-chain")
+            assert verify.status_code == 200
+            data = verify.json()
+            assert data["match"] is True
+            assert data["rolling_digest"] == data["recomputed_digest"]
+            assert data["event_count"] >= 4
+
+        asyncio.run(_with_client(app, check))
+
+    def test_ui_replay_no_auth(self) -> None:
+        """GET /ui/replay returns matching decision digests for a valid turn."""
+        app = _make_app()
+
+        async def check(client: httpx.AsyncClient) -> None:
+            resp = await client.post("/ingress/intent", json=_intent_envelope("hello replay"))
+            assert resp.status_code == 202
+
+            replay = await client.get("/ui/replay", params={"thread_id": "thread-1", "turn_id": "turn-1"})
+            assert replay.status_code == 200
+            data = replay.json()
+            assert data["match"] is True
+            assert data["recomputed_digest"] == data["stored_digest"]
+            assert isinstance(data["decision_index"], int)
+            assert isinstance(data["intent_index"], int)
+
+        asyncio.run(_with_client(app, check))
+
+    def test_ui_replay_missing_turn(self) -> None:
+        """GET /ui/replay returns 422 when the requested turn does not exist."""
+        app = _make_app()
+
+        async def check(client: httpx.AsyncClient) -> None:
+            replay = await client.get("/ui/replay", params={"thread_id": "missing-thread", "turn_id": "missing-turn"})
+            assert replay.status_code == 422
+            data = replay.json()
+            assert data["error"] in {"decision.not_found", "intent.not_found"}
+            assert "detail" in data
 
         asyncio.run(_with_client(app, check))
 

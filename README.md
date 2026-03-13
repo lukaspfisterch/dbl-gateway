@@ -114,12 +114,28 @@ Two-column layout: sidebar with three semantic panels, main area with the event 
 
 - **Agent Activity** — live phase tracking per turn, last event per kind, turn count.
 - **Capabilities** — gateway version, providers, model health, surfaces.
-- **Verify** — current `v_digest`, event count, last DECISION metadata.
+- **Verify** — current `v_digest`, event count, last DECISION metadata, active chain verification, and per-turn decision replay.
 
 Events are grouped by turn (`correlation_id`), color-coded by kind, and show
 delta-time between events in the same turn.
 
-All `/ui/*` routes are read-only infrastructure and require no authentication.
+Verification stays server-side. The browser only works with events and calls
+read-only observer routes:
+
+- `GET /ui/tail` — SSE event stream for the observer.
+- `GET /ui/capabilities` — provider and surface summary.
+- `GET /ui/snapshot` — latest `v_digest` and event count.
+- `GET /ui/verify-chain` — full-chain `v_digest` recomputation and match/mismatch result.
+- `GET /ui/replay?thread_id=...&turn_id=...` — decision replay for one turn.
+
+Workflow:
+
+1. Open `/ui`.
+2. Send an intent.
+3. Click `Verify Chain` in the Verify panel to recompute the full chain.
+4. Click a `DECISION` event row to replay that turn and compare stored vs recomputed decision digests.
+
+All `/ui/*` routes are read-only observer infrastructure and require no authentication.
 
 ## What This Is Not
 
@@ -154,7 +170,8 @@ action may execute. Policy rules are defined externally in dbl-policy.
 
 ## Status
 
-**v0.9.2.** Observer UI with semantic panels (activity, capabilities, verify).
+**v0.9.3.** Observer UI with active verification: semantic panels, full-chain `v_digest`
+recomputation, and per-turn decision replay from the browser.
 Substrate-axiom enforcement (A1 append-only, A5 turn-local order, A3/A4 governance-input purity).
 Chain-of-record lineage, context release guard, policy config digest.
 Self-describing capabilities via `GET /capabilities`. Wire contract v3.

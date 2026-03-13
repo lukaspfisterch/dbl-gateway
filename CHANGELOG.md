@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.9.3 — Active Verification
+
+**Phase 3: Browser-triggered verification on top of the semantic observer panels.**
+- `GET /ui/verify-chain` added as an auth-free observer route: recomputes the full `v_digest` chain from persisted events and compares it to the rolling store state.
+- `GET /ui/replay` added as an auth-free observer route: replays a single turn decision by `thread_id` + `turn_id` and returns digest match/mismatch details.
+- Observer UI Verify panel now supports active verification:
+  - `Verify Chain` button shows `VALID` / `MISMATCH` for the full chain.
+  - Clicking a `DECISION` row triggers server-side replay and shows per-turn verification status.
+  - Mismatch output includes stored vs recomputed digest values for triage.
+- Replay path aligned with runtime reality:
+  - replay uses the gateway's configured policy adapter, not a fresh default adapter.
+  - replay digest recomputation now includes `intent_index`, matching stored normative DECISION digests.
+- Store adapter/port extended so UI verification can call `recompute_v_digest()` through the app state abstraction.
+- Observer UI tests expanded with auth-free coverage for chain verification, successful replay, and missing-turn replay failure.
+
 ## v0.9.2 — Semantic Panels
 
 **Phase 2: Three sidebar panels alongside the event stream.**

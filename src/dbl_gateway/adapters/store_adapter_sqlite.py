@@ -65,5 +65,8 @@ class SQLiteStoreAdapter(StorePort):
     ):
         return self._store.timeline(thread_id=thread_id, include_payload=include_payload)
 
+    def recompute_v_digest(self) -> str:
+        return self._store.recompute_v_digest()
+
     def close(self) -> None:
         self._store.close()

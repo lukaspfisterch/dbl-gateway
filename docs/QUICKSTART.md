@@ -41,6 +41,9 @@ curl http://127.0.0.1:8010/capabilities
 ```
 
 Open the built-in observer UI at `http://127.0.0.1:8010/ui` to watch events in real-time.
+The Verify panel now supports active browser-triggered verification:
+- `Verify Chain` recomputes the full `v_digest` chain server-side.
+- Clicking a `DECISION` row replays that turn server-side and reports digest match/mismatch.
 
 ## Send an intent
 
@@ -88,6 +91,24 @@ The gateway produces four events for every intent:
 2. **DECISION** -- policy verdict (`ALLOW` / `DENY`), permitted tools, enforced budget. Normative.
 3. **PROOF** -- context release guard (`payload_digest` of what is sent to the provider).
 4. **EXECUTION** -- model output, tool calls, blocked tools, usage. Observational.
+
+## Verify in the UI
+
+After sending an intent, the observer should show four events:
+
+1. **INTENT**
+2. **DECISION**
+3. **PROOF**
+4. **EXECUTION**
+
+Then:
+
+1. Click `Verify Chain` in the Verify panel.
+2. Expect `Chain: VALID` when the rolling digest matches a full recomputation.
+3. Click the `DECISION` event row.
+4. Expect `Decision #N: VALID` when replay reproduces the stored DECISION digest.
+
+If verification fails, the panel shows the stored and recomputed digests for comparison.
 
 ## Next
 
