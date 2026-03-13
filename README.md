@@ -117,7 +117,6 @@ Three-zone layout:
 - **Verify** — current `v_digest`, event count, last DECISION metadata, active chain verification, and per-turn decision replay.
 - **Event Stream** — chronological turn-grouped event timeline with click selection.
 - **Inspector** — event detail, turn-local view, and raw JSON for the selected event.
-- **Demo Agent** — integrated controller for a demo scenario.
 
 Events are grouped by turn (`correlation_id`), color-coded by kind, and show
 delta-time between events in the same turn.
