@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DBL Gateway — Event Observer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 14px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid #2a2a4a;
+  flex-shrink: 0;
+}
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+header h1 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #a0a0c0;
+  letter-spacing: 0.5px;
+}
+.header-meta {
+  font-size: 12px;
+  color: #555;
+}
+.header-meta span { margin-right: 12px; }
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #666;
+}
+.status-dot.live { background: #4aff9e; }
+.status-dot.error { background: #ff4a4a; }
+#event-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+/* Turn separator — thin line between correlation groups */
+.turn-sep {
+  height: 1px;
+  background: #2a2a4a;
+  margin: 4px 20px;
+}
+.event-row {
+  display: grid;
+  grid-template-columns: 50px 95px 1fr 80px 80px 60px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 20px;
+  font-size: 13px;
+}
+.event-row:hover { background: #22224a; }
+/* Indent non-INTENT events within a turn */
+.event-row.turn-child {
+  padding-left: 32px;
+}
+.event-idx {
+  color: #555;
+  text-align: right;
+}
+.event-kind {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-align: center;
+}
+.kind-INTENT     { background: #4a9eff22; color: #4a9eff; border: 1px solid #4a9eff44; }
+.kind-DECISION   { background: #4aff9e22; color: #4aff9e; border: 1px solid #4aff9e44; }
+.kind-PROOF      { background: #b44aff22; color: #b44aff; border: 1px solid #b44aff44; }
+.kind-EXECUTION  { background: #ff9e4a22; color: #ff9e4a; border: 1px solid #ff9e4a44; }
+.event-intent-type { color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-corr { color: #555; font-size: 12px; }
+.event-actor { color: #666; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-dt {
+  color: #666;
+  font-size: 11px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.event-dt.slow { color: #ff9e4a; }
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px;
+  border-top: 1px solid #2a2a4a;
+  flex-shrink: 0;
+}
+.count { color: #555; font-size: 12px; }
+button {
+  background: #2a2a4a;
+  color: #a0a0c0;
+  border: 1px solid #3a3a5a;
+  padding: 4px 14px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+button:hover { background: #3a3a5a; }
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #444;
+  font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>DBL Gateway &mdash; Event Observer</h1>
+    <div class="header-meta">
+      <span id="stream-label">stream: default</span>
+      <span id="event-count">0 events</span>
+    </div>
+  </div>
+  <div class="status">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="status-text">Connecting</span>
+  </div>
+</header>
+
+<div id="event-log">
+  <div class="empty-state" id="empty-state">Waiting for events&hellip;</div>
+</div>
+
+<footer>
+  <span class="count" id="footer-info"></span>
+  <button onclick="clearLog()">Clear</button>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var log = document.getElementById("event-log");
+  var emptyState = document.getElementById("empty-state");
+  var statusDot = document.getElementById("status-dot");
+  var statusText = document.getElementById("status-text");
+  var countEl = document.getElementById("event-count");
+  var count = 0;
+
+  // Turn tracking for grouping and delta-time
+  var lastCorrelationId = null;
+  var turnTimestamps = {};  // correlation_id -> { first: Date, last: Date }
+
+  function setStatus(text, state) {
+    statusText.textContent = text;
+    statusDot.className = "status-dot " + state;
+  }
+
+  function updateCount() {
+    countEl.textContent = count + " event" + (count !== 1 ? "s" : "");
+  }
+
+  function appendEvent(evt) {
+    if (emptyState) {
+      emptyState.remove();
+      emptyState = null;
+    }
+
+    var cid = evt.correlation_id || "";
+    var now = new Date();
+    var isNewTurn = cid !== lastCorrelationId;
+    var isChild = evt.kind !== "INTENT" && !isNewTurn;
+
+    // Insert turn separator when correlation_id changes
+    if (isNewTurn && count > 0) {
+      var sep = document.createElement("div");
+      sep.className = "turn-sep";
+      log.appendChild(sep);
+    }
+
+    // Track timestamps per turn
+    if (!turnTimestamps[cid]) {
+      turnTimestamps[cid] = { first: now, last: now };
+    }
+    var dt = now - turnTimestamps[cid].last;
+    turnTimestamps[cid].last = now;
+
+    var row = document.createElement("div");
+    row.className = "event-row" + (isChild ? " turn-child" : "");
+
+    // #index
+    var idx = document.createElement("span");
+    idx.className = "event-idx";
+    idx.textContent = "#" + (evt.index != null ? evt.index : "?");
+
+    // KIND badge
+    var kind = document.createElement("span");
+    kind.className = "event-kind kind-" + (evt.kind || "UNKNOWN");
+    kind.textContent = evt.kind || "UNKNOWN";
+
+    // intent_type
+    var intentType = document.createElement("span");
+    intentType.className = "event-intent-type";
+    intentType.textContent = evt.intent_type || "";
+
+    // correlation_id (truncated)
+    var corr = document.createElement("span");
+    corr.className = "event-corr";
+    corr.textContent = cid.length > 8 ? cid.substring(0, 8) + "\u2026" : cid;
+    corr.title = cid;
+
+    // actor
+    var actor = document.createElement("span");
+    actor.className = "event-actor";
+    actor.textContent = evt.actor || "";
+
+    // delta-time (skip for first event in turn)
+    var dtEl = document.createElement("span");
+    dtEl.className = "event-dt";
+    if (!isNewTurn && dt > 0) {
+      var dtText;
+      if (dt < 1000) {
+        dtText = dt + "ms";
+      } else {
+        dtText = (dt / 1000).toFixed(1) + "s";
+      }
+      dtEl.textContent = "\u0394" + dtText;
+      if (dt > 2000) dtEl.classList.add("slow");
+    }
+
+    row.appendChild(idx);
+    row.appendChild(kind);
+    row.appendChild(intentType);
+    row.appendChild(corr);
+    row.appendChild(dtEl);
+    row.appendChild(actor);
+    log.appendChild(row);
+
+    lastCorrelationId = cid;
+    count++;
+    updateCount();
+
+    log.scrollTop = log.scrollHeight;
+  }
+
+  window.clearLog = function () {
+    while (log.firstChild) log.removeChild(log.firstChild);
+    count = 0;
+    lastCorrelationId = null;
+    turnTimestamps = {};
+    updateCount();
+    emptyState = document.createElement("div");
+    emptyState.className = "empty-state";
+    emptyState.id = "empty-state";
+    emptyState.textContent = "Waiting for events\u2026";
+    log.appendChild(emptyState);
+  };
+
+  function connect() {
+    setStatus("Connecting", "");
+    var es = new EventSource("/ui/tail");
+
+    es.addEventListener("envelope", function (e) {
+      try {
+        var data = JSON.parse(e.data);
+        appendEvent(data);
+      } catch (err) {
+        console.error("Failed to parse SSE event:", err);
+      }
+    });
+
+    es.onopen = function () {
+      setStatus("Live", "live");
+    };
+
+    es.onerror = function () {
+      setStatus("Disconnected", "error");
+    };
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>

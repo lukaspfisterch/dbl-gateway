@@ -100,6 +100,21 @@ exposing `execute()` and `get_capabilities()` against a formal
 `ProviderCapabilities` schema. Runtime capabilities are self-describing
 via `GET /capabilities`.
 
+## Observer UI
+
+The gateway serves a built-in event observer at `/ui` (also the root redirect target).
+No separate frontend, no frameworks — a single HTML file that connects via SSE to
+`/ui/tail` and renders the event stream in real-time.
+
+```
+http://127.0.0.1:8010/ui
+```
+
+Events are grouped by turn (`correlation_id`), color-coded by kind, and show
+delta-time between events in the same turn.
+
+The `/ui/tail` proxy requires no authentication — it is read-only infrastructure.
+
 ## What This Is Not
 
 - Not a RAG pipeline.
@@ -133,6 +148,7 @@ action may execute. Policy rules are defined externally in dbl-policy.
 
 ## Status
 
-**v0.9.0.** Substrate-axiom enforcement (A1 append-only stream, A5 turn-local order, A3/A4 governance-input purity),
-plus chain-of-record lineage (`intent_index`), context release guard (PROOF events), and policy config digest.
+**v0.9.1.** Built-in event observer UI at `/ui`. Substrate-axiom enforcement
+(A1 append-only, A5 turn-local order, A3/A4 governance-input purity).
+Chain-of-record lineage, context release guard, policy config digest.
 Self-describing capabilities via `GET /capabilities`. Wire contract v3.

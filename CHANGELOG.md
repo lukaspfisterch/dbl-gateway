@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.9.1 — Event Observer UI
+
+**Phase 1: Pure event observer served by the gateway itself.**
+- `GET /ui` serves a single-file observer page (no frameworks, no dependencies).
+- `GET /ui/tail` — auth-free SSE proxy for browser EventSource (read-only infrastructure).
+- Root redirect: `GET /` -> `/ui/`.
+- SSE generator extracted into shared `_sse_event_stream()` helper, used by both `/tail` and `/ui/tail`.
+- Turn grouping by `correlation_id` with visual separators.
+- Delta-time column shows latency between events in the same turn.
+- Sticky header with stream name and event count.
+- 6 new tests covering proxy auth bypass, SSE format, lane filtering, header contract, OpenAPI exclusion, and HTML serving.
+
 ## v0.9.0 — Substrate Axiom Enforcement
 
 **Axiom-level runtime enforcement in the gateway core.**

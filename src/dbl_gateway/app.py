@@ -8,12 +8,14 @@ import traceback
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any, Mapping, Sequence
+from collections.abc import AsyncGenerator
+from pathlib import Path
+from typing import Any, Callable, Mapping, Sequence
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request
 import os
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dbl_core.normalize.trace import sanitize_trace
 from dbl_core.events.trace_digest import trace_digest
@@ -74,6 +76,68 @@ def _assert_governance_input(authoritative: Mapping[str, Any]) -> None:
         raise GovernanceInputViolation(
             f"I-GOV-INPUT-1: observational keys in governance input: {sorted(unexpected)}"
         )
+
+
+# ── SSE helpers ──────────────────────────────────────────────────────
+
+
+def _parse_lane_filter(lanes: str | None) -> set[str] | None:
+    """Parse comma-separated lane string into a filter set."""
+    if not lanes:
+        return None
+    result = {lane.strip() for lane in lanes.split(",") if lane.strip()}
+    return result or None
+
+
+async def _sse_event_stream(
+    store: Any,
+    stream_id: str | None,
+    since: int,
+    lane_filter: set[str] | None,
+    is_disconnected: Callable[[], Any],
+) -> AsyncGenerator[str, None]:
+    """Shared SSE generator for /tail and /ui/tail."""
+    cursor = max(since + 1, 0)
+    while True:
+        if await is_disconnected():
+            break
+        snap = store.snapshot(
+            limit=2000,
+            offset=cursor,
+            stream_id=stream_id,
+        )
+        events = snap.get("events", [])
+        if not events:
+            await asyncio.sleep(0.5)
+            continue
+        max_index = cursor - 1
+        for event in events:
+            idx = event.get("index")
+            if isinstance(idx, int) and idx > max_index:
+                max_index = idx
+            if lane_filter and event.get("lane") not in lane_filter:
+                continue
+            data = json.dumps(event, ensure_ascii=True, separators=(",", ":"))
+            event_id = str(idx) if isinstance(idx, int) else ""
+            if event_id:
+                yield f"id: {event_id}\nevent: envelope\ndata: {data}\n\n"
+            else:
+                yield f"event: envelope\ndata: {data}\n\n"
+        if max_index >= cursor:
+            cursor = max_index + 1
+
+
+def _sse_response(generator: AsyncGenerator[str, None]) -> StreamingResponse:
+    """Wrap an SSE generator in a StreamingResponse with correct headers."""
+    return StreamingResponse(
+        generator,
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 def _configure_logging() -> None:
@@ -147,6 +211,10 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
             latency_ms,
         )
         return response
+
+    @app.get("/", include_in_schema=False)
+    async def root_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/ui/", status_code=302)
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
@@ -399,47 +467,12 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         if last_event_id and last_event_id.isdigit():
             since = max(since, int(last_event_id))
 
-        lane_filter: set[str] | None = None
-        if lanes:
-            lane_filter = {lane.strip() for lane in lanes.split(",") if lane.strip()}
-            if not lane_filter:
-                lane_filter = None
+        lane_filter = _parse_lane_filter(lanes)
+        norm_stream = _normalize_optional_str(stream_id, "stream_id") if stream_id else None
 
-        async def event_stream():
-            cursor = max(since + 1, 0)
-            while True:
-                if await request.is_disconnected():
-                    break
-                snap = app.state.store.snapshot(
-                    limit=2000,
-                    offset=cursor,
-                    stream_id=_normalize_optional_str(stream_id, "stream_id") if stream_id else None,
-                )
-                events = snap.get("events", [])
-                if not events:
-                    await asyncio.sleep(0.5)
-                    continue
-                max_index = cursor - 1
-                for event in events:
-                    idx = event.get("index")
-                    if isinstance(idx, int) and idx > max_index:
-                        max_index = idx
-                    if lane_filter and event.get("lane") not in lane_filter:
-                        continue
-                    data = json.dumps(event, ensure_ascii=True, separators=(",", ":"))
-                    event_id = str(idx) if isinstance(idx, int) else ""
-                    if event_id:
-                        yield f"id: {event_id}\n"
-                    yield "event: envelope\n"
-                    yield f"data: {data}\n\n"
-                if max_index >= cursor:
-                    cursor = max_index + 1
-
-        headers = {
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        }
-        return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
+        return _sse_response(
+            _sse_event_stream(app.state.store, norm_stream, since, lane_filter, request.is_disconnected),
+        )
 
     @app.get("/status")
     async def status_surface(
@@ -504,6 +537,27 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         except ParentValidationError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"ok": True, "execution_index": event["index"]}
+
+    # ── Observer UI ──────────────────────────────────────────────────
+    @app.get("/ui/tail", include_in_schema=False)
+    async def ui_tail(
+        request: Request,
+        stream_id: str = Query("default"),
+        since: int = Query(-1, ge=-1),
+        lanes: str | None = Query(None),
+    ) -> StreamingResponse:
+        """SSE proxy for observer UI — read-only, no auth required."""
+        lane_filter = _parse_lane_filter(lanes)
+        norm_stream = _normalize_optional_str(stream_id, "stream_id") if stream_id else None
+        return _sse_response(
+            _sse_event_stream(app.state.store, norm_stream, since, lane_filter, request.is_disconnected),
+        )
+
+    _static_dir = Path(__file__).parent / "static"
+    if _static_dir.is_dir():
+        from starlette.staticfiles import StaticFiles
+
+        app.mount("/ui", StaticFiles(directory=str(_static_dir), html=True), name="observer-ui")
 
     return app
 
