@@ -137,6 +137,28 @@ Workflow:
 
 All `/ui/*` routes are read-only observer infrastructure and require no authentication.
 
+### Demo Agent
+
+For a live demo, run the bundled demo agent after the gateway is up and at least
+one provider is active in `GET /capabilities`:
+
+```bash
+./.venv/bin/python scripts/demo_agent.py --base-url http://127.0.0.1:8010
+```
+
+The script acts as a visible actor (`demo-agent`) and sends a small balanced
+sequence of turns:
+
+- normal turn
+- follow-up turn
+- tool-and-budget turn
+- intentional governance-shape deny
+- recovery turn
+
+It prints what it is doing, posts each intent to `/ingress/intent`, and watches
+the resulting turn events so the terminal output, gateway, and `/ui` stream stay
+in sync during the demo.
+
 ## What This Is Not
 
 - Not a RAG pipeline.

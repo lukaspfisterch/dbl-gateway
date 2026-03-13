@@ -110,6 +110,26 @@ Then:
 
 If verification fails, the panel shows the stored and recomputed digests for comparison.
 
+## Run the demo agent
+
+If at least one provider is active in `GET /capabilities`, you can drive the
+observer without manual `curl` calls:
+
+```bash
+./.venv/bin/python scripts/demo_agent.py --base-url http://127.0.0.1:8010
+```
+
+The demo agent:
+
+1. checks that the gateway is healthy
+2. requires at least one active provider/model
+3. sends a small scripted sequence of intents
+4. prints each resulting turn as events arrive
+
+This is intended for live demos: the agent becomes visible as `actor=demo-agent`,
+the event stream moves on its own, and the Verify panel can be used while the
+script is running.
+
 ## Next
 
 - [ARCHITECTURE.md](../docs/ARCHITECTURE.md) -- three-surface model
