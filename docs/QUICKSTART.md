@@ -40,6 +40,8 @@ curl http://127.0.0.1:8010/healthz
 curl http://127.0.0.1:8010/capabilities
 ```
 
+Open the built-in observer UI at `http://127.0.0.1:8010/ui` to watch events in real-time.
+
 ## Send an intent
 
 ```
@@ -80,11 +82,12 @@ Response (acknowledgement only, not execution output):
 curl "http://127.0.0.1:8010/tail?stream_id=default&since=0"
 ```
 
-The gateway produces three events for every intent:
+The gateway produces four events for every intent:
 
 1. **INTENT** -- the request as received, immutable.
 2. **DECISION** -- policy verdict (`ALLOW` / `DENY`), permitted tools, enforced budget. Normative.
-3. **EXECUTION** -- model output, tool calls, blocked tools, usage. Observational.
+3. **PROOF** -- context release guard (`payload_digest` of what is sent to the provider).
+4. **EXECUTION** -- model output, tool calls, blocked tools, usage. Observational.
 
 ## Next
 
