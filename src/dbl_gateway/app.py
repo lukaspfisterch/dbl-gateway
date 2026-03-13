@@ -33,7 +33,7 @@ from .ports.policy_port import DecisionResult
 from .models import EventRecord
 from .projection import project_runner_state, state_payload
 from .store.factory import create_store
-from .store.sqlite import ParentValidationError
+from .store.sqlite import OrderViolationError, ParentValidationError
 from .wire_contract import parse_intent_envelope
 from .auth import (
     Actor,
@@ -47,6 +47,33 @@ from .auth import (
 
 
 _LOGGER = logging.getLogger("dbl_gateway")
+
+# I-GOV-INPUT-1: Governance input must be derived exclusively from I_L.
+# These are the only top-level keys allowed in the authoritative input dict
+# passed to PolicyPort.decide(). Observational data (O_obs) — provider
+# responses, execution results, timing, traces — is structurally excluded.
+_GOVERNANCE_ALLOWED_KEYS: frozenset[str] = frozenset({
+    "stream_id",
+    "lane",
+    "actor",
+    "intent_type",
+    "correlation_id",
+    "payload",
+    "tenant_id",
+})
+
+
+class GovernanceInputViolation(RuntimeError):
+    """I-GOV-INPUT-1: Observational data detected in governance input."""
+
+
+def _assert_governance_input(authoritative: Mapping[str, Any]) -> None:
+    """I-GOV-INPUT-1: Assert governance input contains only I_L keys."""
+    unexpected = set(authoritative.keys()) - _GOVERNANCE_ALLOWED_KEYS
+    if unexpected:
+        raise GovernanceInputViolation(
+            f"I-GOV-INPUT-1: observational keys in governance input: {sorted(unexpected)}"
+        )
 
 
 def _configure_logging() -> None:
@@ -220,6 +247,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
 
         # Metadata-only intents: delegate decision to policy, skip execution.
         if authoritative["intent_type"] in {"artifact.handle"}:
+            _assert_governance_input(authoritative)
             decision = app.state.policy.decide(authoritative)
             app.state.store.append(
                 kind="DECISION",
@@ -618,6 +646,7 @@ async def _process_intent(
         _tool_scope = auth_payload.get("tool_scope")
         _client_budget = auth_payload.get("budget")
 
+        _assert_governance_input(authoritative)
         try:
             decision = app.state.policy.decide(authoritative)
         except Exception as exc:

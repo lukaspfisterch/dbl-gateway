@@ -13,6 +13,14 @@ class ParentValidationError(ValueError):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
+
+
+class OrderViolationError(RuntimeError):
+    """I-ORDER-1: EXECUTION appended without a preceding DECISION."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 from ..event_builder import make_event
 
 from ..models import EventRecord, Snapshot
@@ -80,6 +88,26 @@ class SQLiteStore:
             self._conn.execute(
                 "CREATE INDEX IF NOT EXISTS events_correlation_id ON events(correlation_id)"
             )
+            # I-STREAM-1: Append-only event stream (A1).
+            # Events are immutable once appended. UPDATE and DELETE are forbidden.
+            self._conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS events_no_update
+                BEFORE UPDATE ON events
+                BEGIN
+                    SELECT RAISE(ABORT, 'I-STREAM-1: events are immutable once appended');
+                END
+                """
+            )
+            self._conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS events_no_delete
+                BEFORE DELETE ON events
+                BEGIN
+                    SELECT RAISE(ABORT, 'I-STREAM-1: events are immutable once appended');
+                END
+                """
+            )
             self._conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS v_state (
@@ -116,6 +144,9 @@ class SQLiteStore:
             raise TypeError(f"payload must be a dict; got {type(payload).__name__}")
         payload_obj: dict[str, object] = dict(payload)
         self._validate_parent(thread_id, turn_id, parent_turn_id)
+        # I-ORDER-1: EXECUTION requires a preceding DECISION in the same turn.
+        if kind == "EXECUTION":
+            self._require_preceding_decision(thread_id, turn_id, correlation_id)
         event = make_event(
             kind=kind,
             thread_id=thread_id,
@@ -264,6 +295,20 @@ class SQLiteStore:
                 raise ParentValidationError("parent_turn_id introduces cycle")
             visited.add(current)
             current = parent_map.get(current)
+
+    def _require_preceding_decision(
+        self, thread_id: str, turn_id: str, correlation_id: str
+    ) -> None:
+        """I-ORDER-1: For each turn, t(DECISION) < t(EXECUTION)."""
+        row = self._conn.execute(
+            "SELECT 1 FROM events WHERE kind = 'DECISION' AND thread_id = ? AND turn_id = ? LIMIT 1",
+            (thread_id, turn_id),
+        ).fetchone()
+        if row is None:
+            raise OrderViolationError(
+                f"I-ORDER-1: no DECISION precedes EXECUTION for turn_id={turn_id!r}, "
+                f"correlation_id={correlation_id!r}"
+            )
 
     def snapshot(
         self,

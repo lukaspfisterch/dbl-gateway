@@ -2,6 +2,20 @@
 
 Invariants that the gateway maintains across all requests. Violations are bugs.
 
+## Substrate Axioms (from DBL Paper)
+
+These invariants enforce the formal axioms from the DBL paper. They are the foundation on which all other invariants rest.
+
+**I-STREAM-1** (A1): The event stream V is append-only. Once an event is persisted, it MUST NOT be modified or removed. The only allowed mutation is `append(e_new)`. Enforced via SQLite triggers that block UPDATE and DELETE on the events table.
+
+**I-ORDER-1** (A5): For each turn, `t(DECISION) < t(EXECUTION)`. An EXECUTION event MUST NOT be appended unless a DECISION event already exists for the same turn. Enforced in the store layer before insertion.
+
+**I-GOV-INPUT-1** (A3/A4): Governance input MUST be derived exclusively from authoritative inputs I_L. Observational data O_obs (provider responses, execution results, timing, traces) MUST NOT be present in the input to `PolicyPort.decide()`. Enforced by key-set validation before every policy call. Allowed keys: `stream_id`, `lane`, `actor`, `intent_type`, `correlation_id`, `payload`, `tenant_id`.
+
+**I-STREAM-2** (A1): Events are cryptographically linked. The stream digest `v_digest` is updated on every append via `v_digest_step(prev_digest, index, event_digest)`. A replayer can recompute the full digest from the event sequence and verify stream integrity.
+
+**I-NORM-1** (A2): Only DECISION events are normative. `V_norm = { e in V | kind(e) = DECISION }`. INTENT, EXECUTION, and PROOF events are observational and carry no normative authority. The `is_authoritative` field is set exclusively for DECISION events.
+
 ## Tool Gating
 
 **I-TOOL-1**: If `tool_scope_enforced == "strict"` and a provider returns a tool call whose `tool_name` is not in `permitted_tools`, the call MUST appear in `tool_blocked` (not `tool_calls`) in the EXECUTION event.
