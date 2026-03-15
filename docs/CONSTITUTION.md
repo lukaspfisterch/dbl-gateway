@@ -2,7 +2,8 @@
 
 ## What This System Is
 
-dbl-gateway is the execution boundary for the Deterministic Boundary Layer.
+dbl-gateway is the reference runtime implementation of the DBL execution boundary
+for the Deterministic Boundary Layer.
 It accepts declared intents, applies policy, executes permitted calls,
 and records everything as an append-only event stream.
 
@@ -23,4 +24,4 @@ and records everything as an append-only event stream.
 
 ## Authority
 
-The [Deterministic Boundary Layer](https://github.com/lukaspfisterch/deterministic-boundary-layer) specification is the theoretical authority. This gateway is one implementation of that specification.
+The [Deterministic Boundary Layer](https://github.com/lukaspfisterch/deterministic-boundary-layer) specification is the theoretical authority. This gateway is the reference runtime implementation of the DBL execution boundary.

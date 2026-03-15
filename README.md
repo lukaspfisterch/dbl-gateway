@@ -7,7 +7,8 @@
 When organizations deploy LLM systems, they quickly need to answer three questions:
 Who asked what, what was permitted, and what actually happened.
 
-dbl-gateway is the execution boundary for the Deterministic Boundary Layer.
+dbl-gateway is the reference runtime implementation of the DBL execution boundary
+for the Deterministic Boundary Layer.
 It accepts declared intents, enforces policy decisions, and records everything
 as an append-only, digest-pinned event stream.
 

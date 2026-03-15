@@ -1,6 +1,7 @@
 # Architecture
 
-The gateway enforces a deterministic boundary between what a caller asks for,
+dbl-gateway is the reference runtime implementation of the DBL execution
+boundary. It enforces a deterministic boundary between what a caller asks for,
 what policy allows, and what actually executes.
 
 Every request passes through a deterministic event chain:
