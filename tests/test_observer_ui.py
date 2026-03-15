@@ -318,15 +318,24 @@ class TestUiSnapshotProxy:
 
         asyncio.run(_with_client(app, check))
 
-    def test_ui_policy_structure_unavailable_without_describe(self) -> None:
-        """GET /ui/policy-structure returns unavailable when policy has no describe()."""
+    def test_ui_policy_structure_opaque_without_describe(self) -> None:
+        """GET /ui/policy-structure falls back to opaque metadata when describe() is missing."""
         app = _make_app()
 
         async def check(client: httpx.AsyncClient) -> None:
             resp = await client.get("/ui/policy-structure")
             assert resp.status_code == 200
             data = resp.json()
-            assert data["available"] is False
+            assert data["available"] is True
+            assert data["source"] == "opaque"
+            assert data["policy_id"] == "test"
+            assert data["policy_version"] == "1"
+            assert data["tree"]["path"] == "root"
+            assert data["tree"]["kind"] == "opaque_policy"
+            assert data["tree"]["label"] == "test"
+            assert data["tree"]["children"] == []
+            assert data["tree"]["meta"]["policy_module"] == "policy_stub"
+            assert data["tree"]["meta"]["policy_class"] == "AllowPolicy"
             assert "describe" in data["detail"]
 
         asyncio.run(_with_client(app, check))

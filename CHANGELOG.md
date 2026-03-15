@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.9.10 — Opaque Policy Fallback
+
+**The observer now degrades gracefully when a loaded policy has no structural `describe()` surface.**
+- Keep `GET /ui/policy-structure` usable for plain `dbl-policy` objects that do not expose `describe()`.
+- Return an `opaque_policy` tree with policy id, version, module, class, and digest instead of hard `Unavailable`.
+- Preserve the richer structural tree path for policies that do expose `describe()`.
+- Align observer docs and discovery metadata so `/ui/policy-structure` is listed in capability surfaces.
+- Add observer UI coverage for the opaque-policy fallback path.
+
 ## v0.9.9 — Policy Tree Inspector
 
 **The observer now includes a structural policy view for DECISION events.**

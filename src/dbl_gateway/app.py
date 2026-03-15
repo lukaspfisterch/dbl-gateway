@@ -192,9 +192,29 @@ def _policy_structure_payload(policy_obj: object | None) -> dict[str, Any]:
         }
     describe = getattr(policy_obj, "describe", None)
     if not callable(describe):
+        policy_module = type(policy_obj).__module__
+        policy_class = type(policy_obj).__name__
+        policy_id = _policy_identity_value(getattr(policy_obj, "policy_id", None))
+        policy_version = _policy_identity_value(getattr(policy_obj, "policy_version", None))
+        opaque_description = {
+            "type": "opaque_policy",
+            "label": policy_id or policy_class,
+            "policy_module": policy_module,
+            "policy_class": policy_class,
+            "policy_id": policy_id,
+            "policy_version": policy_version,
+        }
+        digest = hashlib.sha256(
+            json.dumps(opaque_description, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+        ).hexdigest()
         return {
-            "available": False,
-            "detail": "Current policy does not expose describe().",
+            "available": True,
+            "source": "opaque",
+            "policy_id": policy_id,
+            "policy_version": policy_version,
+            "digest": digest,
+            "tree": _policy_tree_node(opaque_description, path="root"),
+            "detail": "Current policy does not expose describe(); showing opaque metadata only.",
         }
     try:
         description = describe()

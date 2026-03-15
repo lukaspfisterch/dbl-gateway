@@ -702,6 +702,7 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
         catalog = data["surface_catalog"]
         assert isinstance(catalog, list)
         assert any(item["id"] == "surfaces" and item["path"] == "/surfaces" for item in catalog)
+        assert any(item["id"] == "ui_policy_structure" and item["path"] == "/ui/policy-structure" for item in catalog)
         assert any(item["id"] == "ui_intent" and item["path"] == "/ui/intent" for item in catalog)
         providers = data["providers"]
         assert isinstance(providers, list)
@@ -729,6 +730,7 @@ def test_surfaces_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         surfaces = data["surfaces"]
         assert isinstance(surfaces, list)
         assert any(item["id"] == "capabilities" and item["path"] == "/capabilities" for item in surfaces)
+        assert any(item["id"] == "ui_policy_structure" and item["path"] == "/ui/policy-structure" for item in surfaces)
         assert any(item["id"] == "ui_demo_start" and item["path"] == "/ui/demo/start" for item in surfaces)
         assert any(item["id"] == "ui_tail" and item["auth"] == "none" for item in surfaces)
 

@@ -116,7 +116,8 @@ dbl-gateway serve --host 127.0.0.1 --port 8010
 Open `/ui` to watch the event chain in real time.
 
 The built-in observer includes the event stream, decision replay, chain
-verification, manual intent submission, and the integrated demo controller.
+verification, a policy inspector for DECISION events, manual intent submission,
+and the integrated demo controller.
 
 ## Discovery
 

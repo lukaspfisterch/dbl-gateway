@@ -24,6 +24,7 @@ unless it affects wire behavior.
 - `GET /ui/tail` — auth-free SSE stream for browser `EventSource`.
 - `GET /ui/capabilities` — auth-free observer proxy for capabilities.
 - `GET /ui/snapshot` — auth-free observer proxy for the latest `v_digest` and event count.
+- `GET /ui/policy-structure` — auth-free observer proxy for the current policy inspector payload.
 - `POST /ui/intent` — auth-free observer proxy for manual intent submission from the UI.
 - `GET /ui/verify-chain` — auth-free full-chain `v_digest` recomputation and match/mismatch report.
 - `GET /ui/replay?thread_id=...&turn_id=...` — auth-free decision replay for one turn.

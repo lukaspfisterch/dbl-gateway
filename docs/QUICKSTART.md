@@ -44,6 +44,7 @@ Open the built-in observer UI at `http://127.0.0.1:8010/ui` to watch events in r
 The Verify panel now supports active browser-triggered verification:
 - `Verify Chain` recomputes the full `v_digest` chain server-side.
 - The inspector replays a selected `DECISION` turn server-side and reports digest match/mismatch.
+- The `Policy` tab on a selected `DECISION` shows either a structural policy tree or an opaque policy summary when `describe()` is unavailable.
 - The right-side `Demo Agent` panel can run the demo scenario directly from the UI.
 - The left-side `Manual Intent` panel can send a valid minimal intent directly from the UI.
 

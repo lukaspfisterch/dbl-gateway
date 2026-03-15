@@ -323,6 +323,14 @@ def get_surface_catalog() -> list[dict[str, object]]:
             "description": "Observer proxy for latest snapshot state.",
         },
         {
+            "id": "ui_policy_structure",
+            "path": "/ui/policy-structure",
+            "methods": ["GET"],
+            "auth": "none",
+            "plane": "observer_ui",
+            "description": "Observer proxy for the current policy inspector payload.",
+        },
+        {
             "id": "ui_intent",
             "path": "/ui/intent",
             "methods": ["POST"],

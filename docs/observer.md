@@ -28,16 +28,24 @@ The stream groups events by `correlation_id` and shows:
 Selecting an event opens the inspector with:
 
 - `Event` view
+- `Policy` view for `DECISION` events
 - `Turn` view
 - `Raw` view
 
-From a selected `DECISION`, the inspector can trigger replay.
+From a selected `DECISION`, the inspector can trigger replay and inspect the
+currently loaded policy.
+
+If the loaded policy exposes `describe()`, the inspector renders a structural
+tree. If not, it falls back to an `opaque_policy` view with policy id, version,
+module, class, and digest so the inspector stays useful for non-structural
+policies such as `dbl_policy.allow_all`.
 
 ## Verification
 
 The observer uses auth-free proxy routes:
 
 - `GET /ui/snapshot`
+- `GET /ui/policy-structure`
 - `GET /ui/verify-chain`
 - `GET /ui/replay`
 
