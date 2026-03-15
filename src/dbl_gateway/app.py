@@ -1376,6 +1376,11 @@ def _maybe_activate_demo_mode() -> None:
         os.environ["DBL_GATEWAY_INLINE_DECISION"] = "1"
         _LOGGER.info("  inline decision enabled")
 
+    # --- Default context resolution for replayable demo turns ---
+    if not os.getenv("GATEWAY_ENABLE_CONTEXT_RESOLUTION", "").strip():
+        os.environ["GATEWAY_ENABLE_CONTEXT_RESOLUTION"] = "1"
+        _LOGGER.info("  context resolution enabled")
+
     stub_mode = os.getenv("STUB_MODE", "echo")
     _LOGGER.info("  stub mode: %s", stub_mode)
     _LOGGER.info("  -> Open http://localhost:8010/ui/")

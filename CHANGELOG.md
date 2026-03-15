@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.9.8 — Demo Replay Default
+
+**Zero-config demo mode now defaults to replayable turns.**
+- When `GATEWAY_DEMO_MODE=1` and `GATEWAY_ENABLE_CONTEXT_RESOLUTION` is unset,
+  the gateway now enables context resolution automatically.
+- This keeps the existing production feature gate intact while making the
+  demo path replay-ready by default.
+- Explicit `GATEWAY_ENABLE_CONTEXT_RESOLUTION=0/false/no` still wins and is not
+  overridden.
+- Added tests covering both the default-on and explicit-off demo cases.
+
 ## v0.9.7 — Policy Contract Alignment
 
 **The gateway now aligns with `dbl-policy 0.3.x` as a contract-first policy layer.**

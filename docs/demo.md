@@ -41,6 +41,7 @@ When `GATEWAY_DEMO_MODE=1`:
 - Policy defaults to `dbl_policy.allow_all` when none is configured.
 - SQLite trail defaults to `data/demo-trail.sqlite`.
 - Inline decision processing is enabled (no work queue).
+- Context resolution defaults to ON so observer replay works out of the box.
 - Startup log prints the browser entry path.
 
 ## Scenario

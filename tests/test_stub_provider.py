@@ -204,3 +204,41 @@ class TestDemoModeActivation:
                 assert os.environ.get("DBL_GATEWAY_POLICY_MODULE") == "dbl_policy.allow_all"
 
         asyncio.run(run())
+
+    def test_demo_mode_enables_context_resolution_by_default(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        monkeypatch.setenv("GATEWAY_DEMO_MODE", "1")
+        monkeypatch.setenv("DBL_GATEWAY_AUTH_MODE", "dev")
+        monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "demo-context.sqlite"))
+        monkeypatch.delenv("GATEWAY_ENABLE_CONTEXT_RESOLUTION", raising=False)
+
+        import os
+        from dbl_gateway.app import create_app
+
+        app = create_app(start_workers=False)
+
+        async def run() -> None:
+            async with app.router.lifespan_context(app):
+                assert os.environ.get("GATEWAY_ENABLE_CONTEXT_RESOLUTION") == "1"
+
+        asyncio.run(run())
+
+    def test_demo_mode_does_not_override_explicit_context_resolution_setting(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ) -> None:
+        monkeypatch.setenv("GATEWAY_DEMO_MODE", "1")
+        monkeypatch.setenv("DBL_GATEWAY_AUTH_MODE", "dev")
+        monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "demo-context-explicit.sqlite"))
+        monkeypatch.setenv("GATEWAY_ENABLE_CONTEXT_RESOLUTION", "0")
+
+        import os
+        from dbl_gateway.app import create_app
+
+        app = create_app(start_workers=False)
+
+        async def run() -> None:
+            async with app.router.lifespan_context(app):
+                assert os.environ.get("GATEWAY_ENABLE_CONTEXT_RESOLUTION") == "0"
+
+        asyncio.run(run())

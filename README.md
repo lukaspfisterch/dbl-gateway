@@ -52,6 +52,8 @@ GATEWAY_DEMO_MODE=1 dbl-gateway serve
 
 The stub provider generates synthetic responses through the full
 INTENT, DECISION, PROOF, EXECUTION chain.
+Demo mode also enables context resolution by default so observer replay works
+without extra env setup.
 
 ## One-Command Start
 
@@ -140,9 +142,3 @@ See:
 - [docs/wire_contract.md](docs/wire_contract.md)
 - [docs/env_contract.md](docs/env_contract.md)
 - [CHANGELOG.md](CHANGELOG.md)
-
-## Status
-
-**v0.9.7.** Zero-config stub demo plus policy-boundary alignment for
-`dbl-policy 0.3.x`, including contract-safe evaluation and structured
-authoritative inputs.
