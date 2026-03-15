@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.9.9 — Policy Tree Inspector
+
+**The observer now includes a structural policy view for DECISION events.**
+- Add `GET /ui/policy-structure` as an auth-free observer route.
+- Add a `Policy` tab to the bottom inspector for DECISION events.
+- Render the current policy as a tree with structural paths, labels, metadata,
+  and digest.
+- Add a togglable `70/30` and `30/70` inspector layout for tree vs detail.
+- Add observer UI tests for policy structure availability and HTML tab presence.
+
 ## v0.9.8 — Demo Replay Default
 
 **Zero-config demo mode now defaults to replayable turns.**
