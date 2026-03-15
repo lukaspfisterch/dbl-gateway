@@ -11,6 +11,7 @@ import pytest
 from starlette.requests import Request
 
 from dbl_gateway.app import create_app
+from dbl_gateway.adapters.policy_adapter_dbl_policy import DblPolicyAdapter
 from dbl_gateway.ports.execution_port import ExecutionResult
 from dbl_gateway.store.sqlite import SQLiteStore
 from dbl_gateway.wire_contract import INTERFACE_VERSION
@@ -26,6 +27,38 @@ def _env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
 def _make_app() -> Any:
     return create_app(start_workers=False)
+
+
+class _DescribePolicy:
+    def describe(self) -> dict[str, object]:
+        return {
+            "describe_version": 1,
+            "type": "root_policy",
+            "policy_id": "chat.guardrails",
+            "policy_version": "1.0.0",
+            "root": {
+                "describe_version": 1,
+                "type": "chain",
+                "label": "guardrail_chain",
+                "gates": [
+                    {
+                        "describe_version": 1,
+                        "type": "match",
+                        "label": "chat_capability",
+                        "key": "capability",
+                        "value": "chat",
+                    },
+                    {
+                        "describe_version": 1,
+                        "type": "bound",
+                        "label": "output_token_limit",
+                        "key": "max_output_tokens",
+                        "lo": 1,
+                        "hi": 4096,
+                    },
+                ],
+            },
+        }
 
 
 async def _with_client(app: Any, fn: Any) -> Any:
@@ -265,6 +298,39 @@ class TestUiSnapshotProxy:
 
         asyncio.run(_with_client(app, check))
 
+    def test_ui_policy_structure_no_auth(self) -> None:
+        """GET /ui/policy-structure returns viewer payload when policy exposes describe()."""
+        app = _make_app()
+
+        async def check(client: httpx.AsyncClient) -> None:
+            app.state.policy = DblPolicyAdapter(policy=_DescribePolicy())
+            resp = await client.get("/ui/policy-structure")
+            assert resp.status_code == 200
+            assert resp.headers.get("cache-control") == "max-age=30"
+            data = resp.json()
+            assert data["available"] is True
+            assert data["source"] == "describe"
+            assert data["policy_id"] == "chat.guardrails"
+            assert data["policy_version"] == "1.0.0"
+            assert data["tree"]["path"] == "root"
+            assert data["tree"]["kind"] == "root_policy"
+            assert data["tree"]["children"][0]["kind"] == "chain"
+
+        asyncio.run(_with_client(app, check))
+
+    def test_ui_policy_structure_unavailable_without_describe(self) -> None:
+        """GET /ui/policy-structure returns unavailable when policy has no describe()."""
+        app = _make_app()
+
+        async def check(client: httpx.AsyncClient) -> None:
+            resp = await client.get("/ui/policy-structure")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["available"] is False
+            assert "describe" in data["detail"]
+
+        asyncio.run(_with_client(app, check))
+
 
 class TestUiIntentProxy:
     """Tests for the auth-free manual intent proxy."""
@@ -455,5 +521,6 @@ class TestObserverHtml:
             assert "text/html" in resp.headers.get("content-type", "")
             assert "Event Observer" in resp.text
             assert "Manual Intent" in resp.text
+            assert 'data-tab="policy"' in resp.text
 
         asyncio.run(_with_client(app, check))

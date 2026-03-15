@@ -255,6 +255,11 @@ header h1 {
   cursor: pointer;
 }
 .btn-sm:hover { background: #3a3a5a; }
+.btn-sm.active {
+  color: #d5d5ea;
+  border-color: #4a6aff;
+  background: #4a6aff1f;
+}
 
 /* Event stream */
 #event-log {
@@ -374,6 +379,115 @@ header h1 {
   overflow-y: auto;
   padding: 14px 16px 16px;
 }
+.policy-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.policy-toolbar-note {
+  color: #77779b;
+  font-size: 12px;
+}
+.policy-toolbar-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.policy-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(240px, 3fr);
+  gap: 14px;
+}
+.policy-layout.reverse {
+  grid-template-columns: minmax(240px, 3fr) minmax(0, 7fr);
+}
+.policy-pane {
+  border: 1px solid #26264a;
+  border-radius: 8px;
+  background: #16162d;
+  min-width: 0;
+}
+.policy-pane-title {
+  font-size: 10px;
+  color: #6f6f94;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 10px 12px 0;
+}
+.policy-pane-body {
+  padding: 10px 12px 12px;
+}
+.policy-tree {
+  display: grid;
+  gap: 8px;
+}
+.policy-children {
+  display: grid;
+  gap: 8px;
+  margin-left: 18px;
+  padding-left: 12px;
+  border-left: 1px solid #26264a;
+  margin-top: 8px;
+}
+.policy-node {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #303056;
+  border-radius: 8px;
+  background: #131328;
+  padding: 8px 10px;
+}
+.policy-node:hover {
+  background: #1a1a35;
+}
+.policy-node.selected {
+  border-color: #4a6aff;
+  background: #1a2242;
+}
+.policy-node-kind {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid #3b3b66;
+  color: #d5d5ea;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.policy-node-label {
+  color: #b7b7d4;
+  font-size: 12px;
+  margin-left: 8px;
+}
+.policy-node-path {
+  color: #666;
+  font-size: 10px;
+  margin-top: 6px;
+  word-break: break-all;
+}
+.policy-meta-list {
+  display: grid;
+  gap: 6px;
+}
+.policy-meta-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+.policy-meta-key {
+  color: #666;
+}
+.policy-meta-value {
+  color: #b7b7d4;
+  text-align: right;
+  word-break: break-word;
+}
 .inspector-empty {
   display: flex;
   align-items: center;
@@ -481,6 +595,10 @@ header h1 {
   }
   .turn-event-meta {
     display: none;
+  }
+  .policy-layout,
+  .policy-layout.reverse {
+    grid-template-columns: 1fr;
   }
 }
 footer {
@@ -649,6 +767,7 @@ button:hover { background: #3a3a5a; }
     </div>
     <div class="inspector-tabs">
       <button class="tab-btn active" data-tab="event">Event</button>
+      <button class="tab-btn" data-tab="policy">Policy</button>
       <button class="tab-btn" data-tab="turn">Turn</button>
       <button class="tab-btn" data-tab="raw">Raw</button>
     </div>
@@ -723,6 +842,10 @@ button:hover { background: #3a3a5a; }
   var eventRows = [];  // { row: HTMLElement, evt: object }
   var selectedEvent = null;
   var selectedTab = "event";
+  var policyStructureCache = null;
+  var policyStructurePromise = null;
+  var policySelectedPath = null;
+  var policyLayout = window.localStorage.getItem("dbl.policyInspectorLayout") || "70-30";
 
   // ── Agent Activity state ────────────────────────────────────────
   var activity = {
@@ -996,6 +1119,10 @@ button:hover { background: #3a3a5a; }
     return d.innerHTML;
   }
 
+  function escAttr(s) {
+    return esc(s).replace(/"/g, "&quot;");
+  }
+
   function shortDigest(value, limit) {
     var text = String(value || "");
     if (!text) return "\u2014";
@@ -1020,6 +1147,122 @@ button:hover { background: #3a3a5a; }
 
   function detailCard(title, body, wide) {
     return '<div class="detail-card' + (wide ? ' wide' : '') + '"><div class="detail-card-title">' + esc(title) + '</div>' + body + '</div>';
+  }
+
+  function loadPolicyStructure(force) {
+    if (force) {
+      policyStructureCache = null;
+      policyStructurePromise = null;
+    }
+    if (policyStructureCache) {
+      return Promise.resolve(policyStructureCache);
+    }
+    if (policyStructurePromise) {
+      return policyStructurePromise;
+    }
+    policyStructurePromise = fetch("/ui/policy-structure")
+      .then(function (resp) { return resp.json(); })
+      .then(function (data) {
+        policyStructureCache = data;
+        policyStructurePromise = null;
+        return data;
+      })
+      .catch(function () {
+        policyStructurePromise = null;
+        return { available: false, detail: "Policy structure unavailable." };
+      });
+    return policyStructurePromise;
+  }
+
+  function findPolicyNode(node, path) {
+    if (!node) return null;
+    if (node.path === path) return node;
+    var children = node.children || [];
+    for (var i = 0; i < children.length; i++) {
+      var found = findPolicyNode(children[i], path);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function renderPolicyTreeNode(node) {
+    var selected = node.path === policySelectedPath ? " selected" : "";
+    var label = node.label ? '<span class="policy-node-label">' + esc(node.label) + '</span>' : "";
+    var html = '<div class="policy-branch">';
+    html += '<button class="policy-node' + selected + '" data-policy-path="' + escAttr(node.path) + '">';
+    html += '<span class="policy-node-kind">' + esc(node.kind) + '</span>' + label;
+    html += '<div class="policy-node-path">' + esc(node.path) + '</div>';
+    html += '</button>';
+    if (node.children && node.children.length) {
+      html += '<div class="policy-children">';
+      for (var i = 0; i < node.children.length; i++) {
+        html += renderPolicyTreeNode(node.children[i]);
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderPolicyNodeDetail(data, node) {
+    var html = "";
+    html += detailRow("Kind", node.kind || "\u2014");
+    html += detailRow("Label", node.label || "\u2014");
+    html += detailRow("Path", node.path || "\u2014");
+    html += detailRow("Policy ID", data.policy_id || "\u2014");
+    html += detailRow("Policy Version", data.policy_version || "\u2014");
+    html += digestRow("Digest", data.digest || "");
+    var meta = node.meta || {};
+    var keys = Object.keys(meta);
+    if (!keys.length) {
+      html += '<div class="panel-section"><div class="panel-section-title">Meta</div><div class="panel-row"><span class="panel-label">\u2014</span></div></div>';
+      return html;
+    }
+    html += '<div class="panel-section"><div class="panel-section-title">Meta</div><div class="policy-meta-list">';
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      var value = meta[key];
+      html += '<div class="policy-meta-row"><span class="policy-meta-key">' + esc(key) + '</span><span class="policy-meta-value">' + esc(typeof value === "string" ? value : JSON.stringify(value)) + '</span></div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderPolicyStructurePanel(data, evt) {
+    var toolbar = '<div class="policy-toolbar">'
+      + '<div class="policy-toolbar-note">Current loaded policy structure for decision #' + esc(String(evt.index)) + '</div>'
+      + '<div class="policy-toolbar-actions">'
+      + '<button class="btn-sm" data-policy-refresh="1">Refresh</button>'
+      + '<button class="btn-sm' + (policyLayout === "70-30" ? ' active' : '') + '" data-policy-layout="70-30">70/30</button>'
+      + '<button class="btn-sm' + (policyLayout === "30-70" ? ' active' : '') + '" data-policy-layout="30-70">30/70</button>'
+      + '</div>'
+      + '</div>';
+    if (!data.available) {
+      return toolbar + detailCard("Policy Structure", detailRow("Status", "Unavailable") + detailRow("Detail", data.detail || "\u2014"), true);
+    }
+    var selectedNode = findPolicyNode(data.tree, policySelectedPath || data.tree.path) || data.tree;
+    policySelectedPath = selectedNode.path;
+    var layoutClass = policyLayout === "30-70" ? "policy-layout reverse" : "policy-layout";
+    return toolbar
+      + '<div class="' + layoutClass + '">'
+      + '<div class="policy-pane"><div class="policy-pane-title">Policy Tree</div><div class="policy-pane-body"><div class="policy-tree">' + renderPolicyTreeNode(data.tree) + '</div></div></div>'
+      + '<div class="policy-pane"><div class="policy-pane-title">Node Detail</div><div class="policy-pane-body">' + renderPolicyNodeDetail(data, selectedNode) + '</div></div>'
+      + '</div>';
+  }
+
+  function renderPolicyInspector(evt) {
+    if (evt.kind !== "DECISION") {
+      inspectorContent.innerHTML = '<div class="inspector-empty">Select a DECISION event to inspect the current policy tree.</div>';
+      return;
+    }
+    inspectorContent.innerHTML = '<div class="inspector-empty">Loading policy structure\u2026</div>';
+    loadPolicyStructure(false).then(function (data) {
+      if (selectedEvent !== evt || selectedTab !== "policy") return;
+      if (data.available && !policySelectedPath && data.tree) {
+        policySelectedPath = data.tree.path;
+      }
+      inspectorContent.innerHTML = renderPolicyStructurePanel(data, evt);
+    });
   }
 
   function eventByCorrelation(correlationId) {
@@ -1095,6 +1338,8 @@ button:hover { background: #3a3a5a; }
     }
     if (selectedTab === "turn") {
       inspectorContent.innerHTML = renderTurnInspector(evt);
+    } else if (selectedTab === "policy") {
+      renderPolicyInspector(evt);
     } else if (selectedTab === "raw") {
       inspectorContent.innerHTML = detailCard("Raw Event", jsonBlock(evt), true);
     } else {
@@ -1518,6 +1763,28 @@ button:hover { background: #3a3a5a; }
       setInspectorTab(this.getAttribute("data-tab"));
     });
   }
+  inspectorContent.addEventListener("click", function (event) {
+    var pathButton = event.target.closest("[data-policy-path]");
+    if (pathButton && selectedTab === "policy") {
+      policySelectedPath = pathButton.getAttribute("data-policy-path");
+      renderInspector();
+      return;
+    }
+    var layoutButton = event.target.closest("[data-policy-layout]");
+    if (layoutButton && selectedTab === "policy") {
+      policyLayout = layoutButton.getAttribute("data-policy-layout") || "70-30";
+      window.localStorage.setItem("dbl.policyInspectorLayout", policyLayout);
+      renderInspector();
+      return;
+    }
+    var refreshButton = event.target.closest("[data-policy-refresh]");
+    if (refreshButton && selectedTab === "policy") {
+      inspectorContent.innerHTML = '<div class="inspector-empty">Loading policy structure\u2026</div>';
+      loadPolicyStructure(true).then(function () {
+        renderInspector();
+      });
+    }
+  });
   closeInspector();
   connect();
   loadCapabilities();

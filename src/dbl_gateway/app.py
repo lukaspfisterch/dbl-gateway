@@ -174,6 +174,96 @@ def _sse_response(generator: AsyncGenerator[str, None]) -> StreamingResponse:
     )
 
 
+_POLICY_DESCRIBE_STRUCTURAL_KEYS: frozenset[str] = frozenset({
+    "describe_version",
+    "type",
+    "label",
+    "root",
+    "gates",
+    "inner",
+})
+
+
+def _policy_structure_payload(policy_obj: object | None) -> dict[str, Any]:
+    if policy_obj is None:
+        return {
+            "available": False,
+            "detail": "No policy loaded.",
+        }
+    describe = getattr(policy_obj, "describe", None)
+    if not callable(describe):
+        return {
+            "available": False,
+            "detail": "Current policy does not expose describe().",
+        }
+    try:
+        description = describe()
+    except Exception as exc:
+        return {
+            "available": False,
+            "detail": f"Policy describe() failed: {exc}",
+        }
+    if not isinstance(description, Mapping):
+        return {
+            "available": False,
+            "detail": "Policy describe() must return a mapping.",
+        }
+    digest = hashlib.sha256(
+        json.dumps(description, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    ).hexdigest()
+    return {
+        "available": True,
+        "source": "describe",
+        "policy_id": _policy_identity_value(getattr(policy_obj, "policy_id", None)) or _mapping_str(description.get("policy_id")),
+        "policy_version": _policy_identity_value(getattr(policy_obj, "policy_version", None)) or _mapping_str(description.get("policy_version")),
+        "digest": digest,
+        "tree": _policy_tree_node(dict(description), path="root"),
+    }
+
+
+def _policy_identity_value(value: object) -> str | None:
+    if value is None:
+        return None
+    nested = getattr(value, "value", None)
+    if nested is not None:
+        return str(nested)
+    return str(value)
+
+
+def _mapping_str(value: object) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+
+
+def _policy_tree_node(description: Mapping[str, Any], *, path: str) -> dict[str, Any]:
+    return {
+        "path": path,
+        "kind": description["type"],
+        "label": description.get("label"),
+        "meta": {
+            key: value
+            for key, value in description.items()
+            if key not in _POLICY_DESCRIBE_STRUCTURAL_KEYS
+        },
+        "children": _policy_tree_children(description, path=path),
+    }
+
+
+def _policy_tree_children(description: Mapping[str, Any], *, path: str) -> list[dict[str, Any]]:
+    kind = description["type"]
+    if kind == "root_policy":
+        return [_policy_tree_node(description["root"], path=f"{path}.root")]
+    if kind in {"chain", "any_of"}:
+        return [
+            _policy_tree_node(child, path=f"{path}.gates[{index}]")
+            for index, child in enumerate(description["gates"])
+        ]
+    if kind == "invert":
+        return [_policy_tree_node(description["inner"], path=f"{path}.inner")]
+    return []
+
+
 def _configure_logging() -> None:
     if _LOGGER.handlers:
         return
@@ -475,6 +565,15 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
     ) -> dict[str, object]:
         """Snapshot proxy for observer UI — no auth."""
         return app.state.store.snapshot(limit=limit, offset=offset, stream_id=stream_id)
+
+    @app.get("/ui/policy-structure", include_in_schema=False)
+    async def ui_policy_structure() -> JSONResponse:
+        """Policy structure proxy for observer UI — no auth."""
+        policy_obj = getattr(app.state.policy, "policy", None)
+        return JSONResponse(
+            _policy_structure_payload(policy_obj),
+            headers={"Cache-Control": "max-age=30"},
+        )
 
     @app.post("/ui/intent", include_in_schema=False)
     async def ui_intent(body: dict[str, Any] = Body(...)) -> JSONResponse:
