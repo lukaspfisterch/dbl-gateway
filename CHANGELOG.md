@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.9.7 — Policy Contract Alignment
+
+**The gateway now aligns with `dbl-policy 0.3.x` as a contract-first policy layer.**
+- Update the `dbl-policy` dependency to `>=0.3.0,<0.4.0`.
+- Route policy evaluation through the policy contract's safe entrypoint instead
+  of adapter-local shape enforcement.
+- Preserve structured JSON-safe authoritative inputs at the policy boundary
+  instead of reducing them to scalar-only values.
+- Replace eager adapter package imports with lazy imports, reducing import-time
+  coupling and unblocking lightweight test collection.
+- Update gateway tests and policy stubs to match the `dbl-policy 0.3.0`
+  contract surface.
+
 ## v0.9.6 — Zero-Config Stub Demo
 
 **The gateway can now run a full governance demo without any API keys or external dependencies.**

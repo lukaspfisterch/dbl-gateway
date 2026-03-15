@@ -142,5 +142,6 @@ See:
 
 ## Status
 
-**v0.9.6.** Zero-config stub demo, observer runtime with discovery surfaces,
-integrated demo control, manual intent, and a one-command Docker start.
+**v0.9.7.** Zero-config stub demo plus policy-boundary alignment for
+`dbl-policy 0.3.x`, including contract-safe evaluation and structured
+authoritative inputs.

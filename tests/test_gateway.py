@@ -145,14 +145,19 @@ def test_decision_primacy_no_execution_without_allow(tmp_path: Path, monkeypatch
     monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
 
     class RejectPolicy:
+        from dbl_policy.model import PolicyId, PolicyVersion
+
+        policy_id = PolicyId("test")
+        policy_version = PolicyVersion("1")
+
         def evaluate(self, context):
-            from dbl_policy import DecisionOutcome, PolicyDecision, PolicyId, PolicyVersion, TenantId
+            from dbl_policy.model import DecisionOutcome, PolicyDecision, TenantId
 
             return PolicyDecision(
                 outcome=DecisionOutcome.DENY,
                 reason_code="policy.reject",
-                policy_id=PolicyId("test"),
-                policy_version=PolicyVersion("1"),
+                policy_id=self.policy_id,
+                policy_version=self.policy_version,
                 tenant_id=TenantId(context.tenant_id.value),
             )
 
@@ -377,7 +382,7 @@ def test_policy_context_is_filtered(monkeypatch: pytest.MonkeyPatch) -> None:
     assert set(context.inputs.keys()) == {"principal_id", "capability"}
 
 
-def test_policy_context_rejects_nested_shapes() -> None:
+def test_policy_context_preserves_nested_json_safe_shapes() -> None:
     authoritative = {
         "stream_id": "default",
         "lane": "user_chat",
@@ -389,17 +394,17 @@ def test_policy_context_rejects_nested_shapes() -> None:
             "inputs": {
                 "principal_id": "user-1",
                 "extensions": {"secret": "nope"},
+                "request_tags": ["alpha", "beta"],
             },
         },
     }
-    adapter = governance.DblPolicyAdapter()
-    decision = adapter.decide(authoritative)
-    assert decision.decision == "DENY"
-    assert decision.reason_codes == ["context.invalid_shape"]
+    context = governance._build_policy_context(authoritative)
+    assert context.inputs["extensions"] == {"secret": "nope"}
+    assert context.inputs["request_tags"] == ["alpha", "beta"]
 
 
-@pytest.mark.parametrize("bad_value", [[], {}, b"bytes"])
-def test_policy_context_rejects_non_scalar(bad_value) -> None:
+@pytest.mark.parametrize("value", [[], {}])
+def test_policy_context_allows_structured_json_safe_values(value) -> None:
     authoritative = {
         "stream_id": "default",
         "lane": "user_chat",
@@ -409,14 +414,32 @@ def test_policy_context_rejects_non_scalar(bad_value) -> None:
         "payload": {
             "message": "hi",
             "inputs": {
-                "principal_id": bad_value,
+                "extensions": value,
+            },
+        },
+    }
+    context = governance._build_policy_context(authoritative)
+    assert context.inputs["extensions"] == value
+
+
+def test_policy_context_rejects_non_json_safe_value() -> None:
+    authoritative = {
+        "stream_id": "default",
+        "lane": "user_chat",
+        "actor": "user",
+        "intent_type": "chat.message",
+        "correlation_id": "c-1",
+        "payload": {
+            "message": "hi",
+            "inputs": {
+                "extensions": b"bytes",
             },
         },
     }
     adapter = governance.DblPolicyAdapter()
     decision = adapter.decide(authoritative)
     assert decision.decision == "DENY"
-    assert decision.reason_codes == ["context.invalid_shape"]
+    assert decision.reason_codes == ["invalid_input"]
 
 
 def test_digest_excludes_obs_fields() -> None:

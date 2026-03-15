@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dbl-gateway"
-version = "0.9.6"
+version = "0.9.7"
 description = "DBL Gateway"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
@@ -26,7 +26,7 @@ classifiers = [
 license-files = ["LICENSE"]
 dependencies = [
   "dbl-core>=0.3.2,<0.4.0",
-  "dbl-policy>=0.2.0,<0.3.0",
+  "dbl-policy>=0.3.0,<0.4.0",
   "dbl-main>=0.3.0,<0.4.0",
   "dbl-ingress>=0.1.1,<0.2.0",
   "kl-kernel-logic>=0.5.0,<0.6.0",

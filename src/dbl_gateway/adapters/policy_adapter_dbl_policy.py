@@ -4,16 +4,17 @@ from dataclasses import dataclass
 from importlib import import_module
 from typing import Any, Mapping, get_type_hints
 
-from dbl_policy import (
+from dbl_policy import decide_safe
+from dbl_policy.bridge import decision_to_dbl_event
+from dbl_policy.model import ALLOWED_CONTEXT_KEYS as POLICY_ALLOWED_CONTEXT_KEYS
+from dbl_policy.model import (
+    DecisionOutcome,
     Policy,
     PolicyContext,
     PolicyDecision,
-    decision_to_dbl_event,
-    DecisionOutcome,
     PolicyId,
     PolicyVersion,
 )
-from dbl_policy.model import ALLOWED_CONTEXT_KEYS as POLICY_ALLOWED_CONTEXT_KEYS
 
 from ..ports.policy_port import DecisionResult, PolicyPort
 
@@ -23,12 +24,15 @@ ALLOWED_CONTEXT_KEYS = set(POLICY_ALLOWED_CONTEXT_KEYS)
 
 class ObserverPolicy:
     """Policy that always denies in Observer Mode."""
+    policy_id = PolicyId("observer")
+    policy_version = PolicyVersion("1")
+
     def evaluate(self, context: Any) -> PolicyDecision:
         return PolicyDecision(
             outcome=DecisionOutcome.DENY,
             reason_code="gateway.observer_mode",
-            policy_id=PolicyId("observer"),
-            policy_version=PolicyVersion("1"),
+            policy_id=self.policy_id,
+            policy_version=self.policy_version,
             tenant_id=context.tenant_id,
         )
 
@@ -51,12 +55,12 @@ class DblPolicyAdapter(PolicyPort):
                 policy_version="1",
             )
 
-        try:
-            context = _build_policy_context(authoritative_input)
-        except ContextShapeError:
-            return DecisionResult(decision="DENY", reason_codes=["context.invalid_shape"])
         policy = self.policy or _load_policy()
-        decision = policy.evaluate(context)
+        decision = decide_safe(
+            policy,
+            tenant_id=_tenant_id_value(authoritative_input),
+            inputs=_extract_policy_inputs(authoritative_input),
+        )
         gate_event = decision_to_dbl_event(decision, authoritative_input["correlation_id"])
         policy_version = _policy_version_as_str(decision.policy_version.value)
         return DecisionResult(
@@ -69,37 +73,29 @@ class DblPolicyAdapter(PolicyPort):
 
 
 def _build_policy_context(authoritative_input: Mapping[str, Any]) -> PolicyContext:
+    filtered = _extract_policy_inputs(authoritative_input)
+    tenant_type = _tenant_id_type()
+    try:
+        tenant_value = tenant_type(_tenant_id_value(authoritative_input))
+    except Exception as exc:
+        raise RuntimeError("invalid tenant_id") from exc
+    return PolicyContext(tenant_id=tenant_value, inputs=filtered)
+
+
+def _extract_policy_inputs(authoritative_input: Mapping[str, Any]) -> Mapping[str, Any]:
     payload = authoritative_input.get("payload")
     inputs_source = payload
     if isinstance(payload, Mapping):
         maybe_inputs = payload.get("inputs")
         if isinstance(maybe_inputs, Mapping):
             inputs_source = maybe_inputs
-    if isinstance(inputs_source, Mapping):
-        filtered = {key: inputs_source[key] for key in ALLOWED_CONTEXT_KEYS if key in inputs_source}
-        _assert_scalar_inputs(filtered)
-    else:
-        filtered = {}
-    tenant = authoritative_input.get("tenant_id", "unknown")
-    tenant_type = _tenant_id_type()
-    try:
-        tenant_value = tenant_type(str(tenant))
-    except Exception as exc:
-        raise RuntimeError("invalid tenant_id") from exc
-    return PolicyContext(tenant_id=tenant_value, inputs=filtered)
+    if not isinstance(inputs_source, Mapping):
+        return {}
+    return {key: inputs_source[key] for key in ALLOWED_CONTEXT_KEYS if key in inputs_source}
 
 
-class ContextShapeError(ValueError):
-    pass
-
-
-def _assert_scalar_inputs(inputs: Mapping[str, Any]) -> None:
-    for key, value in inputs.items():
-        if value is None:
-            continue
-        if isinstance(value, (str, int, float, bool)):
-            continue
-        raise ContextShapeError(f"context key {key} must be scalar")
+def _tenant_id_value(authoritative_input: Mapping[str, Any]) -> str:
+    return str(authoritative_input.get("tenant_id", "unknown"))
 
 
 def _load_policy() -> Policy:
