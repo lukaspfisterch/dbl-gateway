@@ -63,6 +63,28 @@ Or from source:
 pip install -e .
 ```
 
+## Reference implementation
+
+`dbl-gateway` instantiates the Deterministic Boundary Layer (DBL) as a runtime
+system.
+
+It realizes the event chain INTENT → DECISION → PROOF → EXECUTION, where
+DECISION events are recorded before any execution and remain the only
+normative layer. Execution outputs are treated as non-normative observations.
+
+The gateway enforces the core invariants of the model:
+- append-only event stream
+- strict ordering of DECISION before EXECUTION
+- governance input purity (authoritative inputs only)
+- deterministic replay under fixed inputs and policy configuration
+
+As such, it serves both as a usable governed gateway and as a reference
+instantiation of the DBL model.
+
+For empirical validation, including replay equivalence and policy variation
+benchmarks, see
+[EMPIRICAL_VALIDATION.md](docs/EMPIRICAL_VALIDATION.md).
+
 ## Observer UI
 
 Open `/ui` to watch the event chain in real time.
@@ -75,6 +97,7 @@ submission, and the integrated demo controller.
 
 - [QUICKSTART.md](docs/QUICKSTART.md) — first request, reading events, UI verification
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) — surfaces, component ownership, invariants
+- [EMPIRICAL_VALIDATION.md](docs/EMPIRICAL_VALIDATION.md) — optional replay bench and policy-diff notes
 - [wire_contract.md](docs/wire_contract.md) — envelope format, tool gating, budget, refs
 - [env_contract.md](docs/env_contract.md) — all environment variables
 - [observer.md](docs/observer.md) — UI layout and verification routes

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9.11 — Replay Validation Notes
+
+**Replay validation is now documented as an optional reference-runtime artifact.**
+- Restore gateway-enriched DECISION fields during replay so normative digests reproduce exactly under fixed inputs and policy configuration.
+- Add `docs/EMPIRICAL_VALIDATION.md` with the replay bench flow, result table, and reproduction steps.
+- Refine replay documentation and README positioning so runtime users can ignore validation details unless they need the architectural background.
+
 ## v0.9.10 — Opaque Policy Fallback
 
 **The observer now degrades gracefully when a loaded policy has no structural `describe()` surface.**

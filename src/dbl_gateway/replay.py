@@ -86,12 +86,23 @@ def replay_decision_for_turn(
     except Exception as exc:
         raise DecisionReplayError("policy.failed", f"policy evaluation failed: {exc}") from exc
 
+    # Reconstruct gateway-enriched fields from stored decision payload.
+    # The gateway computes permitted_tools, enforced_budget, and
+    # policy_config_digest after policy.decide() — these are part of the
+    # normative digest and must be restored for replay equivalence.
+    stored_permitted_tools = decision_payload.get("permitted_tools")
+    stored_enforced_budget = decision_payload.get("enforced_budget")
+    stored_policy_config_digest = stored_policy.get("policy_config_digest")
+
     decision_for_digest = DecisionResult(
         decision=policy_result.decision,
         reason_codes=policy_result.reason_codes,
         policy_id=stored_policy.get("policy_id") or policy_result.policy_id,
         policy_version=stored_policy.get("policy_version") or policy_result.policy_version,
         gate_event=policy_result.gate_event,
+        permitted_tools=stored_permitted_tools if isinstance(stored_permitted_tools, list) else None,
+        enforced_budget=stored_enforced_budget if isinstance(stored_enforced_budget, dict) else None,
+        policy_config_digest=stored_policy_config_digest if isinstance(stored_policy_config_digest, str) else None,
     )
     context_digest_value = computed_context_digest if decision_for_digest.decision == "ALLOW" else None
     if decision_for_digest.decision == "ALLOW":
