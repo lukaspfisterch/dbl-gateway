@@ -1,17 +1,17 @@
 # dbl-gateway
 
-[![pytest](https://github.com/lukaspfisterch/dbl-gateway/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lukaspfisterch/dbl-gateway/actions/workflows/tests.yml)
-[![PyPI](https://img.shields.io/pypi/v/dbl-gateway.svg)](https://pypi.org/project/dbl-gateway/)
-[![Python >=3.11](https://img.shields.io/badge/python-%3E%3D3.11-3776AB.svg)](https://pypi.org/project/dbl-gateway/)
+Deterministic governance for non-deterministic systems.
 
-Inspect and replay LLM governance decisions.
+Inspect and replay LLM decisions through a deterministic execution boundary.
 
 Every request produces a decision chain:
 what was requested, what was decided, what was executed.
 
-- **Inspect** any decision: see what was requested, allowed, and executed
-- **Replay** a decision to reconstruct why it was allowed or denied
-- **Swap** the policy, re-evaluate the same input, compare outcomes
+[![pytest](https://github.com/lukaspfisterch/dbl-gateway/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lukaspfisterch/dbl-gateway/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/dbl-gateway.svg)](https://pypi.org/project/dbl-gateway/)
+[![Python >=3.11](https://img.shields.io/badge/python-%3E%3D3.11-3776AB.svg)](https://pypi.org/project/dbl-gateway/)
+
+Run it in 1 minute with Docker, or install the package and connect your own provider.
 
 No API keys required:
 
