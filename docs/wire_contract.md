@@ -204,6 +204,9 @@ Tool names must match `^[a-z][a-z0-9_.]{0,63}$`.
 | `tools_denied` | Tools removed by policy (empty in v0.6.0). |
 | `tools_denied_reason` | Reason for denial (null in v0.6.0). |
 
+Semantic tool denial is deterministic. Current runtime rule:
+- `tool.no_mix.exec_like` — tools in the `exec_like` family (`code.*`, `shell.*`, `exec.*`) are denied when mixed with any other tool family in the same declaration.
+
 ### EXECUTION Fields
 
 | Field | Description |

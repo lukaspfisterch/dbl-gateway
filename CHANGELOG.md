@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.16 — Tool Semantics And Concise Startup Audit
+
+**Tool gating now has a first semantic no-mix rule, and startup config audit is reduced to relevant runtime signals.**
+- Add semantic tool families to capability discovery and publish the first deterministic `no_mix` rule: exec-like tools are denied when mixed with any other tool family.
+- Keep the rule in boundary/runtime logic, not as a heuristic score, and surface stable denial reason `tool.no_mix.exec_like`.
+- Replace the verbose startup env dump with a concise runtime summary covering policy, boundary mode, context-resolution state, exec mode, auth mode, DB status, and active providers.
+- Add focused regression tests for semantic tool gating, capability metadata, and the concise config-audit summary.
+
 ## v0.9.15 — Explicit High-Risk Context Mode
 
 **Handle-derived context is no longer implicitly eligible for model context once fetch is enabled.**

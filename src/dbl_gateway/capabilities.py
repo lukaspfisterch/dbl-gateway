@@ -113,6 +113,8 @@ class CapabilitiesToolScope(BaseModel):
 class CapabilitiesToolSurface(BaseModel):
     declared_tools: CapabilitiesDeclaredTools
     tool_scope: CapabilitiesToolScope
+    semantic_families: dict[str, list[str]]
+    no_mix_rules: list[dict[str, Any]]
 
 
 class CapabilitiesBudgetField(BaseModel):
@@ -399,6 +401,18 @@ def get_capabilities(boundary_config: BoundaryConfig | None = None) -> dict[str,
                 "supported": list(SUPPORTED_TOOL_SCOPE),
                 "default_when_declared_tools_present": "strict",
             },
+            "semantic_families": {
+                "exec_like": ["code.*", "shell.*", "exec.*"],
+                "web_read": ["web.*"],
+                "file_ops": ["file.*", "fs.*"],
+                "data_access": ["db.*", "sql.*"],
+            },
+            "no_mix_rules": [
+                {
+                    "rule_id": "tool.no_mix.exec_like",
+                    "description": "exec-like tools are denied when mixed with any other tool family",
+                },
+            ],
         },
         "budget": {
             "fields": {

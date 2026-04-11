@@ -20,14 +20,14 @@ class TestComputePermittedTools:
         result = _compute_permitted_tools(None, None, _allow())
         assert result == (None, None, None, None)
 
-    def test_tools_passthrough(self):
-        """declared_tools are passed through as permitted_tools."""
+    def test_mixed_exec_like_and_read_tools_apply_no_mix_rule(self):
+        """Exec-like tools are denied when mixed with other families."""
         tools = ["web.search", "code.execute"]
         permitted, scope, denied, reason = _compute_permitted_tools(tools, "strict", _allow())
-        assert permitted == ["web.search", "code.execute"]
+        assert permitted == ["web.search"]
         assert scope == "strict"
-        assert denied == []
-        assert reason is None
+        assert denied == ["code.execute"]
+        assert reason == "tool.no_mix.exec_like"
 
     def test_default_scope_strict(self):
         """tool_scope defaults to 'strict' when tools are declared."""
@@ -58,3 +58,11 @@ class TestComputePermittedTools:
         permitted, scope, denied, reason = _compute_permitted_tools(None, "advisory", _allow())
         assert permitted == []
         assert scope == "advisory"
+
+    def test_exec_like_only_is_allowed(self):
+        """Pure exec-like declarations remain allowed."""
+        tools = ["code.execute", "shell.execute"]
+        permitted, scope, denied, reason = _compute_permitted_tools(tools, "strict", _allow())
+        assert permitted == ["code.execute", "shell.execute"]
+        assert denied == []
+        assert reason is None

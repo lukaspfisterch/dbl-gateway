@@ -324,13 +324,33 @@
           "declared_tools": {
             "$ref": "#/components/schemas/CapabilitiesDeclaredTools"
           },
+          "no_mix_rules": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "No Mix Rules",
+            "type": "array"
+          },
+          "semantic_families": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Semantic Families",
+            "type": "object"
+          },
           "tool_scope": {
             "$ref": "#/components/schemas/CapabilitiesToolScope"
           }
         },
         "required": [
           "declared_tools",
-          "tool_scope"
+          "tool_scope",
+          "semantic_families",
+          "no_mix_rules"
         ],
         "title": "CapabilitiesToolSurface",
         "type": "object"

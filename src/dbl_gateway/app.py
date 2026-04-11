@@ -1442,55 +1442,53 @@ async def _work_queue_loop(app: FastAPI, work_queue: asyncio.Queue) -> None:
 
 
 def _audit_env() -> None:
-    import os
-
-    def present(name: str) -> str:
-        return "FOUND" if os.getenv(name, "").strip() else "MISSING"
-
     _LOGGER.info("CONFIG AUDIT")
-    _LOGGER.info("Policy:")
-    _LOGGER.info("  DBL_GATEWAY_POLICY_MODULE: %s", present("DBL_GATEWAY_POLICY_MODULE"))
-    policy_obj = os.getenv("DBL_GATEWAY_POLICY_OBJECT", "").strip()
-    policy_obj_status = "not set (default: POLICY)" if policy_obj == "" else "FOUND"
-    _LOGGER.info("  DBL_GATEWAY_POLICY_OBJECT: %s", policy_obj_status)
-    _LOGGER.info("  GATEWAY_MODE: %s", present("GATEWAY_MODE"))
+    summary = _config_audit_summary()
+    _LOGGER.info(
+        "  policy=%s object=%s boundary=%s context_resolution=%s exec_mode=%s demo_mode=%s auth_mode=%s db=%s",
+        summary["policy_module"],
+        summary["policy_object"],
+        summary["boundary_mode"],
+        summary["context_resolution"],
+        summary["exec_mode"],
+        summary["demo_mode"],
+        summary["auth_mode"],
+        summary["db"],
+    )
+    _LOGGER.info("  providers=%s", ", ".join(summary["providers"]) if summary["providers"] else "none")
 
-    _LOGGER.info("Providers:")
-    for name in [
-        "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "GOOGLE_API_KEY",
-        "GOOGLE_GENERATIVE_AI_API_KEY",
-        "MISTRAL_API_KEY",
-        "COHERE_API_KEY",
-        "AI21_API_KEY",
-        "XAI_API_KEY",
-        "PERPLEXITY_API_KEY",
-        "OPENROUTER_API_KEY",
-        "OLLAMA_HOST",
-        "OLLAMA_BASE_URL",
-        "VLLM_ENDPOINT",
-        "LMSTUDIO_API_KEY",
-        "ANY_API_KEY",
-    ]:
-        _LOGGER.info("  %s: %s", name, present(name))
 
-    _LOGGER.info("Cloud:")
-    for name in [
-        "AZURE_OPENAI_API_KEY",
-        "AZURE_OPENAI_ENDPOINT",
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "AWS_REGION",
-    ]:
-        _LOGGER.info("  %s: %s", name, present(name))
-
-    _LOGGER.info("Storage:")
-    for name in [
-        "DATABASE_URL",
-        "REDIS_URL",
-    ]:
-        _LOGGER.info("  %s: %s", name, present(name))
+def _config_audit_summary() -> dict[str, object]:
+    provider_signals: list[tuple[str, bool]] = [
+        ("openai", bool(os.getenv("OPENAI_API_KEY", "").strip())),
+        ("anthropic", bool(os.getenv("ANTHROPIC_API_KEY", "").strip())),
+        ("google", bool(os.getenv("GOOGLE_API_KEY", "").strip() or os.getenv("GOOGLE_GENERATIVE_AI_API_KEY", "").strip())),
+        ("mistral", bool(os.getenv("MISTRAL_API_KEY", "").strip())),
+        ("cohere", bool(os.getenv("COHERE_API_KEY", "").strip())),
+        ("ai21", bool(os.getenv("AI21_API_KEY", "").strip())),
+        ("xai", bool(os.getenv("XAI_API_KEY", "").strip())),
+        ("perplexity", bool(os.getenv("PERPLEXITY_API_KEY", "").strip())),
+        ("openrouter", bool(os.getenv("OPENROUTER_API_KEY", "").strip())),
+        ("ollama", bool(os.getenv("OLLAMA_HOST", "").strip() or os.getenv("OLLAMA_BASE_URL", "").strip())),
+        ("vllm", bool(os.getenv("VLLM_ENDPOINT", "").strip())),
+        ("lmstudio", bool(os.getenv("LMSTUDIO_API_KEY", "").strip())),
+        ("any", bool(os.getenv("ANY_API_KEY", "").strip())),
+    ]
+    active_providers = [name for name, enabled in provider_signals if enabled]
+    demo_enabled = os.getenv("GATEWAY_DEMO_MODE", "").strip() in ("1", "true", "yes")
+    if demo_enabled:
+        active_providers.append("stub-demo")
+    return {
+        "policy_module": "set" if os.getenv("DBL_GATEWAY_POLICY_MODULE", "").strip() else "missing",
+        "policy_object": os.getenv("DBL_GATEWAY_POLICY_OBJECT", "").strip() or "POLICY(default)",
+        "boundary_mode": get_boundary_config().exposure_mode,
+        "context_resolution": "on" if context_resolution_enabled() else "off",
+        "exec_mode": _get_exec_mode(),
+        "demo_mode": "on" if demo_enabled else "off",
+        "auth_mode": os.getenv("DBL_GATEWAY_AUTH_MODE", "dev").strip() or "dev",
+        "db": "set" if os.getenv("DBL_GATEWAY_DB", "").strip() else "default",
+        "providers": active_providers,
+    }
 
 
 def _maybe_activate_demo_mode() -> None:
@@ -1735,7 +1733,33 @@ def _compute_permitted_tools(
         return None, None, None, None
     scope = tool_scope or "strict"
     tools = declared_tools or []
-    return tools, scope, [], None
+    denied_tools, denied_reason = _deny_unsafe_tool_mix(tools)
+    permitted_tools = [tool for tool in tools if tool not in denied_tools]
+    return permitted_tools, scope, denied_tools, denied_reason
+
+
+def _tool_family(tool_name: str) -> str:
+    tool = tool_name.strip().lower()
+    if tool in {"code.execute", "shell.execute"} or tool.startswith(("code.", "shell.", "exec.")):
+        return "exec_like"
+    if tool.startswith("web."):
+        return "web_read"
+    if tool.startswith(("file.", "fs.")):
+        return "file_ops"
+    if tool.startswith(("db.", "sql.")):
+        return "data_access"
+    return "other"
+
+
+def _deny_unsafe_tool_mix(tools: list[str]) -> tuple[list[str], str | None]:
+    if not tools:
+        return [], None
+    family_by_tool = {tool: _tool_family(tool) for tool in tools}
+    families = set(family_by_tool.values())
+    if "exec_like" in families and len(families - {"exec_like"}) > 0:
+        denied = sorted(tool for tool, family in family_by_tool.items() if family == "exec_like")
+        return denied, "tool.no_mix.exec_like"
+    return [], None
 
 
 def _compute_enforced_budget(

@@ -81,6 +81,9 @@ returned observer status/results.
 - `declared_tools`: list of tool name strings (max 20), validated against `^[a-z][a-z0-9_.]{0,63}$`.
 - `tool_scope`: `"strict"` (block undeclared) or `"advisory"` (log and allow). Default `"strict"` when `declared_tools` present.
 - In `public` exposure mode, declared tool count is additionally capped by the boundary artifact before admission.
+- `tool_surface.semantic_families` publishes the gateway's deterministic tool-family buckets.
+- `tool_surface.no_mix_rules` publishes semantic combinations the gateway will deny before execution shaping.
+- Current rule: `tool.no_mix.exec_like` denies exec-like tools when mixed with any other tool family.
 - DECISION records `permitted_tools`, `tool_scope_enforced`.
 - EXECUTION records `tool_calls` (allowed) and `tool_blocked` (blocked with reason).
 

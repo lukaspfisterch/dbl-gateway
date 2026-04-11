@@ -62,5 +62,7 @@ def test_generated_snapshot_has_contract_fields(tmp_path: Path) -> None:
     # Contract structure
     assert isinstance(data["intents"]["supported"], list)
     assert isinstance(data["tool_surface"]["declared_tools"]["max_items"], int)
+    assert "semantic_families" in data["tool_surface"]
+    assert "no_mix_rules" in data["tool_surface"]
     assert isinstance(data["budget"]["fields"]["max_tokens"]["min"], int)
     assert isinstance(data["surface_catalog"], list)

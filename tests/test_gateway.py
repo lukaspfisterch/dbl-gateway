@@ -11,7 +11,7 @@ import pytest
 import sys
 from starlette.requests import Request
 
-from dbl_gateway.app import create_app
+from dbl_gateway.app import _config_audit_summary, create_app
 from dbl_gateway.ports.execution_port import ExecutionResult
 from dbl_gateway.wire_contract import INTERFACE_VERSION
 from dbl_gateway.digest import event_digest
@@ -812,6 +812,8 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert data["intents"]["catalog"]["artifact.handle"]["risk_class"] == "high_risk_context"
         assert data["intents"]["catalog"]["artifact.handle"]["admitted"] is True
         assert data["intents"]["catalog"]["artifact.handle"]["model_context_admit_mode"] == "metadata_only"
+        assert "semantic_families" in data["tool_surface"]
+        assert data["tool_surface"]["no_mix_rules"][0]["rule_id"] == "tool.no_mix.exec_like"
         providers = data["providers"]
         assert isinstance(providers, list)
         assert providers and providers[0]["id"] == "openai"
@@ -844,6 +846,24 @@ def test_surfaces_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         assert not any(item["id"].startswith("ui_") for item in surfaces)
 
     run_with_client(app, scenario)
+
+
+def test_config_audit_summary_is_concise(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_POLICY_MODULE", "policy_stub")
+    monkeypatch.setenv("DBL_GATEWAY_POLICY_OBJECT", "")
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", _boundary_path("boundary.operator.json"))
+    monkeypatch.setenv("DBL_GATEWAY_DB", "data/trail.sqlite")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("GATEWAY_ENABLE_CONTEXT_RESOLUTION", "true")
+
+    summary = _config_audit_summary()
+
+    assert summary["policy_module"] == "set"
+    assert summary["policy_object"] == "POLICY(default)"
+    assert summary["boundary_mode"] == "operator"
+    assert summary["context_resolution"] == "on"
+    assert summary["db"] == "set"
+    assert summary["providers"] == ["openai"]
 
 
 def test_intent_template_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
