@@ -42,7 +42,13 @@ These invariants enforce the formal axioms from the DBL paper. They are the foun
 
 ## Decision Normative Surface
 
-**I-NORM-1**: `request_class`, `budget_class`, `request_semantic_reason`, `request_constraints_applied`, `budget_policy_reason`, `slot_class`, `cost_class`, `reservation_required`, `economic_policy_reason`, `permitted_tools`, `enforced_budget`, `policy_config_digest`, and `intent_index` are included in the normative decision digest. Changes to these fields produce a different digest.
+**I-NORM-1**: `actor_id`, `trust_class`, `identity_issuer`, `identity_verified`, `request_class`, `budget_class`, `request_semantic_reason`, `request_constraints_applied`, `budget_policy_reason`, `slot_class`, `cost_class`, `reservation_required`, `economic_policy_reason`, `permitted_tools`, `enforced_budget`, `policy_config_digest`, and `intent_index` are included in the normative decision digest. Changes to these fields produce a different digest.
+
+## Identity Boundary
+
+**I-AUTH-1**: Trust class is derived only from the admitted identity line (`gateway_auth`) and the active auth config. Runtime queue state, provider behavior, or observer data MUST NOT influence `trust_class`.
+
+**I-AUTH-2**: When an identity is unverified, the effective trust class MUST be `anonymous`.
 
 ## Chain-of-Record (v0.9.0)
 

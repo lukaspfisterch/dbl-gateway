@@ -92,6 +92,10 @@ def replay_decision_for_turn(
     # normative digest and must be restored for replay equivalence.
     stored_permitted_tools = decision_payload.get("permitted_tools")
     stored_enforced_budget = decision_payload.get("enforced_budget")
+    stored_actor_id = decision_payload.get("actor_id")
+    stored_trust_class = decision_payload.get("trust_class")
+    stored_identity_issuer = decision_payload.get("identity_issuer")
+    stored_identity_verified = decision_payload.get("identity_verified")
     stored_request_class = decision_payload.get("request_class")
     stored_budget_class = decision_payload.get("budget_class")
     stored_request_semantic_reason = decision_payload.get("request_semantic_reason")
@@ -113,6 +117,10 @@ def replay_decision_for_turn(
         policy_id=stored_policy.get("policy_id") or policy_result.policy_id,
         policy_version=stored_policy.get("policy_version") or policy_result.policy_version,
         gate_event=policy_result.gate_event,
+        actor_id=stored_actor_id if isinstance(stored_actor_id, str) else None,
+        trust_class=stored_trust_class if isinstance(stored_trust_class, str) else None,
+        identity_issuer=stored_identity_issuer if isinstance(stored_identity_issuer, str) else None,
+        identity_verified=stored_identity_verified if isinstance(stored_identity_verified, bool) else None,
         request_class=stored_request_class if isinstance(stored_request_class, str) else None,
         budget_class=stored_budget_class if isinstance(stored_budget_class, str) else None,
         request_semantic_reason=(

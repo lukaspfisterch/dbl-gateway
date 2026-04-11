@@ -60,6 +60,10 @@ def test_generated_snapshot_has_contract_fields(tmp_path: Path) -> None:
     # Runtime-dynamic fields stripped
     assert "providers" not in data
     # Contract structure
+    assert data["auth"]["mode"] == "dev"
+    assert "current_trust_class" in data["auth"]
+    assert "trust_classes" in data["auth"]
+    assert "identity_sources" in data["auth"]
     assert isinstance(data["intents"]["supported"], list)
     assert isinstance(data["tool_surface"]["declared_tools"]["max_items"], int)
     assert "semantic_families" in data["tool_surface"]

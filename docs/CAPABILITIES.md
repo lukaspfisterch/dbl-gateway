@@ -34,6 +34,7 @@ unless it affects wire behavior.
 - Boundary artifacts also declare `tool_policy`, which contains family patterns plus the allowed-family matrix per exposure mode and trust class.
 - Boundary artifacts now also declare `request_policy`, which classifies requests (`probe`, `intent`, `execution_light`, `execution_heavy`) and publishes budget ceilings per `(exposure_mode, trust_class, request_class)`.
 - Boundary artifacts now also declare `economic_policy`, which maps each `(exposure_mode, trust_class, request_class)` tuple to `slot_class`, `cost_class`, and `reservation_required`.
+- `GET /capabilities` now also publishes `auth.mode`, `auth.current_trust_class`, `auth.trust_classes`, and `auth.identity_sources`.
 
 ## Observer UI Endpoints
 
@@ -117,6 +118,18 @@ returned observer status/results.
 - `economic.policy_by_exposure` publishes the full `exposure -> trust_class -> request_class -> economic rule` matrix.
 - DECISION records `slot_class`, `cost_class`, `reservation_required`, and `economic_policy_reason`.
 - These fields describe the required execution class only. They do not encode current queue depth, provider health, or real-time slot availability.
+
+## Auth And Identity
+- Identity stays a boundary input, not a gateway-owned user store.
+- The gateway resolves a minimal identity line into `actor_id`, `tenant_id`, `client_id`, `roles`, `issuer`, `verified`, and `trust_class`.
+- `auth.mode` publishes the active auth lane (`dev` or `oidc` today).
+- `auth.identity_sources` publishes the request source expected for that lane:
+  - `dev_headers` for local/demo header-derived identity
+  - `bearer_jwt` for generic OIDC bearer-token identity
+- `auth.current_trust_class` publishes the trust class currently derived for the caller.
+- Trust classes remain stable: `anonymous`, `user`, `operator`, `internal`.
+- The gateway injects this identity as `payload.inputs.extensions.gateway_auth` before policy evaluation.
+- DECISION records `actor_id`, `trust_class`, `identity_issuer`, and `identity_verified`.
 
 ## Context Resolution Gate
 - Controlled by `GATEWAY_ENABLE_CONTEXT_RESOLUTION` env var (default OFF).

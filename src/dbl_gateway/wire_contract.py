@@ -57,6 +57,10 @@ class DecisionPayload(TypedDict, total=False):
     provider: str
     policy_id: str
     policy_version: str
+    actor_id: str
+    trust_class: str
+    identity_issuer: str
+    identity_verified: bool
     request_class: str
     budget_class: str
     request_semantic_reason: str

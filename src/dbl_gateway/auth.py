@@ -28,6 +28,8 @@ class Actor:
     tenant_id: str
     client_id: str
     roles: tuple[str, ...]
+    issuer: str
+    verified: bool
     raw_claims: dict[str, Any]
 
 
@@ -45,6 +47,36 @@ class ForbiddenError(Exception):
 _JWKS_BY_URL: dict[str, dict[str, Any]] = {}
 _JWKS_TS_BY_URL: dict[str, float] = {}
 _JWKS_CACHE_TTL_S: float = 300.0
+
+
+def identity_fields_for_actor(
+    actor: Actor | None,
+    *,
+    trust_class: str | None = None,
+    fallback_actor_id: str = "gateway",
+    fallback_issuer: str = "gateway",
+) -> dict[str, Any]:
+    resolved_trust_class = trust_class or trust_class_for_actor(actor)
+    if actor is None:
+        verified = resolved_trust_class != "anonymous"
+        return {
+            "actor_id": fallback_actor_id if verified else "anonymous",
+            "tenant_id": "unknown",
+            "client_id": "unknown",
+            "roles": [],
+            "issuer": fallback_issuer if verified else "anonymous",
+            "verified": verified,
+            "trust_class": resolved_trust_class,
+        }
+    return {
+        "actor_id": actor.actor_id,
+        "tenant_id": actor.tenant_id,
+        "client_id": actor.client_id,
+        "roles": list(actor.roles),
+        "issuer": actor.issuer,
+        "verified": actor.verified,
+        "trust_class": resolved_trust_class,
+    }
 
 
 def load_auth_config() -> AuthConfig:
@@ -121,6 +153,8 @@ def _authenticate_dev(headers: Mapping[str, str], cfg: AuthConfig) -> Actor:
         tenant_id=headers.get("x-dev-tenant", "dev-tenant").strip() or "dev-tenant",
         client_id=headers.get("x-dev-client", "dev-client").strip() or "dev-client",
         roles=roles,
+        issuer="dev",
+        verified=True,
         raw_claims={"dev": True},
     )
 
@@ -236,6 +270,8 @@ def _authorize_oidc_claims(claims: Mapping[str, Any], cfg: AuthConfig) -> Actor:
         tenant_id=tenant_id,
         client_id=client_id,
         roles=roles,
+        issuer=_pick_first_str(claims, ["iss"], default="oidc"),
+        verified=True,
         raw_claims=dict(claims),
     )
 
@@ -299,7 +335,7 @@ def _parse_role_map(role_map_raw: str) -> dict[str, list[str]] | None:
 
 
 def trust_class_for_actor(actor: Actor | None) -> str:
-    if actor is None:
+    if actor is None or not actor.verified:
         return "anonymous"
     roles = set(actor.roles)
     if actor.raw_claims.get("dev") is True or "gateway.internal" in roles:

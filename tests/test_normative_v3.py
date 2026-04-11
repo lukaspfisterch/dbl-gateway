@@ -11,6 +11,10 @@ class TestNormativeDecisionV3:
         decision = DecisionResult(
             decision="ALLOW",
             reason_codes=[],
+            actor_id="dev-user",
+            trust_class="internal",
+            identity_issuer="dev",
+            identity_verified=True,
             request_class="execution_light",
             budget_class="light",
             request_semantic_reason="request.semantic.bounded_execution",
@@ -20,6 +24,10 @@ class TestNormativeDecisionV3:
         normative = build_normative_decision(
             decision, assembly_digest=None, context_digest=None,
         )
+        assert normative["actor_id"] == "dev-user"
+        assert normative["trust_class"] == "internal"
+        assert normative["identity_issuer"] == "dev"
+        assert normative["identity_verified"] is True
         assert normative["request_class"] == "execution_light"
         assert normative["budget_class"] == "light"
         assert normative["request_semantic_reason"] == "request.semantic.bounded_execution"
@@ -104,6 +112,10 @@ class TestNormativeDecisionV3:
             "transforms": [],
             "result": "ALLOW",
             "reasons": [],
+            "actor_id": "dev-user",
+            "trust_class": "internal",
+            "identity_issuer": "dev",
+            "identity_verified": True,
             "request_class": "execution_light",
             "budget_class": "light",
             "request_semantic_reason": "request.semantic.bounded_execution",
@@ -121,6 +133,10 @@ class TestNormativeDecisionV3:
             "enforced_budget": None,
         })
         assert norm["permitted_tools"] == ["a_tool", "z_tool"]
+        assert norm["actor_id"] == "dev-user"
+        assert norm["trust_class"] == "internal"
+        assert norm["identity_issuer"] == "dev"
+        assert norm["identity_verified"] is True
         assert norm["slot_class"] == "shared"
         assert norm["cost_class"] == "bounded"
         assert norm["reservation_required"] is False

@@ -59,6 +59,7 @@ def test_public_capabilities_hide_non_public_surfaces(monkeypatch: pytest.Monkey
         data = resp.json()
         ids = {item["id"] for item in data["surface_catalog"]}
         assert data["boundary"]["exposure_mode"] == "public"
+        assert data["auth"]["current_trust_class"] == "internal"
         assert ids == {"healthz", "capabilities", "ingress_intent"}
         assert data["intents"]["supported"] == ["chat.message"]
         assert "artifact.handle" not in data["intents"]["catalog"]
@@ -119,6 +120,7 @@ def test_demo_mode_exposes_ui(monkeypatch: pytest.MonkeyPatch) -> None:
         ids = {item["id"] for item in caps_data["surface_catalog"]}
         assert "ui_root" in ids
         assert "ui_demo_start" in ids
+        assert caps_data["auth"]["current_trust_class"] == "internal"
         assert "artifact.handle" in caps_data["intents"]["supported"]
         assert caps_data["intents"]["catalog"]["artifact.handle"]["risk_class"] == "high_risk_context"
         assert caps_data["tool_surface"]["trust_class_current"] == "internal"

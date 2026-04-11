@@ -23,6 +23,7 @@ from .config import (
     get_context_config,
     request_policy_rule_for_mode,
 )
+from .auth import TRUST_CLASSES, load_auth_config
 from .providers import get_provider_capabilities
 from .providers.contract import ProviderCapabilities
 from .wire_contract import (
@@ -89,6 +90,13 @@ class CapabilitiesBoundary(BaseModel):
     exposure_mode: str
 
 
+class CapabilitiesAuth(BaseModel):
+    mode: str
+    current_trust_class: str
+    trust_classes: list[str]
+    identity_sources: list[str]
+
+
 class SurfaceDescriptor(BaseModel):
     id: str
     path: str
@@ -149,6 +157,7 @@ class CapabilitiesResponse(BaseModel):
     schema_version: str
     gateway_version: str
     interface_version: int
+    auth: CapabilitiesAuth
     boundary: CapabilitiesBoundary
     intents: CapabilitiesIntents
     tool_surface: CapabilitiesToolSurface
@@ -377,6 +386,7 @@ def get_capabilities(
     trust_class: str = "anonymous",
 ) -> dict[str, object]:
     cfg = boundary_config or get_boundary_config()
+    auth_cfg = load_auth_config()
     checked_at = datetime.now(timezone.utc).isoformat()
     providers: list[dict[str, Any]] = []
     intent_catalog = get_intent_catalog(cfg)
@@ -462,6 +472,18 @@ def get_capabilities(
         "schema_version": CAPABILITIES_SCHEMA_VERSION,
         "gateway_version": _gateway_version(),
         "interface_version": INTERFACE_VERSION,
+        "auth": {
+            "mode": auth_cfg.mode,
+            "current_trust_class": trust_class,
+            "trust_classes": list(TRUST_CLASSES),
+            "identity_sources": (
+                ["dev_headers"]
+                if auth_cfg.mode == "dev"
+                else ["bearer_jwt"]
+                if auth_cfg.mode == "oidc"
+                else []
+            ),
+        },
         "boundary": {
             "boundary_version": cfg.boundary_version,
             "boundary_config_digest": cfg.config_digest,

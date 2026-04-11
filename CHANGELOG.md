@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.22 — Identity-Derived Trust Line
+
+**Identity now enters the gateway as a deterministic boundary input instead of staying implicit inside auth helpers.**
+- Extend the admitted auth shape to `actor_id`, `tenant_id`, `client_id`, `roles`, `issuer`, `verified`, and `trust_class`, and inject it into policy-visible `payload.inputs.extensions.gateway_auth`.
+- Record `actor_id`, `trust_class`, `identity_issuer`, and `identity_verified` in normative DECISION payloads so replay can explain who the boundary thought was acting and why that trust lane applied.
+- Publish the active auth lane through `/capabilities` as `auth.mode`, `auth.current_trust_class`, `auth.trust_classes`, and `auth.identity_sources`, keeping local dev headers and generic bearer JWT identity discoverable without teaching role heuristics implicitly.
+- Keep the runtime generic: no gateway-owned user DB, sessions, or Azure-specific branching; later OIDC providers such as Azure AD can plug into the same trust derivation seam.
+
 ## v0.9.21 — Economic Policy Classification
 
 **Boundary economics now live beside request and tool policy instead of being left implicit for later runtime adapters.**

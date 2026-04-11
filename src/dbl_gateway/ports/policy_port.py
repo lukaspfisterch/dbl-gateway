@@ -11,6 +11,10 @@ class DecisionResult:
     policy_id: str | None = None
     policy_version: str | None = None
     gate_event: object | None = None
+    actor_id: str | None = None
+    trust_class: str | None = None
+    identity_issuer: str | None = None
+    identity_verified: bool | None = None
     request_class: str | None = None
     budget_class: str | None = None
     request_semantic_reason: str | None = None

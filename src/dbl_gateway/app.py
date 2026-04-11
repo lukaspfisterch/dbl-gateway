@@ -64,6 +64,7 @@ from .auth import (
     AuthError,
     ForbiddenError,
     authenticate_request,
+    identity_fields_for_actor,
     require_roles,
     require_tenant,
     load_auth_config,
@@ -137,6 +138,14 @@ class EconomicPolicyEvaluation:
     cost_class: str
     reservation_required: bool
     economic_policy_reason: str
+
+
+@dataclass(frozen=True)
+class IdentityEvaluation:
+    actor_id: str | None
+    trust_class: str
+    identity_issuer: str | None
+    identity_verified: bool
 
 
 def _assert_governance_input(authoritative: Mapping[str, Any]) -> None:
@@ -802,6 +811,7 @@ async def _process_intent(
     assembled_context: Mapping[str, Any] | None = None
     try:
         authoritative = _authoritative_from_event(intent_event, correlation_id)
+        identity_evaluation = _identity_evaluation(authoritative)
 
         if context_resolution_enabled():
             # Fetch thread events for ref resolution
@@ -839,7 +849,14 @@ async def _process_intent(
                     stream_id=authoritative["stream_id"],
                     correlation_id=correlation_id,
                     payload=_decision_payload(
-                        DecisionResult(decision="DENY", reason_codes=[exc.code]),
+                        DecisionResult(
+                            decision="DENY",
+                            reason_codes=[exc.code],
+                            actor_id=identity_evaluation.actor_id,
+                            trust_class=identity_evaluation.trust_class,
+                            identity_issuer=identity_evaluation.identity_issuer,
+                            identity_verified=identity_evaluation.identity_verified,
+                        ),
                         trace_id,
                         assembly_digest=None,
                         context_digest=None,
@@ -889,7 +906,14 @@ async def _process_intent(
                     stream_id=authoritative["stream_id"],
                     correlation_id=correlation_id,
                     payload=_decision_payload(
-                        DecisionResult(decision="DENY", reason_codes=["evaluation_error"]),
+                        DecisionResult(
+                            decision="DENY",
+                            reason_codes=["evaluation_error"],
+                            actor_id=identity_evaluation.actor_id,
+                            trust_class=identity_evaluation.trust_class,
+                            identity_issuer=identity_evaluation.identity_issuer,
+                            identity_verified=identity_evaluation.identity_verified,
+                        ),
                         trace_id,
                         assembly_digest=None,
                         context_digest=None,
@@ -949,6 +973,7 @@ async def _process_intent(
             authoritative_for_policy,
             economic_policy_evaluation,
         )
+        identity_evaluation = _identity_evaluation(authoritative_for_policy)
 
         _assert_governance_input(authoritative_for_policy)
         try:
@@ -986,7 +1011,14 @@ async def _process_intent(
                 stream_id=authoritative["stream_id"],
                 correlation_id=correlation_id,
                 payload=_decision_payload(
-                    DecisionResult(decision="DENY", reason_codes=["evaluation_error"]),
+                    DecisionResult(
+                        decision="DENY",
+                        reason_codes=["evaluation_error"],
+                        actor_id=identity_evaluation.actor_id,
+                        trust_class=identity_evaluation.trust_class,
+                        identity_issuer=identity_evaluation.identity_issuer,
+                        identity_verified=identity_evaluation.identity_verified,
+                    ),
                     trace_id,
                     assembly_digest=assembly_digest,
                     context_digest=None,
@@ -1022,6 +1054,10 @@ async def _process_intent(
                 policy_id=decision.policy_id,
                 policy_version=decision.policy_version,
                 gate_event=decision.gate_event,
+                actor_id=decision.actor_id,
+                trust_class=decision.trust_class,
+                identity_issuer=decision.identity_issuer,
+                identity_verified=decision.identity_verified,
                 request_class=decision.request_class,
                 budget_class=decision.budget_class,
                 request_semantic_reason=decision.request_semantic_reason,
@@ -1049,6 +1085,10 @@ async def _process_intent(
             policy_id=decision.policy_id,
             policy_version=decision.policy_version,
             gate_event=decision.gate_event,
+            actor_id=identity_evaluation.actor_id,
+            trust_class=identity_evaluation.trust_class,
+            identity_issuer=identity_evaluation.identity_issuer,
+            identity_verified=identity_evaluation.identity_verified,
             request_class=decision.request_class,
             budget_class=decision.budget_class,
             request_semantic_reason=decision.request_semantic_reason,
@@ -1098,6 +1138,10 @@ async def _process_intent(
                 policy_id=decision.policy_id,
                 policy_version=decision.policy_version,
                 gate_event=decision.gate_event,
+                actor_id=identity_evaluation.actor_id,
+                trust_class=identity_evaluation.trust_class,
+                identity_issuer=identity_evaluation.identity_issuer,
+                identity_verified=identity_evaluation.identity_verified,
                 request_class=request_policy_evaluation.request_class,
                 budget_class=request_policy_evaluation.budget_class,
                 request_semantic_reason=request_policy_evaluation.request_semantic_reason,
@@ -1135,6 +1179,10 @@ async def _process_intent(
                 policy_id=decision.policy_id,
                 policy_version=decision.policy_version,
                 gate_event=decision.gate_event,
+                actor_id=identity_evaluation.actor_id,
+                trust_class=identity_evaluation.trust_class,
+                identity_issuer=identity_evaluation.identity_issuer,
+                identity_verified=identity_evaluation.identity_verified,
                 request_class=request_policy_evaluation.request_class,
                 budget_class=request_policy_evaluation.budget_class,
                 request_semantic_reason=request_policy_evaluation.request_semantic_reason,
@@ -1162,6 +1210,10 @@ async def _process_intent(
                 policy_id=decision.policy_id,
                 policy_version=decision.policy_version,
                 gate_event=decision.gate_event,
+                actor_id=identity_evaluation.actor_id,
+                trust_class=identity_evaluation.trust_class,
+                identity_issuer=identity_evaluation.identity_issuer,
+                identity_verified=identity_evaluation.identity_verified,
                 request_class=request_policy_evaluation.request_class,
                 budget_class=request_policy_evaluation.budget_class,
                 request_semantic_reason=request_policy_evaluation.request_semantic_reason,
@@ -2099,33 +2151,67 @@ def _inject_gateway_auth_inputs(
     inputs = dict(inputs_raw) if isinstance(inputs_raw, Mapping) else {}
     extensions_raw = inputs.get("extensions")
     extensions = dict(extensions_raw) if isinstance(extensions_raw, Mapping) else {}
-    gateway_auth: dict[str, Any] = {"trust_class": trust_class}
-    if actor is not None:
-        gateway_auth["tenant_id"] = actor.tenant_id
-        gateway_auth["client_id"] = actor.client_id
-        gateway_auth["actor_id"] = actor.actor_id
-    extensions["gateway_auth"] = gateway_auth
+    extensions["gateway_auth"] = identity_fields_for_actor(actor, trust_class=trust_class)
     inputs["extensions"] = extensions
     payload["inputs"] = inputs
 
 
 def _tool_policy_trust_class(authoritative: Mapping[str, Any]) -> str:
+    return _identity_evaluation(authoritative).trust_class
+
+
+def _identity_evaluation(authoritative: Mapping[str, Any]) -> IdentityEvaluation:
     payload = authoritative.get("payload")
     if not isinstance(payload, Mapping):
-        return "anonymous"
+        return IdentityEvaluation(
+            actor_id=None,
+            trust_class="anonymous",
+            identity_issuer=None,
+            identity_verified=False,
+        )
     inputs = payload.get("inputs")
     if not isinstance(inputs, Mapping):
-        return "anonymous"
+        return IdentityEvaluation(
+            actor_id=None,
+            trust_class="anonymous",
+            identity_issuer=None,
+            identity_verified=False,
+        )
     extensions = inputs.get("extensions")
     if not isinstance(extensions, Mapping):
-        return "anonymous"
+        return IdentityEvaluation(
+            actor_id=None,
+            trust_class="anonymous",
+            identity_issuer=None,
+            identity_verified=False,
+        )
     gateway_auth = extensions.get("gateway_auth")
     if not isinstance(gateway_auth, Mapping):
-        return "anonymous"
+        return IdentityEvaluation(
+            actor_id=None,
+            trust_class="anonymous",
+            identity_issuer=None,
+            identity_verified=False,
+        )
     trust_class = gateway_auth.get("trust_class")
-    if isinstance(trust_class, str) and trust_class.strip():
-        return trust_class.strip()
-    return "anonymous"
+    return IdentityEvaluation(
+        actor_id=(
+            gateway_auth.get("actor_id").strip()
+            if isinstance(gateway_auth.get("actor_id"), str) and gateway_auth.get("actor_id").strip()
+            else None
+        ),
+        trust_class=(
+            trust_class.strip()
+            if isinstance(trust_class, str) and trust_class.strip()
+            else "anonymous"
+        ),
+        identity_issuer=(
+            gateway_auth.get("issuer").strip()
+            if isinstance(gateway_auth.get("issuer"), str) and gateway_auth.get("issuer").strip()
+            else None
+        ),
+        identity_verified=bool(gateway_auth.get("verified") is True),
+    )
 
 
 def _request_budget(payload: Mapping[str, Any]) -> dict[str, int] | None:

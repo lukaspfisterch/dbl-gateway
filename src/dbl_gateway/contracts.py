@@ -48,6 +48,10 @@ class DecisionNormative(TypedDict, total=False):
     result: str
     reasons: list[DecisionReason]
     transforms: list[DecisionTransform]
+    actor_id: str | None
+    trust_class: str | None
+    identity_issuer: str | None
+    identity_verified: bool | None
     request_class: str | None
     budget_class: str | None
     request_semantic_reason: str | None
@@ -347,6 +351,22 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
         "result": result,
         "reasons": norm_reasons,
         "transforms": norm_transforms,
+        "actor_id": _normalize_optional_text(
+            decision.get("actor_id"),
+            field_name="actor_id",
+        ),
+        "trust_class": _normalize_optional_text(
+            decision.get("trust_class"),
+            field_name="trust_class",
+        ),
+        "identity_issuer": _normalize_optional_text(
+            decision.get("identity_issuer"),
+            field_name="identity_issuer",
+        ),
+        "identity_verified": _normalize_optional_bool(
+            decision.get("identity_verified"),
+            field_name="identity_verified",
+        ),
         "request_class": _normalize_optional_text(
             decision.get("request_class"),
             field_name="request_class",

@@ -292,6 +292,16 @@ def test_gateway_injects_tool_policy_into_policy_inputs(
         policy_meta = inputs["extensions"]["gateway_tool_policy"]
         request_meta = inputs["extensions"]["gateway_request_policy"]
         economic_meta = inputs["extensions"]["gateway_economic_policy"]
+        assert gateway_auth["actor_id"] == "dev-user"
+        assert gateway_auth["tenant_id"] == "dev-tenant"
+        assert gateway_auth["client_id"] == "dev-client"
+        assert gateway_auth["issuer"] == "dev"
+        assert gateway_auth["verified"] is True
+        assert gateway_auth["roles"] == [
+            "gateway.intent.write",
+            "gateway.decision.write",
+            "gateway.snapshot.read",
+        ]
         assert gateway_auth["trust_class"] == "internal"
         assert policy_meta["declared_tool_families"] == ["web_read", "exec_like"]
         assert policy_meta["allowed_tool_families"] == ["web_read", "retrieval", "llm_assist"]
@@ -341,6 +351,10 @@ def test_decision_payload_tracks_tool_family_governance(
         assert decision["denied_tool_families"] == ["exec_like"]
         assert decision["request_class"] == "execution_heavy"
         assert decision["budget_class"] == "none"
+        assert decision["actor_id"] == "dev-user"
+        assert decision["trust_class"] == "internal"
+        assert decision["identity_issuer"] == "dev"
+        assert decision["identity_verified"] is True
         assert decision["request_semantic_reason"] == "request.semantic.declared_tools_multiple"
         assert decision["request_constraints_applied"] == [
             "declared_tools.multiple",
@@ -947,6 +961,15 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
         ]
         assert data["tool_surface"]["allowed_families_by_exposure"]["demo"]["*"] == ["*"]
         assert data["tool_surface"]["no_mix_rules"][0]["rule_id"] == "tool.no_mix.exec_like"
+        assert data["auth"]["mode"] == "dev"
+        assert data["auth"]["current_trust_class"] == "internal"
+        assert data["auth"]["trust_classes"] == [
+            "anonymous",
+            "user",
+            "operator",
+            "internal",
+        ]
+        assert data["auth"]["identity_sources"] == ["dev_headers"]
         assert data["budget"]["request_classes"] == [
             "probe",
             "intent",

@@ -204,6 +204,10 @@ Tool names must match `^[a-z][a-z0-9_.]{0,63}$`.
 | `request_semantic_reason` | Stable classifier reason such as `request.semantic.intent_only`, `request.semantic.declared_tools_multiple`, or `request.semantic.budget_heavy`. |
 | `request_constraints_applied` | Deterministic list of structural and boundary constraints applied during request classification and budget shaping. |
 | `budget_policy_reason` | Stable request-policy reason such as `request.execution_heavy_denied` or `request.budget_clamped`. |
+| `actor_id` | Boundary-derived actor identifier used for the admitted identity line. |
+| `trust_class` | Deterministic trust class derived from the verified identity input. |
+| `identity_issuer` | Identity source / issuer recorded for replay and audit. |
+| `identity_verified` | Whether the identity input was verified before trust derivation. |
 | `slot_class` | Deterministic execution slot requirement: `none`, `shared`, or `reserved`. |
 | `cost_class` | Deterministic economic class: `low`, `bounded`, or `capped`. |
 | `reservation_required` | Whether the request requires a reserved execution class before runtime dispatch. |
@@ -238,6 +242,19 @@ Boundary config also carries `economic_policy.matrix`:
 - rule payload: `slot_class`, `cost_class`, `reservation_required`, and optional `reason_code`
 
 The gateway injects this as `payload.inputs.extensions.gateway_request_policy` and `payload.inputs.extensions.gateway_economic_policy` before policy evaluation and records the resulting request/budget/economic fields in DECISION.
+
+The gateway also injects `payload.inputs.extensions.gateway_auth`:
+- `actor_id`
+- `tenant_id`
+- `client_id`
+- `roles`
+- `issuer`
+- `verified`
+- `trust_class`
+
+This identity line is derived deterministically from the active auth lane:
+- `dev` mode: local headers such as `x-dev-actor`, `x-dev-roles`, `x-dev-tenant`, `x-dev-client`
+- `oidc` mode: generic bearer JWT claims after issuer/signature/expiry validation
 
 ### EXECUTION Fields
 

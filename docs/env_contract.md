@@ -14,6 +14,23 @@ Secrets never appear in event payloads.
 | `GATEWAY_EXEC_MODE` | no | `embedded` | `embedded` (in-process provider calls) or `external` (sidecar) |
 | `GATEWAY_ENABLE_CONTEXT_RESOLUTION` | no | OFF | `true`/`1`/`yes` to enable declared_refs resolution and Workbench handle fetch. When OFF, refs are stored but not resolved; `artifact.handle` intents are rejected. |
 
+## Auth And Identity
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DBL_GATEWAY_AUTH_MODE` | no | `dev` | `dev` for local header-derived identity, `oidc` for generic bearer JWT validation |
+| `DBL_GATEWAY_DEV_ACTOR` | no | `dev-user` | Default actor id in `dev` mode |
+| `DBL_GATEWAY_DEV_ROLES` | no | `gateway.intent.write,gateway.decision.write,gateway.snapshot.read` | Default dev roles |
+| `DBL_GATEWAY_OIDC_ISSUER` | `oidc` only | -- | Expected JWT issuer |
+| `DBL_GATEWAY_OIDC_AUDIENCE` | `oidc` only | -- | Expected JWT audience |
+| `DBL_GATEWAY_OIDC_JWKS_URL` | `oidc` only | -- | JWKS endpoint used for signature validation |
+| `DBL_GATEWAY_ALLOWED_TENANTS` | no | `*` | Allowed tenant ids or `*` |
+| `DBL_GATEWAY_TENANT_CLAIM` | no | `tid` | Claim name used for tenant extraction |
+| `DBL_GATEWAY_ROLE_CLAIMS` | no | `roles` | Comma-separated claim names searched for role extraction |
+| `DBL_GATEWAY_ROLE_MAP` | no | -- | Optional JSON mapping from incoming roles to gateway roles |
+
+Identity stays stateless inside the gateway. The request is verified, mapped into `gateway_auth`, and reduced to a deterministic `trust_class`. No session store or gateway-owned user database is required.
+
 ## Boundary Profiles
 
 Built-in boundary profiles live in `config/`:

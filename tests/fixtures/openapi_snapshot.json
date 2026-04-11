@@ -1,6 +1,40 @@
 {
   "components": {
     "schemas": {
+      "CapabilitiesAuth": {
+        "properties": {
+          "current_trust_class": {
+            "title": "Current Trust Class",
+            "type": "string"
+          },
+          "identity_sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Identity Sources",
+            "type": "array"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "trust_classes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Trust Classes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mode",
+          "current_trust_class",
+          "trust_classes",
+          "identity_sources"
+        ],
+        "title": "CapabilitiesAuth",
+        "type": "object"
+      },
       "CapabilitiesBoundary": {
         "properties": {
           "boundary_config_digest": {
@@ -309,6 +343,9 @@
       },
       "CapabilitiesResponse": {
         "properties": {
+          "auth": {
+            "$ref": "#/components/schemas/CapabilitiesAuth"
+          },
           "boundary": {
             "$ref": "#/components/schemas/CapabilitiesBoundary"
           },
@@ -358,6 +395,7 @@
           "schema_version",
           "gateway_version",
           "interface_version",
+          "auth",
           "boundary",
           "intents",
           "tool_surface",

@@ -2,6 +2,19 @@
   "schema_version": "gateway.capabilities.v1",
   "gateway_version": "0.8.1",
   "interface_version": 3,
+  "auth": {
+    "mode": "dev",
+    "current_trust_class": "anonymous",
+    "trust_classes": [
+      "anonymous",
+      "user",
+      "operator",
+      "internal"
+    ],
+    "identity_sources": [
+      "dev_headers"
+    ]
+  },
   "boundary": {
     "boundary_version": "1",
     "boundary_config_digest": "sha256:63883e44463fff0ac6c7c45fc70087fb12736b7ce58b9ff45f286715a50f6aa5",
@@ -832,5 +845,5 @@
       "description": "External execution submission surface when enabled."
     }
   ],
-  "generated_at": "2026-04-11T18:51:12.791454+00:00"
+  "generated_at": "2026-04-11T19:07:43.521300+00:00"
 }
