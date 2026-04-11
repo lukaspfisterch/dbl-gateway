@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import fnmatch
 import hashlib
 import json
 import logging
@@ -64,6 +65,7 @@ from .auth import (
     require_roles,
     require_tenant,
     load_auth_config,
+    trust_class_for_actor,
 )
 
 
@@ -90,18 +92,19 @@ class GovernanceInputViolation(RuntimeError):
 
 _TOOL_FAMILY_ORDER: tuple[str, ...] = (
     "web_read",
-    "file_ops",
-    "data_access",
+    "retrieval",
+    "llm_assist",
     "exec_like",
-    "other",
 )
 
 
 @dataclass(frozen=True)
 class ToolPolicyEvaluation:
+    trust_class: str
     scope: str | None
     declared_tools: list[str]
     denied_tools: list[str]
+    denied_families: list[str]
     denied_reason: str | None
     permitted_tools: list[str]
     declared_families: list[str]
@@ -426,13 +429,21 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
     async def capabilities(request: Request) -> dict[str, object]:
         actor = await _require_actor(request)
         _require_role(actor, ["gateway.snapshot.read"])
-        return await run_in_threadpool(get_capabilities_cached, boundary_cfg)
+        return await run_in_threadpool(
+            get_capabilities_cached,
+            boundary_cfg,
+            trust_class=trust_class_for_actor(actor),
+        )
 
     @app.get("/surfaces")
     async def surfaces(request: Request) -> dict[str, object]:
         actor = await _require_actor(request)
         _require_role(actor, ["gateway.snapshot.read"])
-        caps = await run_in_threadpool(get_capabilities_cached, boundary_cfg)
+        caps = await run_in_threadpool(
+            get_capabilities_cached,
+            boundary_cfg,
+            trust_class=trust_class_for_actor(actor),
+        )
         return {
             "gateway_version": caps.get("gateway_version"),
             "interface_version": caps.get("interface_version"),
@@ -463,7 +474,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         trace_id = uuid.uuid4().hex
-        return await _ingest_envelope(app, envelope, trace_id)
+        return await _ingest_envelope(app, envelope, trace_id, actor=actor)
 
     @app.get("/snapshot")
     async def snapshot(
@@ -626,7 +637,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
     @app.get("/ui/capabilities", include_in_schema=False)
     async def ui_capabilities() -> JSONResponse:
         """Capabilities proxy for observer UI — no auth."""
-        data = get_capabilities_cached(boundary_cfg)
+        data = get_capabilities_cached(boundary_cfg, trust_class="internal")
         return JSONResponse(data, headers={"Cache-Control": "max-age=30"})
 
     @app.get("/ui/snapshot", include_in_schema=False)
@@ -654,7 +665,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
             envelope = parse_intent_envelope(body)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return await _ingest_envelope(app, envelope, uuid.uuid4().hex)
+        return await _ingest_envelope(app, envelope, uuid.uuid4().hex, trust_class="internal")
 
     @app.get("/ui/verify-chain", include_in_schema=False)
     async def ui_verify_chain(
@@ -717,7 +728,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         if demo.get("running"):
             return JSONResponse(await _demo_status_payload(app), status_code=409)
 
-        capabilities = get_capabilities_cached(boundary_cfg)
+        capabilities = get_capabilities_cached(boundary_cfg, trust_class="internal")
         active = active_provider_model(capabilities)
         if active is None:
             return JSONResponse(
@@ -883,10 +894,12 @@ async def _process_intent(
         _declared_tools = auth_payload.get("declared_tools")
         _tool_scope = auth_payload.get("tool_scope")
         _client_budget = auth_payload.get("budget")
+        _trust_class = _tool_policy_trust_class(authoritative)
         tool_policy_evaluation = _compute_tool_policy_evaluation(
             _declared_tools if isinstance(_declared_tools, list) else None,
             _tool_scope if isinstance(_tool_scope, str) else None,
             boundary_config=app.state.boundary_config,
+            trust_class=_trust_class,
         )
         authoritative_for_policy = _authoritative_with_gateway_tool_policy(
             authoritative,
@@ -968,6 +981,7 @@ async def _process_intent(
                 declared_tool_families=decision.declared_tool_families,
                 allowed_tool_families=decision.allowed_tool_families,
                 permitted_tool_families=decision.permitted_tool_families,
+                denied_tool_families=decision.denied_tool_families,
                 permitted_tools=decision.permitted_tools,
                 tool_scope_enforced=decision.tool_scope_enforced,
                 tools_denied=decision.tools_denied,
@@ -985,6 +999,7 @@ async def _process_intent(
             declared_tool_families=list(tool_policy_evaluation.declared_families),
             allowed_tool_families=list(tool_policy_evaluation.allowed_families),
             permitted_tool_families=list(tool_policy_evaluation.permitted_families),
+            denied_tool_families=list(tool_policy_evaluation.denied_families),
             permitted_tools=decision.permitted_tools,
             tool_scope_enforced=decision.tool_scope_enforced,
             tools_denied=decision.tools_denied,
@@ -1026,6 +1041,7 @@ async def _process_intent(
                 declared_tool_families=decision.declared_tool_families,
                 allowed_tool_families=decision.allowed_tool_families,
                 permitted_tool_families=decision.permitted_tool_families,
+                denied_tool_families=decision.denied_tool_families,
                 permitted_tools=list(tool_policy_evaluation.permitted_tools),
                 tool_scope_enforced=tool_policy_evaluation.scope,
                 tools_denied=list(tool_policy_evaluation.denied_tools),
@@ -1759,7 +1775,7 @@ def _extract_trace_id(intent_event: EventRecord) -> str:
 
 def _authoritative_from_event(intent_event: EventRecord, correlation_id: str) -> dict[str, Any]:
     payload = intent_event.get("payload")
-    return {
+    authoritative = {
         "stream_id": intent_event.get("stream_id"),
         "lane": intent_event.get("lane"),
         "actor": intent_event.get("actor"),
@@ -1767,6 +1783,17 @@ def _authoritative_from_event(intent_event: EventRecord, correlation_id: str) ->
         "correlation_id": correlation_id,
         "payload": payload,
     }
+    if isinstance(payload, Mapping):
+        inputs = payload.get("inputs")
+        if isinstance(inputs, Mapping):
+            extensions = inputs.get("extensions")
+            if isinstance(extensions, Mapping):
+                gateway_auth = extensions.get("gateway_auth")
+                if isinstance(gateway_auth, Mapping):
+                    tenant_id = gateway_auth.get("tenant_id")
+                    if isinstance(tenant_id, str) and tenant_id.strip():
+                        authoritative["tenant_id"] = tenant_id.strip()
+    return authoritative
 
 
 def make_trace_bundle(raw_trace: Mapping[str, Any]) -> tuple[dict[str, Any], str]:
@@ -1780,6 +1807,7 @@ def _compute_permitted_tools(
     decision: DecisionResult,
     *,
     boundary_config=None,
+    trust_class: str = "anonymous",
 ) -> tuple[list[str] | None, str | None, list[str] | None, str | None]:
     """Compute tool gating fields for DECISION payload.
 
@@ -1795,6 +1823,7 @@ def _compute_permitted_tools(
         declared_tools,
         tool_scope,
         boundary_config=boundary_config,
+        trust_class=trust_class,
     )
     return (
         evaluation.permitted_tools,
@@ -1809,57 +1838,70 @@ def _compute_tool_policy_evaluation(
     tool_scope: str | None,
     *,
     boundary_config=None,
+    trust_class: str = "anonymous",
 ) -> ToolPolicyEvaluation:
     cfg = boundary_config or get_boundary_config()
     tools = list(declared_tools or [])
     scope = None if declared_tools is None and tool_scope is None else (tool_scope or "strict")
-    allowed_families = list(allowed_tool_families_for_mode(cfg))
+    allowed_families = list(allowed_tool_families_for_mode(cfg, trust_class=trust_class))
+    family_by_tool: dict[str, str | None] = {tool: _tool_family(tool, cfg) for tool in tools}
+    unknown_tools = [tool for tool in tools if family_by_tool[tool] is None]
+    known_tools = [tool for tool in tools if family_by_tool[tool] is not None]
+    no_mix_denied, no_mix_reason = _deny_unsafe_tool_mix(known_tools, cfg)
+    tools_after_no_mix = [tool for tool in known_tools if tool not in no_mix_denied]
+
     allow_all_families = "*" in allowed_families
     allowed_family_set = set(allowed_families)
-
     family_denied = [
-        tool for tool in tools
-        if not allow_all_families and _tool_family(tool) not in allowed_family_set
+        tool for tool in tools_after_no_mix
+        if not allow_all_families and family_by_tool[tool] not in allowed_family_set
     ]
-    tools_after_family_gate = [tool for tool in tools if tool not in family_denied]
-    no_mix_denied, no_mix_reason = _deny_unsafe_tool_mix(tools_after_family_gate)
 
-    denied_tools = [
-        tool for tool in tools
-        if tool in family_denied or tool in no_mix_denied
-    ]
-    denied_reason = "tool.family_not_allowed" if family_denied else no_mix_reason
+    denied_tools = [tool for tool in tools if tool in unknown_tools or tool in no_mix_denied or tool in family_denied]
+    denied_reason = None
+    if unknown_tools:
+        denied_reason = "tool.unknown_family"
+    elif no_mix_reason:
+        denied_reason = no_mix_reason
+    elif family_denied:
+        denied_reason = "tool.family_not_allowed"
     permitted_tools = [tool for tool in tools if tool not in denied_tools]
 
     return ToolPolicyEvaluation(
+        trust_class=trust_class,
         scope=scope,
         declared_tools=tools,
         denied_tools=denied_tools,
+        denied_families=_ordered_tool_families(
+            ["unknown" if family_by_tool[tool] is None else str(family_by_tool[tool]) for tool in denied_tools]
+        ),
         denied_reason=denied_reason,
         permitted_tools=permitted_tools,
-        declared_families=_ordered_tool_families(_tool_family(tool) for tool in tools),
+        declared_families=_ordered_tool_families(
+            family for family in (family_by_tool[tool] for tool in tools) if family is not None
+        ),
         allowed_families=_ordered_tool_families(allowed_families),
-        permitted_families=_ordered_tool_families(_tool_family(tool) for tool in permitted_tools),
+        permitted_families=_ordered_tool_families(
+            family for family in (family_by_tool[tool] for tool in permitted_tools) if family is not None
+        ),
     )
 
 
-def _tool_family(tool_name: str) -> str:
+def _tool_family(tool_name: str, boundary_config=None) -> str | None:
+    cfg = boundary_config or get_boundary_config()
     tool = tool_name.strip().lower()
-    if tool in {"code.execute", "shell.execute"} or tool.startswith(("code.", "shell.", "exec.")):
-        return "exec_like"
-    if tool.startswith("web."):
-        return "web_read"
-    if tool.startswith(("file.", "fs.")):
-        return "file_ops"
-    if tool.startswith(("db.", "sql.")):
-        return "data_access"
-    return "other"
+    for family_name, patterns in cfg.tool_policy.families.items():
+        for pattern in patterns:
+            if fnmatch.fnmatchcase(tool, pattern.strip().lower()):
+                return str(family_name)
+    return None
 
 
-def _deny_unsafe_tool_mix(tools: list[str]) -> tuple[list[str], str | None]:
+def _deny_unsafe_tool_mix(tools: list[str], boundary_config=None) -> tuple[list[str], str | None]:
     if not tools:
         return [], None
-    family_by_tool = {tool: _tool_family(tool) for tool in tools}
+    cfg = boundary_config or get_boundary_config()
+    family_by_tool = {tool: _tool_family(tool, cfg) for tool in tools}
     families = set(family_by_tool.values())
     if "exec_like" in families and len(families - {"exec_like"}) > 0:
         denied = [tool for tool in tools if family_by_tool[tool] == "exec_like"]
@@ -1900,9 +1942,11 @@ def _authoritative_with_gateway_tool_policy(
     extensions_raw = inputs.get("extensions")
     extensions = dict(extensions_raw) if isinstance(extensions_raw, Mapping) else {}
     extensions["gateway_tool_policy"] = {
+        "trust_class": evaluation.trust_class,
         "declared_tool_families": list(evaluation.declared_families),
         "allowed_tool_families": list(evaluation.allowed_families),
         "permitted_tool_families": list(evaluation.permitted_families),
+        "denied_tool_families": list(evaluation.denied_families),
     }
     inputs["extensions"] = extensions
     payload_copy = dict(payload)
@@ -1910,6 +1954,45 @@ def _authoritative_with_gateway_tool_policy(
     authoritative_copy = dict(authoritative)
     authoritative_copy["payload"] = payload_copy
     return authoritative_copy
+
+
+def _inject_gateway_auth_inputs(
+    payload: dict[str, Any],
+    *,
+    actor: Actor | None,
+    trust_class: str,
+) -> None:
+    inputs_raw = payload.get("inputs")
+    inputs = dict(inputs_raw) if isinstance(inputs_raw, Mapping) else {}
+    extensions_raw = inputs.get("extensions")
+    extensions = dict(extensions_raw) if isinstance(extensions_raw, Mapping) else {}
+    gateway_auth: dict[str, Any] = {"trust_class": trust_class}
+    if actor is not None:
+        gateway_auth["tenant_id"] = actor.tenant_id
+        gateway_auth["client_id"] = actor.client_id
+        gateway_auth["actor_id"] = actor.actor_id
+    extensions["gateway_auth"] = gateway_auth
+    inputs["extensions"] = extensions
+    payload["inputs"] = inputs
+
+
+def _tool_policy_trust_class(authoritative: Mapping[str, Any]) -> str:
+    payload = authoritative.get("payload")
+    if not isinstance(payload, Mapping):
+        return "anonymous"
+    inputs = payload.get("inputs")
+    if not isinstance(inputs, Mapping):
+        return "anonymous"
+    extensions = inputs.get("extensions")
+    if not isinstance(extensions, Mapping):
+        return "anonymous"
+    gateway_auth = extensions.get("gateway_auth")
+    if not isinstance(gateway_auth, Mapping):
+        return "anonymous"
+    trust_class = gateway_auth.get("trust_class")
+    if isinstance(trust_class, str) and trust_class.strip():
+        return trust_class.strip()
+    return "anonymous"
 
 
 def _compute_enforced_budget(
@@ -2128,7 +2211,7 @@ def _intent_template_payload(
 
 
 async def _demo_status_payload(app: FastAPI) -> dict[str, Any]:
-    capabilities = get_capabilities_cached()
+    capabilities = get_capabilities_cached(trust_class="internal")
     active = active_provider_model(capabilities)
     demo = app.state.demo_agent
     metadata = scenario_metadata(step_delay=float(demo.get("step_delay_s") or 0.0))
@@ -2157,7 +2240,7 @@ async def _demo_status_payload(app: FastAPI) -> dict[str, Any]:
 
 async def _run_demo_agent(app: FastAPI) -> None:
     demo = app.state.demo_agent
-    capabilities = get_capabilities_cached()
+    capabilities = get_capabilities_cached(trust_class="internal")
     active = active_provider_model(capabilities)
     if active is None:
         demo["last_error"] = "demo.provider_unavailable"
@@ -2202,7 +2285,7 @@ async def _run_demo_agent(app: FastAPI) -> None:
                 turn_id=turn_id,
                 parent_turn_id=parent_turn_id,
             )
-            response = await _ingest_envelope(app, envelope, uuid.uuid4().hex)
+            response = await _ingest_envelope(app, envelope, uuid.uuid4().hex, trust_class="internal")
             payload = json.loads(response.body.decode("utf-8"))
             if response.status_code >= 400:
                 raise RuntimeError(payload.get("detail") or payload.get("reason_code") or "demo ingress failed")
@@ -2262,7 +2345,14 @@ async def _wait_for_demo_turn(
     raise RuntimeError(f"turn timeout for correlation_id={correlation_id}")
 
 
-async def _ingest_envelope(app: FastAPI, envelope: Mapping[str, Any], trace_id: str) -> JSONResponse:
+async def _ingest_envelope(
+    app: FastAPI,
+    envelope: Mapping[str, Any],
+    trace_id: str,
+    *,
+    actor: Actor | None = None,
+    trust_class: str | None = None,
+) -> JSONResponse:
     intent_payload = envelope["payload"]
     raw_payload = intent_payload["payload"]
     payload_for_shape = dict(raw_payload)
@@ -2288,6 +2378,12 @@ async def _ingest_envelope(app: FastAPI, envelope: Mapping[str, Any], trace_id: 
             },
         )
     shaped_payload = _shape_payload(intent_payload["intent_type"], payload_for_shape)
+    resolved_trust_class = trust_class or trust_class_for_actor(actor)
+    _inject_gateway_auth_inputs(
+        shaped_payload,
+        actor=actor,
+        trust_class=resolved_trust_class,
+    )
     try:
         admission_record = admit_and_shape_intent(
             {
@@ -2311,6 +2407,8 @@ async def _ingest_envelope(app: FastAPI, envelope: Mapping[str, Any], trace_id: 
         )
     authoritative = _thaw_json(admission_record.deterministic)
     authoritative["correlation_id"] = admission_record.correlation_id
+    if actor is not None:
+        authoritative["tenant_id"] = actor.tenant_id
     if intent_payload.get("requested_model_id"):
         authoritative["payload"]["requested_model_id"] = intent_payload["requested_model_id"]
     if isinstance(outer_inputs, Mapping) and isinstance(authoritative.get("payload"), Mapping):

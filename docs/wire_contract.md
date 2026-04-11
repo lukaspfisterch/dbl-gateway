@@ -202,18 +202,20 @@ Tool names must match `^[a-z][a-z0-9_.]{0,63}$`.
 | `declared_tool_families` | Deterministic family buckets derived from `declared_tools`. |
 | `allowed_tool_families` | Tool families allowed by the active boundary policy. |
 | `permitted_tool_families` | Tool families remaining after boundary family gating and no-mix invariants. |
+| `denied_tool_families` | Tool families explicitly denied during the boundary pass. |
 | `permitted_tools` | Tools the gateway allows (normative). |
 | `tool_scope_enforced` | `"strict"` or `"advisory"`. |
 | `tools_denied` | Tools removed by boundary family policy or structural invariants. |
-| `tools_denied_reason` | Stable denial reason such as `tool.family_not_allowed` or `tool.no_mix.exec_like`. |
+| `tools_denied_reason` | Stable denial reason such as `tool.unknown_family`, `tool.family_not_allowed`, or `tool.no_mix.exec_like`. |
 
 Semantic tool denial is deterministic. Current runtime rule:
+- `tool.unknown_family` — the declared tool does not match any configured boundary family pattern.
 - `tool.family_not_allowed` — the declared tool's family is not admitted by the active boundary profile.
 - `tool.no_mix.exec_like` — tools in the `exec_like` family (`code.*`, `shell.*`, `exec.*`) are denied when mixed with any other tool family in the same declaration.
 
-Boundary config also carries `tool_policy`:
-- `public` — `web_read`
-- `operator` — `web_read`, `file_ops`, `data_access`, `other`
+Boundary config now carries `tool_policy.families` plus `tool_policy.matrix`:
+- `public` — anonymous stays minimal, trusted callers may add retrieval families
+- `operator` — `user`/`operator`/`internal` get progressively broader allowlists
 - `demo` — `*`
 
 ### EXECUTION Fields

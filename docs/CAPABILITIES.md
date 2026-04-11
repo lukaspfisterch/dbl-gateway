@@ -31,7 +31,7 @@ unless it affects wire behavior.
   - `operator` — runtime and discovery surfaces without `/ui/*`
   - `demo` — full observer/demo surface
 - Public ingress is additionally bounded by the active boundary artifact's deterministic admission limits for `artifact.handle`, `declared_refs`, `declared_tools`, and budget maxima.
-- Boundary artifacts also declare `tool_policy`, which determines the allowed tool families per exposure mode.
+- Boundary artifacts also declare `tool_policy`, which contains family patterns plus the allowed-family matrix per exposure mode and trust class.
 
 ## Observer UI Endpoints
 
@@ -83,12 +83,14 @@ returned observer status/results.
 - `tool_scope`: `"strict"` (block undeclared) or `"advisory"` (log and allow). Default `"strict"` when `declared_tools` present.
 - In `public` exposure mode, declared tool count is additionally capped by the boundary artifact before admission.
 - `tool_surface.semantic_families` publishes the gateway's deterministic tool-family buckets.
-- `tool_surface.allowed_families_current` publishes the tool families currently allowed by the active boundary profile.
-- `tool_surface.allowed_families_by_exposure` publishes the same allowlists for `public`, `operator`, and `demo`.
+- `tool_surface.trust_class_current` publishes the trust class resolved for the current caller.
+- `tool_surface.allowed_families_current` publishes the tool families currently allowed for the active `(exposure_mode, trust_class)`.
+- `tool_surface.allowed_families_by_exposure` publishes the full boundary matrix as `exposure -> trust_class -> families`.
 - `tool_surface.no_mix_rules` publishes semantic combinations the gateway will deny before execution shaping.
 - Current rule: `tool.no_mix.exec_like` denies exec-like tools when mixed with any other tool family.
+- Unknown tools that do not match any configured family are denied with `tool.unknown_family`.
 - Tool-family allowlists deny tools with stable reason `tool.family_not_allowed` before no-mix shaping runs.
-- DECISION records `declared_tool_families`, `allowed_tool_families`, `permitted_tool_families`, `permitted_tools`, `tool_scope_enforced`, `tools_denied`, and `tools_denied_reason`.
+- DECISION records `declared_tool_families`, `allowed_tool_families`, `permitted_tool_families`, `denied_tool_families`, `permitted_tools`, `tool_scope_enforced`, `tools_denied`, and `tools_denied_reason`.
 - EXECUTION records `tool_calls` (allowed) and `tool_blocked` (blocked with reason).
 
 ## Budget Constraint

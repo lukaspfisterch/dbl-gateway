@@ -115,8 +115,9 @@ class CapabilitiesToolSurface(BaseModel):
     declared_tools: CapabilitiesDeclaredTools
     tool_scope: CapabilitiesToolScope
     semantic_families: dict[str, list[str]]
+    trust_class_current: str
     allowed_families_current: list[str]
-    allowed_families_by_exposure: dict[str, list[str]]
+    allowed_families_by_exposure: dict[str, dict[str, list[str]]]
     no_mix_rules: list[dict[str, Any]]
 
 
@@ -330,14 +331,18 @@ _SURFACES_BY_ID: dict[str, dict[str, object]] = {
 }
 
 
-def get_capabilities_cached(boundary_config: BoundaryConfig | None = None) -> dict[str, object]:
+def get_capabilities_cached(
+    boundary_config: BoundaryConfig | None = None,
+    *,
+    trust_class: str = "anonymous",
+) -> dict[str, object]:
     """
     Cached version of get_capabilities with TTL.
     This should be called via run_in_threadpool if used in async context
     to avoid blocking the event loop on cache misses.
     """
     cfg = boundary_config or get_boundary_config()
-    cache_key = _capabilities_cache_key(cfg)
+    cache_key = _capabilities_cache_key(cfg, trust_class)
     now = time.time()
     cached = _CAPS_CACHE.get(cache_key)
     expires = _CAPS_CACHE.get(f"{cache_key}:expires_at", 0)
@@ -345,13 +350,17 @@ def get_capabilities_cached(boundary_config: BoundaryConfig | None = None) -> di
     if cached is not None and now < expires:
         return cached
 
-    caps = get_capabilities(cfg)
+    caps = get_capabilities(cfg, trust_class=trust_class)
     _CAPS_CACHE[cache_key] = caps
     _CAPS_CACHE[f"{cache_key}:expires_at"] = now + _CAPS_TTL_SECONDS
     return caps
 
 
-def get_capabilities(boundary_config: BoundaryConfig | None = None) -> dict[str, object]:
+def get_capabilities(
+    boundary_config: BoundaryConfig | None = None,
+    *,
+    trust_class: str = "anonymous",
+) -> dict[str, object]:
     cfg = boundary_config or get_boundary_config()
     checked_at = datetime.now(timezone.utc).isoformat()
     providers: list[dict[str, Any]] = []
@@ -405,15 +414,18 @@ def get_capabilities(boundary_config: BoundaryConfig | None = None) -> dict[str,
                 "default_when_declared_tools_present": "strict",
             },
             "semantic_families": {
-                "exec_like": ["code.*", "shell.*", "exec.*"],
-                "web_read": ["web.*"],
-                "file_ops": ["file.*", "fs.*"],
-                "data_access": ["db.*", "sql.*"],
-                "other": ["uncategorized"],
+                name: list(patterns)
+                for name, patterns in cfg.tool_policy.families.items()
             },
-            "allowed_families_current": list(allowed_tool_families_for_mode(cfg)),
+            "trust_class_current": trust_class,
+            "allowed_families_current": list(
+                allowed_tool_families_for_mode(cfg, trust_class=trust_class)
+            ),
             "allowed_families_by_exposure": {
-                mode: list(allowed_tool_families_for_mode(cfg, mode=mode))
+                mode: {
+                    trust: list(allowed_tool_families_for_mode(cfg, mode=mode, trust_class=trust))
+                    for trust in cfg.tool_policy.matrix.get(mode, {})
+                }
                 for mode in ("public", "operator", "demo")
             },
             "no_mix_rules": [
@@ -547,9 +559,10 @@ def surface_access_payload(
     }
 
 
-def _capabilities_cache_key(cfg: BoundaryConfig) -> str:
+def _capabilities_cache_key(cfg: BoundaryConfig, trust_class: str) -> str:
     runtime_fingerprint = {
         "boundary": cfg.config_digest,
+        "trust_class": trust_class,
         "demo_mode": _is_demo_mode(),
         "stub_mode": os.getenv("STUB_MODE", "").strip(),
         "openai_key": bool(_get_openai_key()),

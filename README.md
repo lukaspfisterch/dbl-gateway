@@ -59,7 +59,7 @@ The full built-in observer is demo-only unless you explicitly select the demo bo
 In `public`, the boundary also applies deterministic admission limits from the versioned boundary config before any `INTENT` is appended.
 High-risk context intents are only advertised in discovery when the active boundary/runtime can actually admit them.
 Even outside `public`, handle-derived content is `metadata_only` by default and requires explicit `model_context` opt-in before it can enter prompt context.
-The same boundary artifact now also declares allowed tool families by exposure mode, so tool-family governance is versioned, discoverable, and replay-stable.
+The same boundary artifact now also declares tool families plus an exposure-by-trust matrix, so tool governance is versioned, discoverable, and replay-stable instead of being hidden in execution.
 Startup logging now emits a concise config summary instead of listing every possible provider env var.
 
 ## Install

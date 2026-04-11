@@ -4,7 +4,7 @@
   "interface_version": 3,
   "boundary": {
     "boundary_version": "1",
-    "boundary_config_digest": "sha256:caeb2f2c4f3192ad20d3e8cbfd6b7a3900433cbe471cfc3a6a926ee84967884c",
+    "boundary_config_digest": "sha256:4ca10e56dc17824a79ed9ed01684f674084b15ebde21831ac8982625e6f17514",
     "exposure_mode": "operator"
   },
   "intents": {
@@ -53,39 +53,65 @@
         "exec.*"
       ],
       "web_read": [
+        "http.get",
+        "web.fetch",
         "web.*"
       ],
-      "file_ops": [
-        "file.*",
-        "fs.*"
-      ],
-      "data_access": [
+      "retrieval": [
+        "search.*",
+        "vector.*",
+        "db.read",
         "db.*",
         "sql.*"
       ],
-      "other": [
-        "uncategorized"
+      "llm_assist": [
+        "summarize",
+        "classify",
+        "transform"
       ]
     },
-    "allowed_families_current": [
-      "web_read",
-      "file_ops",
-      "data_access",
-      "other"
-    ],
+    "trust_class_current": "anonymous",
+    "allowed_families_current": [],
     "allowed_families_by_exposure": {
-      "public": [
-        "web_read"
-      ],
-      "operator": [
-        "web_read",
-        "file_ops",
-        "data_access",
-        "other"
-      ],
-      "demo": [
-        "*"
-      ]
+      "public": {
+        "anonymous": [
+          "web_read"
+        ],
+        "user": [
+          "web_read",
+          "retrieval"
+        ],
+        "operator": [
+          "web_read",
+          "retrieval"
+        ],
+        "internal": [
+          "web_read",
+          "retrieval"
+        ]
+      },
+      "operator": {
+        "anonymous": [],
+        "user": [
+          "web_read",
+          "retrieval"
+        ],
+        "operator": [
+          "web_read",
+          "retrieval",
+          "llm_assist"
+        ],
+        "internal": [
+          "web_read",
+          "retrieval",
+          "llm_assist"
+        ]
+      },
+      "demo": {
+        "*": [
+          "*"
+        ]
+      }
     },
     "no_mix_rules": [
       {
@@ -216,5 +242,5 @@
       "description": "External execution submission surface when enabled."
     }
   ],
-  "generated_at": "2026-04-11T16:59:24.772502+00:00"
+  "generated_at": "2026-04-11T17:29:02.887231+00:00"
 }

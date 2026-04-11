@@ -31,6 +31,9 @@ class Actor:
     raw_claims: dict[str, Any]
 
 
+TRUST_CLASSES: tuple[str, ...] = ("anonymous", "user", "operator", "internal")
+
+
 class AuthError(Exception):
     pass
 
@@ -293,3 +296,16 @@ def _parse_role_map(role_map_raw: str) -> dict[str, list[str]] | None:
             mapped = [v for v in value if isinstance(v, str) and v.strip()]
             role_map[str(key)] = mapped
     return role_map
+
+
+def trust_class_for_actor(actor: Actor | None) -> str:
+    if actor is None:
+        return "anonymous"
+    roles = set(actor.roles)
+    if actor.raw_claims.get("dev") is True or "gateway.internal" in roles:
+        return "internal"
+    if roles & {"gateway.operator", "gateway.admin"}:
+        return "operator"
+    if actor.actor_id.strip():
+        return "user"
+    return "anonymous"

@@ -95,6 +95,7 @@ def replay_decision_for_turn(
     stored_declared_tool_families = decision_payload.get("declared_tool_families")
     stored_allowed_tool_families = decision_payload.get("allowed_tool_families")
     stored_permitted_tool_families = decision_payload.get("permitted_tool_families")
+    stored_denied_tool_families = decision_payload.get("denied_tool_families")
     stored_policy_config_digest = stored_policy.get("policy_config_digest")
 
     decision_for_digest = DecisionResult(
@@ -111,6 +112,9 @@ def replay_decision_for_turn(
         ),
         permitted_tool_families=(
             stored_permitted_tool_families if isinstance(stored_permitted_tool_families, list) else None
+        ),
+        denied_tool_families=(
+            stored_denied_tool_families if isinstance(stored_denied_tool_families, list) else None
         ),
         permitted_tools=stored_permitted_tools if isinstance(stored_permitted_tools, list) else None,
         enforced_budget=stored_enforced_budget if isinstance(stored_enforced_budget, dict) else None,

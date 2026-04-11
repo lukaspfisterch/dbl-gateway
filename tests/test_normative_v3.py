@@ -14,6 +14,7 @@ class TestNormativeDecisionV3:
             declared_tool_families=["web_read", "exec_like"],
             allowed_tool_families=["web_read"],
             permitted_tool_families=["web_read"],
+            denied_tool_families=["exec_like"],
         )
         normative = build_normative_decision(
             decision, assembly_digest=None, context_digest=None,
@@ -21,6 +22,7 @@ class TestNormativeDecisionV3:
         assert normative["declared_tool_families"] == ["web_read", "exec_like"]
         assert normative["allowed_tool_families"] == ["web_read"]
         assert normative["permitted_tool_families"] == ["web_read"]
+        assert normative["denied_tool_families"] == ["exec_like"]
 
     def test_permitted_tools_in_normative(self):
         """permitted_tools appears in normative dict."""
@@ -67,6 +69,7 @@ class TestNormativeDecisionV3:
             "declared_tool_families": ["web_read", "exec_like"],
             "allowed_tool_families": ["web_read"],
             "permitted_tool_families": ["web_read"],
+            "denied_tool_families": ["exec_like"],
             "permitted_tools": ["z_tool", "a_tool"],
             "enforced_budget": None,
         })
@@ -84,11 +87,13 @@ class TestNormativeDecisionV3:
             "declared_tool_families": ["web_read", "exec_like"],
             "allowed_tool_families": ["web_read", "data_access"],
             "permitted_tool_families": ["web_read", "data_access"],
+            "denied_tool_families": ["exec_like"],
             "permitted_tools": None,
             "enforced_budget": None,
         })
         assert norm["declared_tool_families"] == ["exec_like", "web_read"]
         assert norm["allowed_tool_families"] == ["data_access", "web_read"]
+        assert norm["denied_tool_families"] == ["exec_like"]
 
     def test_digest_changes_with_tools(self):
         """Different permitted_tools produce different digests."""
@@ -102,6 +107,7 @@ class TestNormativeDecisionV3:
             "declared_tool_families": ["web_read"],
             "allowed_tool_families": ["web_read"],
             "permitted_tool_families": ["web_read"],
+            "denied_tool_families": [],
             "enforced_budget": None,
         }
         norm_a = _normalize_decision({**base, "permitted_tools": ["tool_a"]})
@@ -118,6 +124,7 @@ class TestNormativeDecisionV3:
             "result": "ALLOW",
             "reasons": [],
             "permitted_tools": None,
+            "denied_tool_families": None,
             "enforced_budget": None,
         }
         norm_a = _normalize_decision({**base, "permitted_tool_families": ["web_read"]})
@@ -136,6 +143,7 @@ class TestNormativeDecisionV3:
             "declared_tool_families": ["web_read"],
             "allowed_tool_families": ["web_read"],
             "permitted_tool_families": ["web_read"],
+            "denied_tool_families": [],
             "permitted_tools": None,
         }
         norm_a = _normalize_decision({**base, "enforced_budget": {"max_tokens": 100}})

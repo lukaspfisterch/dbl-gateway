@@ -17,6 +17,8 @@ from typing import Any, Literal, Mapping
 from dbl_core.events.canonical import canonicalize_value, json_dumps
 from hashlib import sha256
 
+from .auth import TRUST_CLASSES
+
 
 __all__ = [
     "BoundaryAdmissionConfig",
@@ -103,9 +105,8 @@ class BoundaryAdmissionConfig:
 class BoundaryToolPolicyConfig:
     """Immutable tool-family policy derived from boundary config."""
 
-    public: tuple[str, ...]
-    operator: tuple[str, ...]
-    demo: tuple[str, ...]
+    families: Mapping[str, tuple[str, ...]]
+    matrix: Mapping[str, Mapping[str, tuple[str, ...]]]
 
 
 @dataclass(frozen=True)
@@ -167,13 +168,14 @@ def allowed_tool_families_for_mode(
     boundary_config: BoundaryConfig,
     *,
     mode: Literal["public", "operator", "demo"] | None = None,
+    trust_class: str = "anonymous",
 ) -> tuple[str, ...]:
     selected_mode = mode or boundary_config.exposure_mode
-    if selected_mode == "public":
-        return boundary_config.tool_policy.public
-    if selected_mode == "operator":
-        return boundary_config.tool_policy.operator
-    return boundary_config.tool_policy.demo
+    mode_matrix = boundary_config.tool_policy.matrix.get(selected_mode, {})
+    if "*" in mode_matrix:
+        return mode_matrix["*"]
+    selected_trust = trust_class if trust_class in TRUST_CLASSES else "anonymous"
+    return mode_matrix.get(selected_trust, ())
 
 
 def load_boundary_config(path: Path | None = None) -> BoundaryConfig:
@@ -254,16 +256,58 @@ def _parse_boundary_config(raw: Mapping[str, Any]) -> BoundaryConfig:
     if not isinstance(raw_tool_policy, Mapping):
         raise ValueError("tool_policy must be an object")
 
-    def _parse_tool_families(name: str) -> tuple[str, ...]:
-        raw_families = raw_tool_policy.get(name)
-        if not isinstance(raw_families, list) or not raw_families:
-            raise ValueError(f"tool_policy.{name} must be a non-empty list[str]")
-        families: list[str] = []
-        for item in raw_families:
+    raw_families = raw_tool_policy.get("families")
+    if not isinstance(raw_families, Mapping) or not raw_families:
+        raise ValueError("tool_policy.families must be a non-empty object")
+
+    families: dict[str, tuple[str, ...]] = {}
+    for family_name, patterns in raw_families.items():
+        if not isinstance(family_name, str) or not family_name.strip():
+            raise ValueError("tool_policy.families keys must be non-empty strings")
+        if not isinstance(patterns, list) or not patterns:
+            raise ValueError(f"tool_policy.families.{family_name} must be a non-empty list[str]")
+        parsed_patterns: list[str] = []
+        for item in patterns:
             if not isinstance(item, str) or not item.strip():
-                raise ValueError(f"tool_policy.{name} entries must be non-empty strings")
-            families.append(item.strip())
-        return tuple(families)
+                raise ValueError(
+                    f"tool_policy.families.{family_name} entries must be non-empty strings"
+                )
+            parsed_patterns.append(item.strip())
+        families[family_name.strip()] = tuple(parsed_patterns)
+
+    raw_matrix = raw_tool_policy.get("matrix")
+    if not isinstance(raw_matrix, Mapping):
+        raise ValueError("tool_policy.matrix must be an object")
+
+    matrix: dict[str, dict[str, tuple[str, ...]]] = {}
+    for exposure_name in _EXPOSURE_RANKS:
+        raw_mode = raw_matrix.get(exposure_name)
+        if not isinstance(raw_mode, Mapping):
+            raise ValueError(f"tool_policy.matrix.{exposure_name} must be an object")
+        parsed_mode: dict[str, tuple[str, ...]] = {}
+        for trust_name, allowed in raw_mode.items():
+            if trust_name != "*" and trust_name not in TRUST_CLASSES:
+                raise ValueError(
+                    f"tool_policy.matrix.{exposure_name} keys must be trust classes or '*'"
+                )
+            if not isinstance(allowed, list):
+                raise ValueError(
+                    f"tool_policy.matrix.{exposure_name}.{trust_name} must be list[str]"
+                )
+            parsed_allowed: list[str] = []
+            for item in allowed:
+                if not isinstance(item, str) or not item.strip():
+                    raise ValueError(
+                        f"tool_policy.matrix.{exposure_name}.{trust_name} entries must be non-empty strings"
+                    )
+                family_name = item.strip()
+                if family_name != "*" and family_name not in families:
+                    raise ValueError(
+                        f"tool_policy.matrix.{exposure_name}.{trust_name} references unknown family {family_name!r}"
+                    )
+                parsed_allowed.append(family_name)
+            parsed_mode[str(trust_name)] = tuple(parsed_allowed)
+        matrix[exposure_name] = parsed_mode
 
     config_digest = _compute_config_digest(raw)
 
@@ -280,9 +324,8 @@ def _parse_boundary_config(raw: Mapping[str, Any]) -> BoundaryConfig:
             public_max_budget_duration_ms=max_budget_duration_ms,
         ),
         tool_policy=BoundaryToolPolicyConfig(
-            public=_parse_tool_families("public"),
-            operator=_parse_tool_families("operator"),
-            demo=_parse_tool_families("demo"),
+            families=families,
+            matrix=matrix,
         ),
         config_digest=config_digest,
         _raw=raw,

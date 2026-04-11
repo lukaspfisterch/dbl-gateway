@@ -57,6 +57,10 @@ class DecisionPayload(TypedDict, total=False):
     provider: str
     policy_id: str
     policy_version: str
+    declared_tool_families: list[str]
+    allowed_tool_families: list[str]
+    permitted_tool_families: list[str]
+    denied_tool_families: list[str]
     permitted_tools: list[str]
     tool_scope_enforced: str
     tools_denied: list[str]

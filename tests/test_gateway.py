@@ -273,10 +273,13 @@ def test_gateway_injects_tool_policy_into_policy_inputs(
         await _wait_for_decision(client, correlation_id="c-1")
         assert capture.last_input is not None
         inputs = capture.last_input["payload"]["inputs"]
+        gateway_auth = inputs["extensions"]["gateway_auth"]
         policy_meta = inputs["extensions"]["gateway_tool_policy"]
+        assert gateway_auth["trust_class"] == "internal"
         assert policy_meta["declared_tool_families"] == ["web_read", "exec_like"]
-        assert policy_meta["allowed_tool_families"] == ["web_read", "file_ops", "data_access", "other"]
+        assert policy_meta["allowed_tool_families"] == ["web_read", "retrieval", "llm_assist"]
         assert policy_meta["permitted_tool_families"] == ["web_read"]
+        assert policy_meta["denied_tool_families"] == ["exec_like"]
 
     run_with_client(app, scenario)
 
@@ -296,11 +299,12 @@ def test_decision_payload_tracks_tool_family_governance(
         snap = await _wait_for_decision(client, correlation_id="c-1")
         decision = [event for event in snap["events"] if event["kind"] == "DECISION"][-1]["payload"]
         assert decision["declared_tool_families"] == ["web_read", "exec_like"]
-        assert decision["allowed_tool_families"] == ["web_read", "file_ops", "data_access", "other"]
+        assert decision["allowed_tool_families"] == ["web_read", "retrieval", "llm_assist"]
         assert decision["permitted_tool_families"] == ["web_read"]
+        assert decision["denied_tool_families"] == ["exec_like"]
         assert decision["permitted_tools"] == ["web.search"]
         assert decision["tools_denied"] == ["code.execute"]
-        assert decision["tools_denied_reason"] == "tool.family_not_allowed"
+        assert decision["tools_denied_reason"] == "tool.no_mix.exec_like"
 
     run_with_client(app, scenario)
 
@@ -876,14 +880,17 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert data["intents"]["catalog"]["artifact.handle"]["admitted"] is True
         assert data["intents"]["catalog"]["artifact.handle"]["model_context_admit_mode"] == "metadata_only"
         assert "semantic_families" in data["tool_surface"]
+        assert data["tool_surface"]["trust_class_current"] == "internal"
         assert data["tool_surface"]["allowed_families_current"] == [
             "web_read",
-            "file_ops",
-            "data_access",
-            "other",
+            "retrieval",
+            "llm_assist",
         ]
-        assert data["tool_surface"]["allowed_families_by_exposure"]["public"] == ["web_read"]
-        assert data["tool_surface"]["allowed_families_by_exposure"]["demo"] == ["*"]
+        assert data["tool_surface"]["allowed_families_by_exposure"]["public"]["internal"] == [
+            "web_read",
+            "retrieval",
+        ]
+        assert data["tool_surface"]["allowed_families_by_exposure"]["demo"]["*"] == ["*"]
         assert data["tool_surface"]["no_mix_rules"][0]["rule_id"] == "tool.no_mix.exec_like"
         providers = data["providers"]
         assert isinstance(providers, list)

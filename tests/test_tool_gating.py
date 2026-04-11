@@ -35,6 +35,7 @@ class TestComputePermittedTools:
             "strict",
             _allow(),
             boundary_config=_boundary("boundary.demo.json"),
+            trust_class="internal",
         )
         assert permitted == ["web.search"]
         assert scope == "strict"
@@ -79,6 +80,7 @@ class TestComputePermittedTools:
             "strict",
             _allow(),
             boundary_config=_boundary("boundary.demo.json"),
+            trust_class="internal",
         )
         assert permitted == ["code.execute", "shell.execute"]
         assert denied == []
@@ -92,8 +94,48 @@ class TestComputePermittedTools:
             "strict",
             _allow(),
             boundary_config=_boundary("boundary.operator.json"),
+            trust_class="user",
         )
         assert permitted == []
         assert scope == "strict"
         assert denied == ["code.execute"]
         assert reason == "tool.family_not_allowed"
+
+    def test_public_anonymous_denies_exec_like_family(self):
+        """Public anonymous callers cannot request exec-like tools."""
+        permitted, scope, denied, reason = _compute_permitted_tools(
+            ["code.execute"],
+            "strict",
+            _allow(),
+            boundary_config=_boundary("boundary.public.json"),
+            trust_class="anonymous",
+        )
+        assert permitted == []
+        assert denied == ["code.execute"]
+        assert reason == "tool.family_not_allowed"
+
+    def test_operator_operator_allows_llm_assist(self):
+        """Operator-trusted callers may use llm_assist tools in operator mode."""
+        permitted, scope, denied, reason = _compute_permitted_tools(
+            ["summarize"],
+            "strict",
+            _allow(),
+            boundary_config=_boundary("boundary.operator.json"),
+            trust_class="operator",
+        )
+        assert permitted == ["summarize"]
+        assert denied == []
+        assert reason is None
+
+    def test_unknown_tool_family_is_denied(self):
+        """Tools outside the configured family map are rejected deterministically."""
+        permitted, scope, denied, reason = _compute_permitted_tools(
+            ["file.read"],
+            "strict",
+            _allow(),
+            boundary_config=_boundary("boundary.operator.json"),
+            trust_class="internal",
+        )
+        assert permitted == []
+        assert denied == ["file.read"]
+        assert reason == "tool.unknown_family"

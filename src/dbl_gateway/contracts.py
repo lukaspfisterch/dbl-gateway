@@ -51,6 +51,7 @@ class DecisionNormative(TypedDict, total=False):
     declared_tool_families: list[str] | None
     allowed_tool_families: list[str] | None
     permitted_tool_families: list[str] | None
+    denied_tool_families: list[str] | None
     permitted_tools: list[str] | None
     enforced_budget: BudgetConstraint | None
     intent_index: int | None
@@ -279,6 +280,10 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
         decision.get("permitted_tool_families"),
         field_name="permitted_tool_families",
     )
+    norm_denied_tool_families = _normalize_string_list(
+        decision.get("denied_tool_families"),
+        field_name="denied_tool_families",
+    )
 
     # Normalize permitted_tools (sorted for canonical ordering).
     permitted_tools_raw = decision.get("permitted_tools")
@@ -322,6 +327,7 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
         "declared_tool_families": norm_declared_tool_families,
         "allowed_tool_families": norm_allowed_tool_families,
         "permitted_tool_families": norm_permitted_tool_families,
+        "denied_tool_families": norm_denied_tool_families,
         "permitted_tools": norm_permitted_tools,
         "enforced_budget": norm_enforced_budget,
     }

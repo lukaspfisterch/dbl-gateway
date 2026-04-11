@@ -323,10 +323,13 @@
         "properties": {
           "allowed_families_by_exposure": {
             "additionalProperties": {
-              "items": {
-                "type": "string"
+              "additionalProperties": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
-              "type": "array"
+              "type": "object"
             },
             "title": "Allowed Families By Exposure",
             "type": "object"
@@ -361,12 +364,17 @@
           },
           "tool_scope": {
             "$ref": "#/components/schemas/CapabilitiesToolScope"
+          },
+          "trust_class_current": {
+            "title": "Trust Class Current",
+            "type": "string"
           }
         },
         "required": [
           "declared_tools",
           "tool_scope",
           "semantic_families",
+          "trust_class_current",
           "allowed_families_current",
           "allowed_families_by_exposure",
           "no_mix_rules"

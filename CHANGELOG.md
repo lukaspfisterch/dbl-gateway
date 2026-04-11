@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.18 — Tool Trust Classes
+
+**Boundary tool policy now resolves against `exposure_mode x trust_class`, not exposure alone.**
+- Reshape `tool_policy` into versioned `families + matrix`, with deterministic trust classes `anonymous`, `user`, `operator`, and `internal`.
+- Derive trust class from the existing actor/auth model, persist it in `payload.inputs.extensions.gateway_auth`, and feed it into policy-visible `gateway_tool_policy` metadata.
+- Move family resolution onto the boundary artifact, reject unknown tools with stable reason `tool.unknown_family`, and keep `tool.no_mix.exec_like` as the structural invariant before trust-based family gating.
+- Extend DECISION audit fields with `denied_tool_families`, expose `trust_class_current` and the full exposure/trust allow-matrix via `/capabilities`, and add focused regression coverage for the new trust-dependent behavior.
+
 ## v0.9.17 — Boundary Tool Families
 
 **Tool-family governance now lives in the versioned boundary config and enters the decision line explicitly.**

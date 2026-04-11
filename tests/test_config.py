@@ -170,9 +170,28 @@ def sample_boundary_config(tmp_path: Path) -> Path:
             },
         },
         "tool_policy": {
-            "public": ["web_read"],
-            "operator": ["web_read", "file_ops"],
-            "demo": ["*"],
+            "families": {
+                "exec_like": ["code.*"],
+                "web_read": ["web.*"],
+                "retrieval": ["search.*"],
+            },
+            "matrix": {
+                "public": {
+                    "anonymous": ["web_read"],
+                    "user": ["web_read", "retrieval"],
+                    "operator": ["web_read", "retrieval"],
+                    "internal": ["web_read", "retrieval"],
+                },
+                "operator": {
+                    "anonymous": [],
+                    "user": ["web_read", "retrieval"],
+                    "operator": ["web_read", "retrieval"],
+                    "internal": ["web_read", "retrieval"],
+                },
+                "demo": {
+                    "*": ["*"],
+                },
+            },
         },
         "surface_rules": {
             "healthz": "public",
@@ -195,8 +214,9 @@ def test_load_valid_boundary_config(sample_boundary_config: Path) -> None:
     assert cfg.surface_rules["surfaces"] == "operator"
     assert cfg.admission.public_allow_artifact_handle is False
     assert cfg.admission.public_max_declared_tools == 0
-    assert allowed_tool_families_for_mode(cfg) == ("web_read", "file_ops")
-    assert allowed_tool_families_for_mode(cfg, mode="public") == ("web_read",)
+    assert cfg.tool_policy.families["exec_like"] == ("code.*",)
+    assert allowed_tool_families_for_mode(cfg, trust_class="internal") == ("web_read", "retrieval")
+    assert allowed_tool_families_for_mode(cfg, mode="public", trust_class="anonymous") == ("web_read",)
     assert cfg.config_digest.startswith("sha256:")
 
 
@@ -214,9 +234,22 @@ def test_boundary_config_digest_changes_on_content_change(tmp_path: Path) -> Non
             },
         },
         "tool_policy": {
-            "public": ["web_read"],
-            "operator": ["web_read", "file_ops"],
-            "demo": ["*"],
+            "families": {"web_read": ["web.*"]},
+            "matrix": {
+                "public": {
+                    "anonymous": ["web_read"],
+                    "user": ["web_read"],
+                    "operator": ["web_read"],
+                    "internal": ["web_read"],
+                },
+                "operator": {
+                    "anonymous": [],
+                    "user": ["web_read"],
+                    "operator": ["web_read"],
+                    "internal": ["web_read"],
+                },
+                "demo": {"*": ["*"]},
+            },
         },
         "surface_rules": {"healthz": "public"},
     }
@@ -233,9 +266,22 @@ def test_boundary_config_digest_changes_on_content_change(tmp_path: Path) -> Non
             },
         },
         "tool_policy": {
-            "public": ["web_read"],
-            "operator": ["web_read", "file_ops"],
-            "demo": ["*"],
+            "families": {"web_read": ["web.*"]},
+            "matrix": {
+                "public": {
+                    "anonymous": ["web_read"],
+                    "user": ["web_read"],
+                    "operator": ["web_read"],
+                    "internal": ["web_read"],
+                },
+                "operator": {
+                    "anonymous": [],
+                    "user": ["web_read"],
+                    "operator": ["web_read"],
+                    "internal": ["web_read"],
+                },
+                "demo": {"*": ["*"]},
+            },
         },
         "surface_rules": {"healthz": "public"},
     }

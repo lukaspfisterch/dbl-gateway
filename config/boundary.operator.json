@@ -15,9 +15,29 @@
     }
   },
   "tool_policy": {
-    "public": ["web_read"],
-    "operator": ["web_read", "file_ops", "data_access", "other"],
-    "demo": ["*"]
+    "families": {
+      "exec_like": ["code.*", "shell.*", "exec.*"],
+      "web_read": ["http.get", "web.fetch", "web.*"],
+      "retrieval": ["search.*", "vector.*", "db.read", "db.*", "sql.*"],
+      "llm_assist": ["summarize", "classify", "transform"]
+    },
+    "matrix": {
+      "public": {
+        "anonymous": ["web_read"],
+        "user": ["web_read", "retrieval"],
+        "operator": ["web_read", "retrieval"],
+        "internal": ["web_read", "retrieval"]
+      },
+      "operator": {
+        "anonymous": [],
+        "user": ["web_read", "retrieval"],
+        "operator": ["web_read", "retrieval", "llm_assist"],
+        "internal": ["web_read", "retrieval", "llm_assist"]
+      },
+      "demo": {
+        "*": ["*"]
+      }
+    }
   },
   "surface_rules": {
     "healthz": "public",
