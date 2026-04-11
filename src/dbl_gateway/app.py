@@ -1744,6 +1744,8 @@ def _audit_env() -> None:
 
 
 def _config_audit_summary() -> dict[str, object]:
+    boundary_cfg = get_boundary_config()
+    auth_cfg = load_auth_config_with_identity_policy(identity_policy=boundary_cfg.identity_policy._raw)
     provider_signals: list[tuple[str, bool]] = [
         ("openai", bool(os.getenv("OPENAI_API_KEY", "").strip())),
         ("anthropic", bool(os.getenv("ANTHROPIC_API_KEY", "").strip())),
@@ -1766,11 +1768,11 @@ def _config_audit_summary() -> dict[str, object]:
     return {
         "policy_module": "set" if os.getenv("DBL_GATEWAY_POLICY_MODULE", "").strip() else "missing",
         "policy_object": os.getenv("DBL_GATEWAY_POLICY_OBJECT", "").strip() or "POLICY(default)",
-        "boundary_mode": get_boundary_config().exposure_mode,
+        "boundary_mode": boundary_cfg.exposure_mode,
         "context_resolution": "on" if context_resolution_enabled() else "off",
         "exec_mode": _get_exec_mode(),
         "demo_mode": "on" if demo_enabled else "off",
-        "auth_mode": os.getenv("DBL_GATEWAY_AUTH_MODE", "dev").strip() or "dev",
+        "auth_mode": auth_cfg.mode,
         "db": "set" if os.getenv("DBL_GATEWAY_DB", "").strip() else "default",
         "providers": active_providers,
     }

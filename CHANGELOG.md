@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.25 — Controlled Identity Discovery
+
+**Operator discovery now explains the active identity-mapping structure without leaking raw identity topology into public capability views.**
+- Publish `auth.claim_mapping` in `/capabilities` as field names only, sourced from the active boundary `identity_policy`.
+- Replace raw role-map exposure with compact `auth.role_mapping_summary` counters so operators can see how trust classes are derived without enumerating tenant- or group-specific mappings.
+- Omit both identity-structure views in `public`, keeping the public capability surface aligned with minimized discovery rather than operator introspection.
+- Make the startup config summary read `auth_mode` from the active boundary identity policy so startup logging and `/capabilities` report the same auth truth.
+
 ## v0.9.24 — Boundary Identity Policy
 
 **Identity mode and claim mapping now live in the hashed boundary contract instead of hiding in auth env alone.**

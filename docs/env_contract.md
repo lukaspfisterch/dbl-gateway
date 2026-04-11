@@ -48,6 +48,10 @@ Each boundary artifact now contains `identity_policy`:
 - `role_map`
 
 This makes the effective identity mapping part of the hashed boundary contract instead of a hidden runtime detail.
+Operator discovery reuses that same boundary truth:
+- `/capabilities.auth.claim_mapping` shows only the configured claim field names
+- `/capabilities.auth.role_mapping_summary` shows only compact mapping counts and fallback behavior
+- `public` omits both fields to avoid unnecessary identity-structure recon
 
 ## Boundary Profiles
 

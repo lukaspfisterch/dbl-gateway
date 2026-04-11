@@ -131,8 +131,11 @@ returned observer status/results.
   - `dev_headers` for local/demo header-derived identity
   - `oidc_jwt` for generic OIDC bearer-token identity
 - `auth.issuers_allowed` and `auth.audiences_allowed` publish the active OIDC allowlists.
+- `auth.claim_mapping` publishes only the configured claim field names used for `actor_id`, `issuer`, and role extraction.
+- `auth.role_mapping_summary` publishes a compact operator view of the active role-map shape (`mapped_sources`, `operator_sources`, `internal_sources`, `user_fallback`) without exposing raw tenant or group topology.
 - `auth.current_trust_class` publishes the trust class currently derived for the caller.
 - Trust classes remain stable: `anonymous`, `user`, `operator`, `internal`.
+- In `public`, `auth.claim_mapping` and `auth.role_mapping_summary` are omitted entirely.
 - The gateway injects this identity as `payload.inputs.extensions.gateway_auth` before policy evaluation.
 - DECISION records `actor_id`, `trust_class`, `identity_issuer`, `identity_verified`, `identity_source`, and `claims_digest`.
 

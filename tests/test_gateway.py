@@ -12,6 +12,8 @@ import sys
 from starlette.requests import Request
 
 from dbl_gateway.app import _config_audit_summary, create_app
+from dbl_gateway.capabilities import get_capabilities
+from dbl_gateway.config import reset_boundary_config_cache
 from dbl_gateway.ports.execution_port import ExecutionResult
 from dbl_gateway.wire_contract import INTERFACE_VERSION
 from dbl_gateway.digest import event_digest
@@ -976,6 +978,17 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert data["auth"]["identity_sources"] == ["dev_headers"]
         assert data["auth"]["issuers_allowed"] == []
         assert data["auth"]["audiences_allowed"] == []
+        assert data["auth"]["claim_mapping"] == {
+            "actor_id": ["oid", "sub"],
+            "issuer": "iss",
+            "roles": ["roles", "groups"],
+        }
+        assert data["auth"]["role_mapping_summary"] == {
+            "mapped_sources": 2,
+            "operator_sources": 1,
+            "internal_sources": 1,
+            "user_fallback": True,
+        }
         assert data["budget"]["request_classes"] == [
             "probe",
             "intent",
@@ -1051,6 +1064,43 @@ def test_config_audit_summary_is_concise(monkeypatch: pytest.MonkeyPatch) -> Non
     assert summary["context_resolution"] == "on"
     assert summary["db"] == "set"
     assert summary["providers"] == ["openai"]
+
+
+def test_config_audit_summary_matches_boundary_auth_mode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = Path(_boundary_path("boundary.operator.json"))
+    raw = json.loads(base.read_text(encoding="utf-8"))
+    raw["identity_policy"]["mode"] = "oidc"
+    raw["identity_policy"]["issuers_allowed"] = ["https://issuer.example"]
+    raw["identity_policy"]["audiences_allowed"] = ["api://gateway"]
+    boundary_path = tmp_path / "boundary.oidc.json"
+    boundary_path.write_text(json.dumps(raw, indent=2) + "\n", encoding="utf-8")
+
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", str(boundary_path))
+    monkeypatch.setenv("DBL_GATEWAY_AUTH_MODE", "dev")
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+
+    reset_boundary_config_cache()
+    summary = _config_audit_summary()
+    assert summary["auth_mode"] == "oidc"
+
+    reset_boundary_config_cache()
+    data = get_capabilities(trust_class="anonymous")
+    assert data["auth"]["mode"] == "oidc"
+    assert data["auth"]["claim_mapping"] == {
+        "actor_id": ["oid", "sub"],
+        "issuer": "iss",
+        "roles": ["roles", "groups"],
+    }
+    assert data["auth"]["role_mapping_summary"] == {
+        "mapped_sources": 2,
+        "operator_sources": 1,
+        "internal_sources": 1,
+        "user_fallback": True,
+    }
+    assert summary["auth_mode"] == data["auth"]["mode"]
 
 
 def test_intent_template_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -15,7 +15,24 @@
       "dev_headers"
     ],
     "issuers_allowed": [],
-    "audiences_allowed": []
+    "audiences_allowed": [],
+    "claim_mapping": {
+      "actor_id": [
+        "oid",
+        "sub"
+      ],
+      "issuer": "iss",
+      "roles": [
+        "roles",
+        "groups"
+      ]
+    },
+    "role_mapping_summary": {
+      "mapped_sources": 2,
+      "operator_sources": 1,
+      "internal_sources": 1,
+      "user_fallback": true
+    }
   },
   "boundary": {
     "boundary_version": "1",
@@ -847,5 +864,5 @@
       "description": "External execution submission surface when enabled."
     }
   ],
-  "generated_at": "2026-04-11T19:48:26.590651+00:00"
+  "generated_at": "2026-04-11T20:52:58.820301+00:00"
 }

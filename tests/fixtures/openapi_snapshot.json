@@ -2,53 +2,7 @@
   "components": {
     "schemas": {
       "CapabilitiesAuth": {
-        "properties": {
-          "audiences_allowed": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Audiences Allowed",
-            "type": "array"
-          },
-          "current_trust_class": {
-            "title": "Current Trust Class",
-            "type": "string"
-          },
-          "identity_sources": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Identity Sources",
-            "type": "array"
-          },
-          "issuers_allowed": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Issuers Allowed",
-            "type": "array"
-          },
-          "mode": {
-            "title": "Mode",
-            "type": "string"
-          },
-          "trust_classes": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Trust Classes",
-            "type": "array"
-          }
-        },
-        "required": [
-          "mode",
-          "current_trust_class",
-          "trust_classes",
-          "identity_sources",
-          "issuers_allowed",
-          "audiences_allowed"
-        ],
-        "title": "CapabilitiesAuth",
+        "additionalProperties": true,
         "type": "object"
       },
       "CapabilitiesBoundary": {

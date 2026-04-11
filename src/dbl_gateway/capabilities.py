@@ -11,7 +11,7 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_serializer
 
 from .config import (
     allowed_tool_families_for_mode,
@@ -97,6 +97,17 @@ class CapabilitiesAuth(BaseModel):
     identity_sources: list[str]
     issuers_allowed: list[str]
     audiences_allowed: list[str]
+    claim_mapping: dict[str, Any] | None = None
+    role_mapping_summary: dict[str, Any] | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_none_fields(self, handler: Any) -> dict[str, Any]:
+        data = handler(self)
+        if data.get("claim_mapping") is None:
+            data.pop("claim_mapping", None)
+        if data.get("role_mapping_summary") is None:
+            data.pop("role_mapping_summary", None)
+        return data
 
 
 class SurfaceDescriptor(BaseModel):
@@ -357,6 +368,41 @@ _SURFACES_BY_ID: dict[str, dict[str, object]] = {
 }
 
 
+def _identity_sources_for_mode(mode: str) -> list[str]:
+    if mode == "dev":
+        return ["dev_headers"]
+    if mode == "oidc":
+        return ["oidc_jwt"]
+    return []
+
+
+def _identity_claim_mapping(cfg: BoundaryConfig) -> dict[str, Any]:
+    return {
+        "actor_id": list(cfg.identity_policy.actor_id_claims),
+        "issuer": cfg.identity_policy.issuer_claim,
+        "roles": list(cfg.identity_policy.role_claims),
+    }
+
+
+def _identity_role_mapping_summary(cfg: BoundaryConfig) -> dict[str, Any]:
+    operator_targets = {"gateway.operator", "gateway.admin"}
+    internal_targets = {"gateway.internal"}
+    operator_sources = 0
+    internal_sources = 0
+    for mapped_roles in cfg.identity_policy.role_map.values():
+        mapped_set = set(mapped_roles)
+        if mapped_set & operator_targets:
+            operator_sources += 1
+        if mapped_set & internal_targets:
+            internal_sources += 1
+    return {
+        "mapped_sources": len(cfg.identity_policy.role_map),
+        "operator_sources": operator_sources,
+        "internal_sources": internal_sources,
+        "user_fallback": True,
+    }
+
+
 def get_capabilities_cached(
     boundary_config: BoundaryConfig | None = None,
     *,
@@ -469,25 +515,23 @@ def get_capabilities(
         for request_class, rule in serialize_economic_policy(cfg.exposure_mode, trust_class).items()
         if request_class in visible_request_classes_current
     }
+    auth_payload: dict[str, Any] = {
+        "mode": auth_cfg.mode,
+        "current_trust_class": trust_class,
+        "trust_classes": list(TRUST_CLASSES),
+        "identity_sources": _identity_sources_for_mode(auth_cfg.mode),
+        "issuers_allowed": list(auth_cfg.issuers_allowed),
+        "audiences_allowed": list(auth_cfg.audiences_allowed),
+    }
+    if cfg.exposure_mode != "public":
+        auth_payload["claim_mapping"] = _identity_claim_mapping(cfg)
+        auth_payload["role_mapping_summary"] = _identity_role_mapping_summary(cfg)
 
     return {
         "schema_version": CAPABILITIES_SCHEMA_VERSION,
         "gateway_version": _gateway_version(),
         "interface_version": INTERFACE_VERSION,
-        "auth": {
-            "mode": auth_cfg.mode,
-            "current_trust_class": trust_class,
-            "trust_classes": list(TRUST_CLASSES),
-            "identity_sources": (
-                ["dev_headers"]
-                if auth_cfg.mode == "dev"
-                else ["oidc_jwt"]
-                if auth_cfg.mode == "oidc"
-                else []
-            ),
-            "issuers_allowed": list(auth_cfg.issuers_allowed),
-            "audiences_allowed": list(auth_cfg.audiences_allowed),
-        },
+        "auth": auth_payload,
         "boundary": {
             "boundary_version": cfg.boundary_version,
             "boundary_config_digest": cfg.config_digest,

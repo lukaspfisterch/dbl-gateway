@@ -66,6 +66,17 @@ def test_generated_snapshot_has_contract_fields(tmp_path: Path) -> None:
     assert "identity_sources" in data["auth"]
     assert "issuers_allowed" in data["auth"]
     assert "audiences_allowed" in data["auth"]
+    assert data["auth"]["claim_mapping"] == {
+        "actor_id": ["oid", "sub"],
+        "issuer": "iss",
+        "roles": ["roles", "groups"],
+    }
+    assert data["auth"]["role_mapping_summary"] == {
+        "mapped_sources": 2,
+        "operator_sources": 1,
+        "internal_sources": 1,
+        "user_fallback": True,
+    }
     assert isinstance(data["intents"]["supported"], list)
     assert isinstance(data["tool_surface"]["declared_tools"]["max_items"], int)
     assert "semantic_families" in data["tool_surface"]
