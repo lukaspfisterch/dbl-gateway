@@ -33,6 +33,15 @@ Each boundary artifact also contains `admission.public`:
 
 These limits are enforced deterministically from request content plus boundary config. They do not depend on queue depth, load, timing, or other runtime observations.
 
+## Context High-Risk Fetch Mode
+
+`config/context.json` contains `context.handle_content_fetch.high_risk_context_admit_mode`:
+- `disabled` — handle content never enters model context
+- `metadata_only` — handle refs stay resolvable/auditable, but fetched content does not enter model context
+- `model_context` — fetched handle content may enter model context when the remaining fetch guards allow it
+
+Default is `metadata_only`.
+
 ## Provider Credentials
 
 | Variable | Description |

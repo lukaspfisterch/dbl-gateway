@@ -63,6 +63,7 @@ class ContextConfig:
 
     # Handle content fetch (Workbench resolver)
     allow_handle_content_fetch: bool
+    high_risk_context_admit_mode: Literal["disabled", "metadata_only", "model_context"]
     workbench_resolver_url: str | None
     workbench_auth_bearer_token: str | None
     workbench_fetch_timeout_ms: int
@@ -284,6 +285,11 @@ def _parse_config(raw: Mapping[str, Any]) -> ContextConfig:
     allow_handle_fetch = handle_cfg.get("allow_handle_content_fetch", False)
     if not isinstance(allow_handle_fetch, bool):
         raise ValueError("handle_content_fetch.allow_handle_content_fetch must be boolean")
+    high_risk_context_admit_mode = handle_cfg.get("high_risk_context_admit_mode", "metadata_only")
+    if high_risk_context_admit_mode not in ("disabled", "metadata_only", "model_context"):
+        raise ValueError(
+            "handle_content_fetch.high_risk_context_admit_mode must be disabled, metadata_only, or model_context"
+        )
     resolver_url = handle_cfg.get("workbench_resolver_url")
     if resolver_url is not None and not isinstance(resolver_url, str):
         raise ValueError("handle_content_fetch.workbench_resolver_url must be string when provided")
@@ -377,6 +383,7 @@ def _parse_config(raw: Mapping[str, Any]) -> ContextConfig:
         canonical_sort=canonical_sort,
         enforce_scope_bound=enforce_scope,
         allow_handle_content_fetch=allow_handle_fetch,
+        high_risk_context_admit_mode=high_risk_context_admit_mode,
         workbench_resolver_url=resolver_url.strip() if isinstance(resolver_url, str) and resolver_url.strip() else None,
         workbench_auth_bearer_token=auth_token.strip() if isinstance(auth_token, str) and auth_token.strip() else None,
         workbench_fetch_timeout_ms=fetch_timeout_ms,

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.15 — Explicit High-Risk Context Mode
+
+**Handle-derived context is no longer implicitly eligible for model context once fetch is enabled.**
+- Add `context.handle_content_fetch.high_risk_context_admit_mode` with explicit modes `disabled`, `metadata_only`, and `model_context`.
+- Default the runtime to `metadata_only`, so handle refs remain resolvable as metadata without automatically lifting fetched content into prompt context.
+- Require explicit `model_context` opt-in before Workbench-fetched handle content can enter `assembled_context.model_messages`.
+- Expose the active high-risk context mode in discovery metadata and add regression coverage for metadata-only vs model-context behavior.
+
 ## v0.9.14 — High-Risk Context Discovery
 
 **High-risk context intents are now advertised only where the active boundary/runtime can actually admit them.**

@@ -58,12 +58,14 @@ returned observer status/results.
 - Template payloads include `interface_version`, `intent_variant`, and `target_endpoint` so agents can bootstrap against the wire contract without guessing.
 - `template_version` and `template_schema_digest` let clients detect when the teaching surface has changed.
 - `intents.catalog` describes each currently visible intent with `risk_class`, `admitted`, and `requires_context_resolution`.
+- High-risk context intents also expose `model_context_admit_mode`.
 - `GET /intent-template` only emits example envelopes for intents currently admitted by the active boundary/runtime configuration.
 
 ## Intents
 - `chat.message`: accepts `message` plus optional `inputs`, `declared_refs`, `context_mode/context_n`, `declared_tools`, `tool_scope`, `budget`.
 - `artifact.handle`: metadata-only, does not trigger decision by default; content fetch is gated. Rejected when `GATEWAY_ENABLE_CONTEXT_RESOLUTION` is OFF.
 - `artifact.handle` is treated as `high_risk_context` in discovery metadata and is not advertised in `public` mode by default.
+- By default, high-risk handle content remains `metadata_only`; only explicit `model_context` mode allows fetched content into prompt context.
 
 ## Declared Refs & Admission Rules
 - `declared_refs` must be a list of `{ref_type, ref_id, version?}`.
@@ -116,6 +118,7 @@ returned observer status/results.
 - `max_refs=50`, `expand_last_n=10`, `empty_refs_policy=DENY`.
 - `allow_execution_refs_for_prompt=true`, `canonical_sort=event_index_asc`, `enforce_scope_bound=true`.
 - Handle content fetch: disabled by default; `workbench_max_bytes=512000`, `fetch_timeout_ms=1500`.
+- High-risk handle content admit mode defaults to `metadata_only`.
 - Queue max: 100. Concurrency ingest=2, embed=1, index=1, llm=1. LLM wall clock 60s.
 - Max output tokens: openai/anthropic 8192, ollama 4096.
 

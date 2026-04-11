@@ -137,6 +137,7 @@ class TestRefResolver:
                 "enforce_scope_bound": True,
                 "handle_content_fetch": {
                     "allow_handle_content_fetch": True,
+                    "high_risk_context_admit_mode": "model_context",
                     "workbench_resolver_url": "http://127.0.0.1:9090",
                     "workbench_fetch_timeout_ms": 1500,
                     "workbench_max_bytes": 512000,
@@ -198,6 +199,79 @@ class TestRefResolver:
 
         assert result.warnings == ()
         assert result.resolved_refs[0]["content"] == "hello summary"
+
+    def test_handle_content_fetch_stays_metadata_only_without_explicit_model_context(
+        self, tmp_path, monkeypatch,
+    ) -> None:
+        config = {
+            "schema_version": "1",
+            "context": {
+                "max_refs": 5,
+                "empty_refs_policy": "DENY",
+                "expand_last_n": 10,
+                "allow_execution_refs_for_prompt": True,
+                "canonical_sort": "event_index_asc",
+                "enforce_scope_bound": True,
+                "handle_content_fetch": {
+                    "allow_handle_content_fetch": True,
+                    "high_risk_context_admit_mode": "metadata_only",
+                    "workbench_resolver_url": "http://127.0.0.1:9090",
+                    "workbench_fetch_timeout_ms": 1500,
+                    "workbench_max_bytes": 512000,
+                    "workbench_admit_kinds": ["summary"],
+                },
+            },
+            "normalization": {"rules": ["FILTER_INTENT_ONLY", "SCOPE_BOUND", "SORT_CANONICAL"]},
+        }
+        path = tmp_path / "context.json"
+        path.write_text(json.dumps(config), encoding="utf-8")
+        cfg = load_context_config(path)
+
+        event = {
+            "index": 0,
+            "kind": "INTENT",
+            "thread_id": "thread-1",
+            "turn_id": "turn-1",
+            "parent_turn_id": None,
+            "lane": "user",
+            "actor": "test",
+            "intent_type": "artifact.handle",
+            "stream_id": "default",
+            "correlation_id": "corr-1",
+            "payload": {
+                "handle": {
+                    "artifact_ref_id": "art-1",
+                    "artifact_kind": "summary",
+                    "scope": "summary",
+                    "bytes": 10,
+                },
+                "resolver": {
+                    "type": "workbench",
+                    "endpoint": "workbench://cases/case-1/artifacts/art-1",
+                },
+            },
+            "digest": "sha256:abc",
+            "canon_len": 100,
+            "is_authoritative": False,
+        }
+
+        def fake_get(*_args, **_kwargs):
+            raise AssertionError("metadata_only mode must not fetch remote handle content")
+
+        monkeypatch.setattr("dbl_gateway.ref_resolver.httpx.get", fake_get)
+
+        declared_refs = [{"ref_type": "event", "ref_id": "turn-1"}]
+        result = resolve_declared_refs(
+            declared_refs=declared_refs,
+            thread_id="thread-1",
+            thread_events=[event],
+            config=cfg,
+            intent_type="chat.message",
+        )
+
+        assert result.warnings == ("HIGH_RISK_CONTEXT_METADATA_ONLY ref_id=turn-1",)
+        assert result.resolved_refs[0]["content"] == ""
+        assert result.resolved_refs[0]["admitted_for"] == "execution_only"
 
     def test_max_refs_exceeded_raises(self, sample_config: ContextConfig) -> None:
         """Too many refs raise MaxRefsExceededError."""

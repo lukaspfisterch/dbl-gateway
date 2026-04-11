@@ -811,6 +811,7 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert "artifact.handle" in data["intents"]["supported"]
         assert data["intents"]["catalog"]["artifact.handle"]["risk_class"] == "high_risk_context"
         assert data["intents"]["catalog"]["artifact.handle"]["admitted"] is True
+        assert data["intents"]["catalog"]["artifact.handle"]["model_context_admit_mode"] == "metadata_only"
         providers = data["providers"]
         assert isinstance(providers, list)
         assert providers and providers[0]["id"] == "openai"

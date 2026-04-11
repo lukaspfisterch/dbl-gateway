@@ -18,6 +18,7 @@ from .config import (
     context_resolution_enabled,
     exposure_mode_allows,
     get_boundary_config,
+    get_context_config,
 )
 from .providers import get_provider_capabilities
 from .providers.contract import ProviderCapabilities
@@ -423,6 +424,7 @@ def get_capabilities(boundary_config: BoundaryConfig | None = None) -> dict[str,
 def get_intent_catalog(boundary_config: BoundaryConfig | None = None) -> dict[str, dict[str, Any]]:
     cfg = boundary_config or get_boundary_config()
     context_enabled = context_resolution_enabled()
+    context_cfg = get_context_config()
 
     catalog: dict[str, dict[str, Any]] = {
         "chat.message": {
@@ -448,6 +450,9 @@ def get_intent_catalog(boundary_config: BoundaryConfig | None = None) -> dict[st
                 cfg.exposure_mode != "public" or cfg.admission.public_allow_artifact_handle
             ),
             "requires_context_resolution": True,
+            "model_context_admit_mode": (
+                context_cfg.high_risk_context_admit_mode if context_enabled else "disabled"
+            ),
             "available_in_exposure_modes": artifact_exposures,
         }
 

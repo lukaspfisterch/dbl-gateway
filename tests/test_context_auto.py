@@ -15,6 +15,7 @@ def mock_config(tmp_path):
         enforce_scope_bound=True,
         allow_execution_refs_for_prompt=True,
         allow_handle_content_fetch=False,
+        high_risk_context_admit_mode="metadata_only",
         workbench_resolver_url=None,
         workbench_auth_bearer_token=None,
         workbench_fetch_timeout_ms=1500,

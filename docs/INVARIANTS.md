@@ -34,6 +34,8 @@ These invariants enforce the formal axioms from the DBL paper. They are the foun
 
 **I-GATE-2**: When context resolution is OFF, `artifact.handle` intents are rejected at ingress (before INTENT event is appended).
 
+**I-GATE-3**: When `context.handle_content_fetch.high_risk_context_admit_mode != "model_context"`, handle-derived content MUST NOT enter model context. Handle refs may remain metadata-only and auditable, but fetched content does not populate prompt context.
+
 ## Wire Contract
 
 **I-WIRE-1**: Requests with `interface_version != 3` are rejected at ingress.

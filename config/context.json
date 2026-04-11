@@ -10,6 +10,7 @@
     "enforce_scope_bound": true,
     "handle_content_fetch": {
       "allow_handle_content_fetch": false,
+      "high_risk_context_admit_mode": "metadata_only",
       "workbench_resolver_url": "http://127.0.0.1:8080",
       "workbench_auth_bearer_token": "",
       "workbench_fetch_timeout_ms": 1500,

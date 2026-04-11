@@ -246,7 +246,11 @@ def resolve_declared_refs(
             "event_digest": event.get("digest", ""),
             "event_kind": event_kind,
             "admitted_for": admitted_for,
-            "content": content if event_kind == "INTENT" and event.get("intent_type") == "artifact.handle" else _extract_event_content(event),
+            "content": (
+                content or ""
+                if event_kind == "INTENT" and event.get("intent_type") == "artifact.handle"
+                else _extract_event_content(event)
+            ),
         }
         
         if ref.get("version"):
@@ -320,6 +324,12 @@ def _resolve_handle_content(
     if intent_type != "chat.message":
         _log_debug("intent_type_not_chat", None)
         return None, _warn("HANDLE_CONTENT_FETCH_DISABLED")
+    if config.high_risk_context_admit_mode == "disabled":
+        _log_debug("high_risk_context_disabled", None)
+        return None, _warn("HIGH_RISK_CONTEXT_DISABLED")
+    if config.high_risk_context_admit_mode == "metadata_only":
+        _log_debug("high_risk_context_metadata_only", None)
+        return None, _warn("HIGH_RISK_CONTEXT_METADATA_ONLY")
     if not config.allow_handle_content_fetch:
         _log_debug("disabled_flag", None)
         return None, _warn("HANDLE_CONTENT_FETCH_DISABLED")

@@ -128,6 +128,7 @@ This is guarded by config and never uses the event-provided endpoint as a free U
 
 Config keys (context.handle_content_fetch):
 - `allow_handle_content_fetch` (bool)
+- `high_risk_context_admit_mode` (`disabled` | `metadata_only` | `model_context`)
 - `workbench_resolver_url` (base URL; must be http/https)
 - `workbench_auth_bearer_token` (optional)
 - `workbench_fetch_timeout_ms` (default 1500)
@@ -135,6 +136,8 @@ Config keys (context.handle_content_fetch):
 - `workbench_admit_kinds` (default ["extracted_text","summary"])
 
 Warnings (observational, stored in `assembled_context.warnings`):
+- `HIGH_RISK_CONTEXT_DISABLED`
+- `HIGH_RISK_CONTEXT_METADATA_ONLY`
 - `HANDLE_CONTENT_FETCH_DISABLED`
 - `HANDLE_CONTENT_FETCH_KIND_DENIED`
 - `HANDLE_CONTENT_FETCH_TOO_LARGE`

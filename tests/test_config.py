@@ -48,6 +48,7 @@ def test_load_valid_config(sample_config: Path) -> None:
     assert cfg.allow_execution_refs_for_prompt is True
     assert cfg.canonical_sort == "event_index_asc"
     assert cfg.enforce_scope_bound is True
+    assert cfg.high_risk_context_admit_mode == "metadata_only"
     assert cfg.schema_version == "1"
     assert cfg.normalization_rules == ("FILTER_INTENT_ONLY", "SCOPE_BOUND", "SORT_CANONICAL")
 

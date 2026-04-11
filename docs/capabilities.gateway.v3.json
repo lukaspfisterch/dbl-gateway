@@ -27,6 +27,7 @@
         "risk_class": "high_risk_context",
         "admitted": true,
         "requires_context_resolution": true,
+        "model_context_admit_mode": "metadata_only",
         "available_in_exposure_modes": [
           "operator",
           "demo"

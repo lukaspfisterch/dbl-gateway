@@ -68,6 +68,11 @@
                             "type": "boolean",
                             "description": "If true, artifact.handle refs may fetch content from Workbench for chat.message."
                         },
+                        "high_risk_context_admit_mode": {
+                            "type": "string",
+                            "enum": ["disabled", "metadata_only", "model_context"],
+                            "description": "Controls whether high-risk handle content stays metadata-only or may enter model context."
+                        },
                         "workbench_resolver_url": {
                             "type": "string",
                             "description": "Base URL for Workbench resolver (e.g., http://127.0.0.1:8080)."
