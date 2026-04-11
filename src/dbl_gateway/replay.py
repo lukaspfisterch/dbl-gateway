@@ -92,6 +92,9 @@ def replay_decision_for_turn(
     # normative digest and must be restored for replay equivalence.
     stored_permitted_tools = decision_payload.get("permitted_tools")
     stored_enforced_budget = decision_payload.get("enforced_budget")
+    stored_request_class = decision_payload.get("request_class")
+    stored_budget_class = decision_payload.get("budget_class")
+    stored_budget_policy_reason = decision_payload.get("budget_policy_reason")
     stored_declared_tool_families = decision_payload.get("declared_tool_families")
     stored_allowed_tool_families = decision_payload.get("allowed_tool_families")
     stored_permitted_tool_families = decision_payload.get("permitted_tool_families")
@@ -104,6 +107,11 @@ def replay_decision_for_turn(
         policy_id=stored_policy.get("policy_id") or policy_result.policy_id,
         policy_version=stored_policy.get("policy_version") or policy_result.policy_version,
         gate_event=policy_result.gate_event,
+        request_class=stored_request_class if isinstance(stored_request_class, str) else None,
+        budget_class=stored_budget_class if isinstance(stored_budget_class, str) else None,
+        budget_policy_reason=(
+            stored_budget_policy_reason if isinstance(stored_budget_policy_reason, str) else None
+        ),
         declared_tool_families=(
             stored_declared_tool_families if isinstance(stored_declared_tool_families, list) else None
         ),

@@ -56,10 +56,10 @@ The default runtime boundary profile is `operator`:
 - `/ui/*` is not exposed
 
 The full built-in observer is demo-only unless you explicitly select the demo boundary config.
-In `public`, the boundary also applies deterministic admission limits from the versioned boundary config before any `INTENT` is appended.
+In `public`, the boundary still blocks high-risk shapes like `artifact.handle`, `declared_refs`, and over-broad tool declarations before any `INTENT` is appended.
 High-risk context intents are only advertised in discovery when the active boundary/runtime can actually admit them.
 Even outside `public`, handle-derived content is `metadata_only` by default and requires explicit `model_context` opt-in before it can enter prompt context.
-The same boundary artifact now also declares tool families plus an exposure-by-trust matrix, so tool governance is versioned, discoverable, and replay-stable instead of being hidden in execution.
+The same boundary artifact now also declares tool families plus an exposure-by-trust matrix, and a request-policy matrix for request classes and budget ceilings. Tool and budget governance are therefore versioned, discoverable, and replay-stable instead of being hidden in execution.
 Startup logging now emits a concise config summary instead of listing every possible provider env var.
 
 ## Install

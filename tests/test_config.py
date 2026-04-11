@@ -13,6 +13,7 @@ from dbl_gateway.config import (
     ContextConfig,
     reset_boundary_config_cache,
     _compute_config_digest,
+    request_policy_rule_for_mode,
 )
 
 
@@ -193,6 +194,73 @@ def sample_boundary_config(tmp_path: Path) -> Path:
                 },
             },
         },
+        "request_policy": {
+            "classification": {
+                "light_budget": {"max_tokens": 2048, "max_duration_ms": 15000},
+            },
+            "matrix": {
+                "public": {
+                    "anonymous": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 1024, "max_duration_ms": 8000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "user": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 15000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "operator": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 15000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "internal": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 15000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                },
+                "operator": {
+                    "anonymous": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "deny", "reason_code": "request.intent_requires_identity"},
+                        "execution_light": {"decision": "deny", "reason_code": "request.execution_requires_identity"},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "user": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "operator": {
+                        "probe": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                        "execution_heavy": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                    },
+                    "internal": {
+                        "probe": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                        "execution_heavy": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                    },
+                },
+                "demo": {
+                    "*": {
+                        "probe": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 16384, "max_duration_ms": 120000}},
+                        "execution_heavy": {"decision": "allow", "max_budget": {"max_tokens": 16384, "max_duration_ms": 120000}},
+                    },
+                },
+            },
+        },
         "surface_rules": {
             "healthz": "public",
             "capabilities": "public",
@@ -217,6 +285,13 @@ def test_load_valid_boundary_config(sample_boundary_config: Path) -> None:
     assert cfg.tool_policy.families["exec_like"] == ("code.*",)
     assert allowed_tool_families_for_mode(cfg, trust_class="internal") == ("web_read", "retrieval")
     assert allowed_tool_families_for_mode(cfg, mode="public", trust_class="anonymous") == ("web_read",)
+    assert cfg.request_policy.light_budget.max_tokens == 2048
+    assert request_policy_rule_for_mode(
+        cfg,
+        mode="operator",
+        trust_class="internal",
+        request_class="execution_heavy",
+    ).decision == "allow"
     assert cfg.config_digest.startswith("sha256:")
 
 
@@ -251,6 +326,73 @@ def test_boundary_config_digest_changes_on_content_change(tmp_path: Path) -> Non
                 "demo": {"*": ["*"]},
             },
         },
+        "request_policy": {
+            "classification": {
+                "light_budget": {"max_tokens": 2048, "max_duration_ms": 15000},
+            },
+            "matrix": {
+                "public": {
+                    "anonymous": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 1024, "max_duration_ms": 8000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "user": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 15000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "operator": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 15000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "internal": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 15000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                },
+                "operator": {
+                    "anonymous": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "deny", "reason_code": "request.intent_requires_identity"},
+                        "execution_light": {"decision": "deny", "reason_code": "request.execution_requires_identity"},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "user": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "operator": {
+                        "probe": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                        "execution_heavy": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                    },
+                    "internal": {
+                        "probe": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                        "execution_heavy": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                    },
+                },
+                "demo": {
+                    "*": {
+                        "probe": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 16384, "max_duration_ms": 120000}},
+                        "execution_heavy": {"decision": "allow", "max_budget": {"max_tokens": 16384, "max_duration_ms": 120000}},
+                    },
+                },
+            },
+        },
         "surface_rules": {"healthz": "public"},
     }
     config_b = {
@@ -281,6 +423,73 @@ def test_boundary_config_digest_changes_on_content_change(tmp_path: Path) -> Non
                     "internal": ["web_read"],
                 },
                 "demo": {"*": ["*"]},
+            },
+        },
+        "request_policy": {
+            "classification": {
+                "light_budget": {"max_tokens": 2048, "max_duration_ms": 15000},
+            },
+            "matrix": {
+                "public": {
+                    "anonymous": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 1024, "max_duration_ms": 8000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "user": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 15000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "operator": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 15000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "internal": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 15000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                },
+                "operator": {
+                    "anonymous": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "deny", "reason_code": "request.intent_requires_identity"},
+                        "execution_light": {"decision": "deny", "reason_code": "request.execution_requires_identity"},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "user": {
+                        "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000}},
+                        "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"},
+                    },
+                    "operator": {
+                        "probe": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                        "execution_heavy": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                    },
+                    "internal": {
+                        "probe": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                        "execution_heavy": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                    },
+                },
+                "demo": {
+                    "*": {
+                        "probe": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+                        "intent": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+                        "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 16384, "max_duration_ms": 120000}},
+                        "execution_heavy": {"decision": "allow", "max_budget": {"max_tokens": 16384, "max_duration_ms": 120000}},
+                    },
+                },
             },
         },
         "surface_rules": {"healthz": "public"},

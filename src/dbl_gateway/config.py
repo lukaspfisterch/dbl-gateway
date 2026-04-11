@@ -22,7 +22,10 @@ from .auth import TRUST_CLASSES
 
 __all__ = [
     "BoundaryAdmissionConfig",
+    "BoundaryBudgetLimitConfig",
     "BoundaryConfig",
+    "BoundaryRequestPolicyConfig",
+    "BoundaryRequestPolicyRule",
     "BoundaryToolPolicyConfig",
     "ContextConfig",
     "JobRuntimeConfig",
@@ -35,6 +38,7 @@ __all__ = [
     "get_context_config",
     "load_job_runtime_config",
     "get_job_runtime_config",
+    "request_policy_rule_for_mode",
     "reset_boundary_config_cache",
 ]
 
@@ -110,6 +114,32 @@ class BoundaryToolPolicyConfig:
 
 
 @dataclass(frozen=True)
+class BoundaryBudgetLimitConfig:
+    """Immutable budget ceiling used by boundary request policy."""
+
+    max_tokens: int
+    max_duration_ms: int
+
+
+@dataclass(frozen=True)
+class BoundaryRequestPolicyRule:
+    """Immutable rule for one exposure/trust/request-class combination."""
+
+    decision: Literal["allow", "deny"]
+    reason_code: str | None
+    max_budget: BoundaryBudgetLimitConfig | None
+
+
+@dataclass(frozen=True)
+class BoundaryRequestPolicyConfig:
+    """Immutable request classification and budget policy."""
+
+    request_classes: tuple[str, ...]
+    light_budget: BoundaryBudgetLimitConfig
+    matrix: Mapping[str, Mapping[str, Mapping[str, BoundaryRequestPolicyRule]]]
+
+
+@dataclass(frozen=True)
 class BoundaryConfig:
     """Immutable boundary configuration for surface exposure."""
 
@@ -119,6 +149,7 @@ class BoundaryConfig:
     surface_rules: Mapping[str, Literal["public", "operator", "demo"]]
     admission: BoundaryAdmissionConfig
     tool_policy: BoundaryToolPolicyConfig
+    request_policy: BoundaryRequestPolicyConfig
     config_digest: str
     _raw: Mapping[str, Any]
 
@@ -176,6 +207,27 @@ def allowed_tool_families_for_mode(
         return mode_matrix["*"]
     selected_trust = trust_class if trust_class in TRUST_CLASSES else "anonymous"
     return mode_matrix.get(selected_trust, ())
+
+
+def request_policy_rule_for_mode(
+    boundary_config: BoundaryConfig,
+    *,
+    request_class: str,
+    mode: Literal["public", "operator", "demo"] | None = None,
+    trust_class: str = "anonymous",
+) -> BoundaryRequestPolicyRule:
+    selected_mode = mode or boundary_config.exposure_mode
+    mode_matrix = boundary_config.request_policy.matrix.get(selected_mode, {})
+    selected_trust = trust_class if trust_class in TRUST_CLASSES else "anonymous"
+    trust_rules = mode_matrix.get(selected_trust)
+    if trust_rules is None:
+        trust_rules = mode_matrix.get("*", {})
+    rule = trust_rules.get(request_class)
+    if rule is None:
+        raise ValueError(
+            f"request_policy.matrix.{selected_mode}.{selected_trust}.{request_class} is missing",
+        )
+    return rule
 
 
 def load_boundary_config(path: Path | None = None) -> BoundaryConfig:
@@ -309,6 +361,96 @@ def _parse_boundary_config(raw: Mapping[str, Any]) -> BoundaryConfig:
             parsed_mode[str(trust_name)] = tuple(parsed_allowed)
         matrix[exposure_name] = parsed_mode
 
+    raw_request_policy = raw.get("request_policy")
+    if not isinstance(raw_request_policy, Mapping):
+        raise ValueError("request_policy must be an object")
+    raw_classification = raw_request_policy.get("classification")
+    if not isinstance(raw_classification, Mapping):
+        raise ValueError("request_policy.classification must be an object")
+    raw_light_budget = raw_classification.get("light_budget")
+    if not isinstance(raw_light_budget, Mapping):
+        raise ValueError("request_policy.classification.light_budget must be an object")
+    light_budget_tokens = raw_light_budget.get("max_tokens", 2048)
+    if not isinstance(light_budget_tokens, int) or light_budget_tokens < 1:
+        raise ValueError("request_policy.classification.light_budget.max_tokens must be int >= 1")
+    light_budget_duration_ms = raw_light_budget.get("max_duration_ms", 15000)
+    if not isinstance(light_budget_duration_ms, int) or light_budget_duration_ms < 1000:
+        raise ValueError(
+            "request_policy.classification.light_budget.max_duration_ms must be int >= 1000"
+        )
+
+    request_classes = ("probe", "intent", "execution_light", "execution_heavy")
+    raw_request_matrix = raw_request_policy.get("matrix")
+    if not isinstance(raw_request_matrix, Mapping):
+        raise ValueError("request_policy.matrix must be an object")
+    request_matrix: dict[str, dict[str, dict[str, BoundaryRequestPolicyRule]]] = {}
+    for exposure_name in _EXPOSURE_RANKS:
+        raw_mode = raw_request_matrix.get(exposure_name)
+        if not isinstance(raw_mode, Mapping):
+            raise ValueError(f"request_policy.matrix.{exposure_name} must be an object")
+        parsed_mode: dict[str, dict[str, BoundaryRequestPolicyRule]] = {}
+        for trust_name, raw_rules in raw_mode.items():
+            if trust_name != "*" and trust_name not in TRUST_CLASSES:
+                raise ValueError(
+                    f"request_policy.matrix.{exposure_name} keys must be trust classes or '*'"
+                )
+            if not isinstance(raw_rules, Mapping):
+                raise ValueError(
+                    f"request_policy.matrix.{exposure_name}.{trust_name} must be an object"
+                )
+            parsed_rules: dict[str, BoundaryRequestPolicyRule] = {}
+            for request_class in request_classes:
+                raw_rule = raw_rules.get(request_class)
+                if not isinstance(raw_rule, Mapping):
+                    raise ValueError(
+                        f"request_policy.matrix.{exposure_name}.{trust_name}.{request_class} must be an object"
+                    )
+                decision = raw_rule.get("decision")
+                if decision not in {"allow", "deny"}:
+                    raise ValueError(
+                        f"request_policy.matrix.{exposure_name}.{trust_name}.{request_class}.decision "
+                        "must be allow or deny"
+                    )
+                reason_code = raw_rule.get("reason_code")
+                if reason_code is not None and (
+                    not isinstance(reason_code, str) or not reason_code.strip()
+                ):
+                    raise ValueError(
+                        f"request_policy.matrix.{exposure_name}.{trust_name}.{request_class}.reason_code "
+                        "must be a non-empty string when provided"
+                    )
+                raw_rule_budget = raw_rule.get("max_budget")
+                parsed_budget: BoundaryBudgetLimitConfig | None = None
+                if raw_rule_budget is not None:
+                    if not isinstance(raw_rule_budget, Mapping):
+                        raise ValueError(
+                            f"request_policy.matrix.{exposure_name}.{trust_name}.{request_class}.max_budget "
+                            "must be an object"
+                        )
+                    rule_tokens = raw_rule_budget.get("max_tokens")
+                    rule_duration_ms = raw_rule_budget.get("max_duration_ms")
+                    if not isinstance(rule_tokens, int) or rule_tokens < 1:
+                        raise ValueError(
+                            f"request_policy.matrix.{exposure_name}.{trust_name}.{request_class}.max_budget.max_tokens "
+                            "must be int >= 1"
+                        )
+                    if not isinstance(rule_duration_ms, int) or rule_duration_ms < 1000:
+                        raise ValueError(
+                            f"request_policy.matrix.{exposure_name}.{trust_name}.{request_class}.max_budget.max_duration_ms "
+                            "must be int >= 1000"
+                        )
+                    parsed_budget = BoundaryBudgetLimitConfig(
+                        max_tokens=rule_tokens,
+                        max_duration_ms=rule_duration_ms,
+                    )
+                parsed_rules[request_class] = BoundaryRequestPolicyRule(
+                    decision=decision,
+                    reason_code=reason_code.strip() if isinstance(reason_code, str) else None,
+                    max_budget=parsed_budget,
+                )
+            parsed_mode[str(trust_name)] = parsed_rules
+        request_matrix[exposure_name] = parsed_mode
+
     config_digest = _compute_config_digest(raw)
 
     return BoundaryConfig(
@@ -326,6 +468,14 @@ def _parse_boundary_config(raw: Mapping[str, Any]) -> BoundaryConfig:
         tool_policy=BoundaryToolPolicyConfig(
             families=families,
             matrix=matrix,
+        ),
+        request_policy=BoundaryRequestPolicyConfig(
+            request_classes=request_classes,
+            light_budget=BoundaryBudgetLimitConfig(
+                max_tokens=light_budget_tokens,
+                max_duration_ms=light_budget_duration_ms,
+            ),
+            matrix=request_matrix,
         ),
         config_digest=config_digest,
         _raw=raw,

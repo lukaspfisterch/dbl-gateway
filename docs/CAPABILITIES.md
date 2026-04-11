@@ -30,8 +30,9 @@ unless it affects wire behavior.
   - `public` — minimal ingress-oriented surface
   - `operator` — runtime and discovery surfaces without `/ui/*`
   - `demo` — full observer/demo surface
-- Public ingress is additionally bounded by the active boundary artifact's deterministic admission limits for `artifact.handle`, `declared_refs`, `declared_tools`, and budget maxima.
+- Public ingress is additionally bounded by the active boundary artifact's deterministic admission limits for `artifact.handle`, `declared_refs`, and declared tool count.
 - Boundary artifacts also declare `tool_policy`, which contains family patterns plus the allowed-family matrix per exposure mode and trust class.
+- Boundary artifacts now also declare `request_policy`, which classifies requests (`probe`, `intent`, `execution_light`, `execution_heavy`) and publishes budget ceilings per `(exposure_mode, trust_class, request_class)`.
 
 ## Observer UI Endpoints
 
@@ -96,9 +97,13 @@ returned observer status/results.
 ## Budget Constraint
 - `budget.max_tokens`: integer 1-1000000, passed to provider call.
 - `budget.max_duration_ms`: integer 1000-300000, enforces execution wall clock.
-- In `public` exposure mode, budget fields are also denied when they exceed the boundary artifact's configured maxima.
+- `budget.request_classes` publishes the deterministic request taxonomy.
+- `budget.light_budget_classification` publishes the threshold used to separate `execution_light` from `execution_heavy`.
+- `budget.current_request_policy` publishes the active `(exposure_mode, trust_class)` request-policy map.
+- `budget.request_policy_by_exposure` publishes the full `exposure -> trust_class -> request_class -> rule` matrix.
+- Budget-heavy requests are no longer dropped as raw admission failures; they are classified and recorded in DECISION with `request_class`, `budget_class`, and `budget_policy_reason`.
 - `effective_timeout = min(runtime_ms, client_ms)`.
-- DECISION records `enforced_budget` with `source` indicating clamping.
+- DECISION records `request_class`, `budget_class`, `budget_policy_reason`, and `enforced_budget` with `source` indicating runtime clamping.
 - EXECUTION records `usage.duration_ms`.
 
 ## Context Resolution Gate

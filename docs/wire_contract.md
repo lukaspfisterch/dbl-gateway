@@ -199,6 +199,9 @@ Tool names must match `^[a-z][a-z0-9_.]{0,63}$`.
 
 | Field | Description |
 |-------|-------------|
+| `request_class` | Deterministic request taxonomy derived from the authoritative request shape. |
+| `budget_class` | Budget classification derived from the declared budget vs the boundary light-budget threshold. |
+| `budget_policy_reason` | Stable request-policy reason such as `request.execution_heavy_denied` or `request.budget_clamped`. |
 | `declared_tool_families` | Deterministic family buckets derived from `declared_tools`. |
 | `allowed_tool_families` | Tool families allowed by the active boundary policy. |
 | `permitted_tool_families` | Tool families remaining after boundary family gating and no-mix invariants. |
@@ -217,6 +220,13 @@ Boundary config now carries `tool_policy.families` plus `tool_policy.matrix`:
 - `public` — anonymous stays minimal, trusted callers may add retrieval families
 - `operator` — `user`/`operator`/`internal` get progressively broader allowlists
 - `demo` — `*`
+
+Boundary config also carries `request_policy.classification.light_budget` plus `request_policy.matrix`:
+- request classes: `probe`, `intent`, `execution_light`, `execution_heavy`
+- matrix key: `(exposure_mode, trust_class, request_class)`
+- rule payload: `decision` plus optional `max_budget`
+
+The gateway injects this as `payload.inputs.extensions.gateway_request_policy` before policy evaluation and records the resulting request/budget fields in DECISION.
 
 ### EXECUTION Fields
 
@@ -288,6 +298,9 @@ DECISION events include normative fields for replay verification:
   "result": "ALLOW",
   "reasons": [...],
   "transforms": [...],
+  "request_class": "execution_light",
+  "budget_class": "light",
+  "budget_policy_reason": "request.budget_clamped",
   "permitted_tools": ["web.search", "code.execute"],
   "enforced_budget": {"max_tokens": 4096, "max_duration_ms": 30000, "source": "intent_exact"},
   "intent_index": 0,
@@ -300,7 +313,7 @@ DECISION events include normative fields for replay verification:
 }
 ```
 
-All of `permitted_tools`, `enforced_budget`, `policy_config_digest`, and `intent_index` are normative (included in decision digest).
+All of `request_class`, `budget_class`, `budget_policy_reason`, `permitted_tools`, `enforced_budget`, `policy_config_digest`, and `intent_index` are normative (included in decision digest).
 
 | Field | Since | Description |
 |-------|-------|-------------|

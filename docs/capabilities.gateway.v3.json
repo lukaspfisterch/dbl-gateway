@@ -4,7 +4,7 @@
   "interface_version": 3,
   "boundary": {
     "boundary_version": "1",
-    "boundary_config_digest": "sha256:4ca10e56dc17824a79ed9ed01684f674084b15ebde21831ac8982625e6f17514",
+    "boundary_config_digest": "sha256:e371c349687fe7a32bc8818757ce2ae1dd41499ed88a224178a08f2df6179886",
     "exposure_mode": "operator"
   },
   "intents": {
@@ -132,6 +132,310 @@
         "min": 1000,
         "max": 300000
       }
+    },
+    "request_classes": [
+      "probe",
+      "intent",
+      "execution_light",
+      "execution_heavy"
+    ],
+    "light_budget_classification": {
+      "max_tokens": 2048,
+      "max_duration_ms": 15000
+    },
+    "current_request_policy": {
+      "probe": {
+        "decision": "deny",
+        "reason_code": "request.probe_denied",
+        "max_budget": null
+      },
+      "intent": {
+        "decision": "deny",
+        "reason_code": "request.intent_requires_identity",
+        "max_budget": null
+      },
+      "execution_light": {
+        "decision": "deny",
+        "reason_code": "request.execution_requires_identity",
+        "max_budget": null
+      },
+      "execution_heavy": {
+        "decision": "deny",
+        "reason_code": "request.execution_heavy_denied",
+        "max_budget": null
+      }
+    },
+    "request_policy_by_exposure": {
+      "public": {
+        "anonymous": {
+          "probe": {
+            "decision": "deny",
+            "reason_code": "request.probe_denied",
+            "max_budget": null
+          },
+          "intent": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 1024,
+              "max_duration_ms": 8000
+            }
+          },
+          "execution_light": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 2048,
+              "max_duration_ms": 12000
+            }
+          },
+          "execution_heavy": {
+            "decision": "deny",
+            "reason_code": "request.execution_heavy_denied",
+            "max_budget": null
+          }
+        },
+        "user": {
+          "probe": {
+            "decision": "deny",
+            "reason_code": "request.probe_denied",
+            "max_budget": null
+          },
+          "intent": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 2048,
+              "max_duration_ms": 12000
+            }
+          },
+          "execution_light": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 4096,
+              "max_duration_ms": 15000
+            }
+          },
+          "execution_heavy": {
+            "decision": "deny",
+            "reason_code": "request.execution_heavy_denied",
+            "max_budget": null
+          }
+        },
+        "operator": {
+          "probe": {
+            "decision": "deny",
+            "reason_code": "request.probe_denied",
+            "max_budget": null
+          },
+          "intent": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 2048,
+              "max_duration_ms": 12000
+            }
+          },
+          "execution_light": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 4096,
+              "max_duration_ms": 15000
+            }
+          },
+          "execution_heavy": {
+            "decision": "deny",
+            "reason_code": "request.execution_heavy_denied",
+            "max_budget": null
+          }
+        },
+        "internal": {
+          "probe": {
+            "decision": "deny",
+            "reason_code": "request.probe_denied",
+            "max_budget": null
+          },
+          "intent": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 2048,
+              "max_duration_ms": 12000
+            }
+          },
+          "execution_light": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 4096,
+              "max_duration_ms": 15000
+            }
+          },
+          "execution_heavy": {
+            "decision": "deny",
+            "reason_code": "request.execution_heavy_denied",
+            "max_budget": null
+          }
+        }
+      },
+      "operator": {
+        "anonymous": {
+          "probe": {
+            "decision": "deny",
+            "reason_code": "request.probe_denied",
+            "max_budget": null
+          },
+          "intent": {
+            "decision": "deny",
+            "reason_code": "request.intent_requires_identity",
+            "max_budget": null
+          },
+          "execution_light": {
+            "decision": "deny",
+            "reason_code": "request.execution_requires_identity",
+            "max_budget": null
+          },
+          "execution_heavy": {
+            "decision": "deny",
+            "reason_code": "request.execution_heavy_denied",
+            "max_budget": null
+          }
+        },
+        "user": {
+          "probe": {
+            "decision": "deny",
+            "reason_code": "request.probe_denied",
+            "max_budget": null
+          },
+          "intent": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 2048,
+              "max_duration_ms": 15000
+            }
+          },
+          "execution_light": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 4096,
+              "max_duration_ms": 30000
+            }
+          },
+          "execution_heavy": {
+            "decision": "deny",
+            "reason_code": "request.execution_heavy_denied",
+            "max_budget": null
+          }
+        },
+        "operator": {
+          "probe": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 2048,
+              "max_duration_ms": 15000
+            }
+          },
+          "intent": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 4096,
+              "max_duration_ms": 30000
+            }
+          },
+          "execution_light": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 8192,
+              "max_duration_ms": 60000
+            }
+          },
+          "execution_heavy": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 8192,
+              "max_duration_ms": 60000
+            }
+          }
+        },
+        "internal": {
+          "probe": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 2048,
+              "max_duration_ms": 15000
+            }
+          },
+          "intent": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 4096,
+              "max_duration_ms": 30000
+            }
+          },
+          "execution_light": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 8192,
+              "max_duration_ms": 60000
+            }
+          },
+          "execution_heavy": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 8192,
+              "max_duration_ms": 60000
+            }
+          }
+        }
+      },
+      "demo": {
+        "*": {
+          "probe": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 2048,
+              "max_duration_ms": 15000
+            }
+          },
+          "intent": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 8192,
+              "max_duration_ms": 60000
+            }
+          },
+          "execution_light": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 16384,
+              "max_duration_ms": 120000
+            }
+          },
+          "execution_heavy": {
+            "decision": "allow",
+            "reason_code": null,
+            "max_budget": {
+              "max_tokens": 16384,
+              "max_duration_ms": 120000
+            }
+          }
+        }
+      }
     }
   },
   "surfaces": {
@@ -242,5 +546,5 @@
       "description": "External execution submission surface when enabled."
     }
   ],
-  "generated_at": "2026-04-11T17:29:02.887231+00:00"
+  "generated_at": "2026-04-11T17:58:30.192008+00:00"
 }

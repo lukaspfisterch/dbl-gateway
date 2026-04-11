@@ -43,6 +43,7 @@ from .config import (
     get_context_config,
     context_resolution_enabled,
     get_job_runtime_config,
+    request_policy_rule_for_mode,
     reset_boundary_config_cache,
 )
 from .contracts import canonical_json_bytes
@@ -110,6 +111,18 @@ class ToolPolicyEvaluation:
     declared_families: list[str]
     allowed_families: list[str]
     permitted_families: list[str]
+
+
+@dataclass(frozen=True)
+class RequestPolicyEvaluation:
+    trust_class: str
+    request_class: str
+    budget_class: str
+    declared_budget: dict[str, int] | None
+    policy_budget: dict[str, int] | None
+    permitted_budget: dict[str, int] | None
+    denied_reason: str | None
+    was_clamped: bool
 
 
 def _assert_governance_input(authoritative: Mapping[str, Any]) -> None:
@@ -893,7 +906,6 @@ async def _process_intent(
         auth_payload = authoritative.get("payload") or {}
         _declared_tools = auth_payload.get("declared_tools")
         _tool_scope = auth_payload.get("tool_scope")
-        _client_budget = auth_payload.get("budget")
         _trust_class = _tool_policy_trust_class(authoritative)
         tool_policy_evaluation = _compute_tool_policy_evaluation(
             _declared_tools if isinstance(_declared_tools, list) else None,
@@ -901,9 +913,18 @@ async def _process_intent(
             boundary_config=app.state.boundary_config,
             trust_class=_trust_class,
         )
+        request_policy_evaluation = _compute_request_policy_evaluation(
+            authoritative,
+            trust_class=_trust_class,
+            boundary_config=app.state.boundary_config,
+        )
         authoritative_for_policy = _authoritative_with_gateway_tool_policy(
             authoritative,
             tool_policy_evaluation,
+        )
+        authoritative_for_policy = _authoritative_with_gateway_request_policy(
+            authoritative_for_policy,
+            request_policy_evaluation,
         )
 
         _assert_governance_input(authoritative_for_policy)
@@ -996,6 +1017,9 @@ async def _process_intent(
             policy_id=decision.policy_id,
             policy_version=decision.policy_version,
             gate_event=decision.gate_event,
+            request_class=decision.request_class,
+            budget_class=decision.budget_class,
+            budget_policy_reason=decision.budget_policy_reason,
             declared_tool_families=list(tool_policy_evaluation.declared_families),
             allowed_tool_families=list(tool_policy_evaluation.allowed_families),
             permitted_tool_families=list(tool_policy_evaluation.permitted_families),
@@ -1029,15 +1053,42 @@ async def _process_intent(
             resolution_reason = "resolution.error"
 
         # Compute tool gating and budget constraints after policy ALLOW
-        if decision.decision == "ALLOW":
+        if decision.decision == "ALLOW" and request_policy_evaluation.denied_reason is not None:
+            decision = DecisionResult(
+                decision="DENY",
+                reason_codes=[request_policy_evaluation.denied_reason],
+                policy_id=decision.policy_id,
+                policy_version=decision.policy_version,
+                gate_event=decision.gate_event,
+                request_class=request_policy_evaluation.request_class,
+                budget_class=request_policy_evaluation.budget_class,
+                budget_policy_reason=request_policy_evaluation.denied_reason,
+                declared_tool_families=decision.declared_tool_families,
+                allowed_tool_families=decision.allowed_tool_families,
+                permitted_tool_families=decision.permitted_tool_families,
+                denied_tool_families=decision.denied_tool_families,
+                permitted_tools=None,
+                tool_scope_enforced=decision.tool_scope_enforced,
+                tools_denied=decision.tools_denied,
+                tools_denied_reason=decision.tools_denied_reason,
+                enforced_budget=None,
+                policy_config_digest=decision.policy_config_digest,
+            )
+        elif decision.decision == "ALLOW":
             runtime_cfg = get_job_runtime_config()
-            enforced_budget = _compute_enforced_budget(_client_budget, runtime_cfg.llm_wall_clock_s)
+            enforced_budget = _compute_enforced_budget(
+                request_policy_evaluation.permitted_budget,
+                runtime_cfg.llm_wall_clock_s,
+            )
             decision = DecisionResult(
                 decision=decision.decision,
                 reason_codes=decision.reason_codes,
                 policy_id=decision.policy_id,
                 policy_version=decision.policy_version,
                 gate_event=decision.gate_event,
+                request_class=request_policy_evaluation.request_class,
+                budget_class=request_policy_evaluation.budget_class,
+                budget_policy_reason=request_policy_evaluation.denied_reason,
                 declared_tool_families=decision.declared_tool_families,
                 allowed_tool_families=decision.allowed_tool_families,
                 permitted_tool_families=decision.permitted_tool_families,
@@ -1047,6 +1098,27 @@ async def _process_intent(
                 tools_denied=list(tool_policy_evaluation.denied_tools),
                 tools_denied_reason=tool_policy_evaluation.denied_reason,
                 enforced_budget=enforced_budget,
+                policy_config_digest=decision.policy_config_digest,
+            )
+        else:
+            decision = DecisionResult(
+                decision=decision.decision,
+                reason_codes=decision.reason_codes,
+                policy_id=decision.policy_id,
+                policy_version=decision.policy_version,
+                gate_event=decision.gate_event,
+                request_class=request_policy_evaluation.request_class,
+                budget_class=request_policy_evaluation.budget_class,
+                budget_policy_reason=request_policy_evaluation.denied_reason,
+                declared_tool_families=decision.declared_tool_families,
+                allowed_tool_families=decision.allowed_tool_families,
+                permitted_tool_families=decision.permitted_tool_families,
+                denied_tool_families=decision.denied_tool_families,
+                permitted_tools=decision.permitted_tools,
+                tool_scope_enforced=decision.tool_scope_enforced,
+                tools_denied=decision.tools_denied,
+                tools_denied_reason=decision.tools_denied_reason,
+                enforced_budget=decision.enforced_budget,
                 policy_config_digest=decision.policy_config_digest,
             )
 
@@ -1993,6 +2065,170 @@ def _tool_policy_trust_class(authoritative: Mapping[str, Any]) -> str:
     if isinstance(trust_class, str) and trust_class.strip():
         return trust_class.strip()
     return "anonymous"
+
+
+def _request_budget(payload: Mapping[str, Any]) -> dict[str, int] | None:
+    budget = payload.get("budget")
+    if not isinstance(budget, Mapping):
+        return None
+    parsed: dict[str, int] = {}
+    max_tokens = budget.get("max_tokens")
+    if isinstance(max_tokens, int) and max_tokens > 0:
+        parsed["max_tokens"] = max_tokens
+    max_duration_ms = budget.get("max_duration_ms")
+    if isinstance(max_duration_ms, int) and max_duration_ms > 0:
+        parsed["max_duration_ms"] = max_duration_ms
+    return parsed or None
+
+
+def _classify_budget(
+    budget: dict[str, int] | None,
+    *,
+    boundary_config=None,
+) -> str:
+    if not budget:
+        return "none"
+    cfg = boundary_config or get_boundary_config()
+    light_budget = cfg.request_policy.light_budget
+    max_tokens = budget.get("max_tokens")
+    max_duration_ms = budget.get("max_duration_ms")
+    if (
+        (max_tokens is None or max_tokens <= light_budget.max_tokens)
+        and (max_duration_ms is None or max_duration_ms <= light_budget.max_duration_ms)
+    ):
+        return "light"
+    return "heavy"
+
+
+def _classify_request(
+    authoritative: Mapping[str, Any],
+    *,
+    boundary_config=None,
+) -> str:
+    payload = authoritative.get("payload")
+    if not isinstance(payload, Mapping):
+        return "intent"
+    intent_type = str(authoritative.get("intent_type") or payload.get("intent_type") or "")
+    if intent_type == "artifact.handle":
+        return "probe"
+    declared_refs = payload.get("declared_refs")
+    declared_tools = payload.get("declared_tools")
+    budget = _request_budget(payload)
+    has_refs = isinstance(declared_refs, list) and len(declared_refs) > 0
+    tool_count = len(declared_tools) if isinstance(declared_tools, list) else 0
+    if not has_refs and tool_count == 0 and budget is None:
+        return "intent"
+    if has_refs or tool_count > 1 or _classify_budget(budget, boundary_config=boundary_config) == "heavy":
+        return "execution_heavy"
+    return "execution_light"
+
+
+def _policy_budget_dict(max_tokens: int, max_duration_ms: int) -> dict[str, int]:
+    return {
+        "max_tokens": max_tokens,
+        "max_duration_ms": max_duration_ms,
+    }
+
+
+def _apply_request_policy_budget(
+    declared_budget: dict[str, int] | None,
+    *,
+    policy_budget: dict[str, int] | None,
+) -> tuple[dict[str, int] | None, bool]:
+    if policy_budget is None and declared_budget is None:
+        return None, False
+    if policy_budget is None:
+        return dict(declared_budget or {}), False
+    permitted_budget = dict(policy_budget)
+    was_clamped = False
+    if declared_budget:
+        declared_tokens = declared_budget.get("max_tokens")
+        if isinstance(declared_tokens, int) and declared_tokens > 0:
+            permitted_budget["max_tokens"] = min(policy_budget["max_tokens"], declared_tokens)
+            was_clamped = was_clamped or permitted_budget["max_tokens"] < declared_tokens
+        declared_duration = declared_budget.get("max_duration_ms")
+        if isinstance(declared_duration, int) and declared_duration > 0:
+            permitted_budget["max_duration_ms"] = min(policy_budget["max_duration_ms"], declared_duration)
+            was_clamped = was_clamped or permitted_budget["max_duration_ms"] < declared_duration
+    return permitted_budget, was_clamped
+
+
+def _compute_request_policy_evaluation(
+    authoritative: Mapping[str, Any],
+    *,
+    trust_class: str,
+    boundary_config=None,
+) -> RequestPolicyEvaluation:
+    cfg = boundary_config or get_boundary_config()
+    payload = authoritative.get("payload")
+    payload_map = payload if isinstance(payload, Mapping) else {}
+    declared_budget = _request_budget(payload_map)
+    request_class = _classify_request(authoritative, boundary_config=cfg)
+    budget_class = _classify_budget(declared_budget, boundary_config=cfg)
+    rule = request_policy_rule_for_mode(
+        cfg,
+        request_class=request_class,
+        trust_class=trust_class,
+    )
+    policy_budget = (
+        _policy_budget_dict(rule.max_budget.max_tokens, rule.max_budget.max_duration_ms)
+        if rule.max_budget is not None
+        else None
+    )
+    if rule.decision == "deny":
+        return RequestPolicyEvaluation(
+            trust_class=trust_class,
+            request_class=request_class,
+            budget_class=budget_class,
+            declared_budget=declared_budget,
+            policy_budget=policy_budget,
+            permitted_budget=None,
+            denied_reason=rule.reason_code or "request.not_allowed",
+            was_clamped=False,
+        )
+    permitted_budget, was_clamped = _apply_request_policy_budget(
+        declared_budget,
+        policy_budget=policy_budget,
+    )
+    return RequestPolicyEvaluation(
+        trust_class=trust_class,
+        request_class=request_class,
+        budget_class=budget_class,
+        declared_budget=declared_budget,
+        policy_budget=policy_budget,
+        permitted_budget=permitted_budget,
+        denied_reason="request.budget_clamped" if was_clamped else None,
+        was_clamped=was_clamped,
+    )
+
+
+def _authoritative_with_gateway_request_policy(
+    authoritative: Mapping[str, Any],
+    evaluation: RequestPolicyEvaluation,
+) -> dict[str, Any]:
+    payload = authoritative.get("payload")
+    if not isinstance(payload, Mapping):
+        return dict(authoritative)
+    inputs_raw = payload.get("inputs")
+    inputs = dict(inputs_raw) if isinstance(inputs_raw, Mapping) else {}
+    extensions_raw = inputs.get("extensions")
+    extensions = dict(extensions_raw) if isinstance(extensions_raw, Mapping) else {}
+    extensions["gateway_request_policy"] = {
+        "trust_class": evaluation.trust_class,
+        "request_class": evaluation.request_class,
+        "budget_class": evaluation.budget_class,
+        "declared_budget": dict(evaluation.declared_budget) if evaluation.declared_budget else None,
+        "policy_budget": dict(evaluation.policy_budget) if evaluation.policy_budget else None,
+        "permitted_budget": dict(evaluation.permitted_budget) if evaluation.permitted_budget else None,
+        "denied_reason": evaluation.denied_reason,
+        "was_clamped": evaluation.was_clamped,
+    }
+    inputs["extensions"] = extensions
+    payload_copy = dict(payload)
+    payload_copy["inputs"] = inputs
+    authoritative_copy = dict(authoritative)
+    authoritative_copy["payload"] = payload_copy
+    return authoritative_copy
 
 
 def _compute_enforced_budget(

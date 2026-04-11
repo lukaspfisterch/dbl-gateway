@@ -1379,6 +1379,9 @@ button:hover { background: #3a3a5a; }
       summary += detailRow("Policy ID", payload.policy_id || (payload.policy && payload.policy.policy_id) || "\u2014");
       summary += detailRow("Policy Version", payload.policy_version || (payload.policy && payload.policy.policy_version) || "\u2014");
       summary += detailRow("Reason Codes", (payload.reason_codes || []).join(", ") || "\u2014");
+      summary += detailRow("Request Class", payload.request_class || "\u2014");
+      summary += detailRow("Budget Class", payload.budget_class || "\u2014");
+      summary += detailRow("Budget Policy", payload.budget_policy_reason || "\u2014");
       summary += detailRow("Intent Index", payload.intent_index != null ? "#" + payload.intent_index : "\u2014");
       summary += detailRow("Permitted Tools", (payload.permitted_tools || []).join(", ") || "\u2014");
       if (payload.enforced_budget) {

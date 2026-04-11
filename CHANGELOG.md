@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.19 — Request Classes And Budget Policy
+
+**Request classification and budget governance now live in the versioned boundary contract and enter DECISION explicitly.**
+- Add `request_policy` to boundary config artifacts with a deterministic light-budget threshold plus an `(exposure_mode, trust_class, request_class)` matrix for `probe`, `intent`, `execution_light`, and `execution_heavy`.
+- Classify requests from authoritative input shape only, inject the result into policy-visible `payload.inputs.extensions.gateway_request_policy`, and record `request_class`, `budget_class`, and `budget_policy_reason` in normative DECISION payloads.
+- Move budget-heavy public handling out of pre-INTENT admission and into the replayable DECISION seam, while keeping the existing pre-INTENT guards for high-risk intent types, refs, and over-broad tool declarations.
+- Clamp provider budgets from the boundary request-policy matrix before runtime timeout clamping, publish the active and per-exposure request-policy maps through `/capabilities`, and add focused regression coverage for config parsing, policy-input enrichment, request/budget digests, and public/operator/demo behavior.
+
 ## v0.9.18 — Tool Trust Classes
 
 **Boundary tool policy now resolves against `exposure_mode x trust_class`, not exposure alone.**

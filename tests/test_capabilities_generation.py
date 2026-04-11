@@ -68,4 +68,8 @@ def test_generated_snapshot_has_contract_fields(tmp_path: Path) -> None:
     assert "allowed_families_by_exposure" in data["tool_surface"]
     assert "no_mix_rules" in data["tool_surface"]
     assert isinstance(data["budget"]["fields"]["max_tokens"]["min"], int)
+    assert "request_classes" in data["budget"]
+    assert "light_budget_classification" in data["budget"]
+    assert "current_request_policy" in data["budget"]
+    assert "request_policy_by_exposure" in data["budget"]
     assert isinstance(data["surface_catalog"], list)

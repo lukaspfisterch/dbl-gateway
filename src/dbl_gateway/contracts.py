@@ -48,6 +48,9 @@ class DecisionNormative(TypedDict, total=False):
     result: str
     reasons: list[DecisionReason]
     transforms: list[DecisionTransform]
+    request_class: str | None
+    budget_class: str | None
+    budget_policy_reason: str | None
     declared_tool_families: list[str] | None
     allowed_tool_families: list[str] | None
     permitted_tool_families: list[str] | None
@@ -268,6 +271,13 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
             raise ValueError(f"{field_name} must be a list")
         return sorted(str(item).strip() for item in value)
 
+    def _normalize_optional_text(value: object, *, field_name: str) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field_name} must be a non-empty string")
+        return value.strip()
+
     norm_declared_tool_families = _normalize_string_list(
         decision.get("declared_tool_families"),
         field_name="declared_tool_families",
@@ -324,6 +334,18 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
         "result": result,
         "reasons": norm_reasons,
         "transforms": norm_transforms,
+        "request_class": _normalize_optional_text(
+            decision.get("request_class"),
+            field_name="request_class",
+        ),
+        "budget_class": _normalize_optional_text(
+            decision.get("budget_class"),
+            field_name="budget_class",
+        ),
+        "budget_policy_reason": _normalize_optional_text(
+            decision.get("budget_policy_reason"),
+            field_name="budget_policy_reason",
+        ),
         "declared_tool_families": norm_declared_tool_families,
         "allowed_tool_families": norm_allowed_tool_families,
         "permitted_tool_families": norm_permitted_tool_families,

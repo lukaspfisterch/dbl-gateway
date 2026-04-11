@@ -26,16 +26,56 @@
       },
       "CapabilitiesBudget": {
         "properties": {
+          "current_request_policy": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Current Request Policy",
+            "type": "object"
+          },
           "fields": {
             "additionalProperties": {
               "$ref": "#/components/schemas/CapabilitiesBudgetField"
             },
             "title": "Fields",
             "type": "object"
+          },
+          "light_budget_classification": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Light Budget Classification",
+            "type": "object"
+          },
+          "request_classes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Request Classes",
+            "type": "array"
+          },
+          "request_policy_by_exposure": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            "title": "Request Policy By Exposure",
+            "type": "object"
           }
         },
         "required": [
-          "fields"
+          "fields",
+          "request_classes",
+          "light_budget_classification",
+          "current_request_policy",
+          "request_policy_by_exposure"
         ],
         "title": "CapabilitiesBudget",
         "type": "object"

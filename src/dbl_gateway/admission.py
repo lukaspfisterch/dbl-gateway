@@ -19,7 +19,6 @@ SECRET_KEYS = {"api_key", "authorization", "token", "secret", "bearer"}
 ADMISSION_INTENT_TYPE_DENIED = "admission.intent_type_denied"
 ADMISSION_CONTEXT_REFS_DENIED = "admission.context_refs_denied"
 ADMISSION_DECLARED_TOOLS_DENIED = "admission.declared_tools_denied"
-ADMISSION_BUDGET_EXCEEDS_PUBLIC_LIMIT = "admission.budget_exceeds_public_limit"
 
 
 @dataclass(frozen=True)
@@ -138,24 +137,3 @@ def _enforce_boundary_admission(
                 f"({len(declared_tools)} > {admission.public_max_declared_tools})"
             ),
         )
-
-    budget = payload.get("budget")
-    if isinstance(budget, Mapping):
-        max_tokens = budget.get("max_tokens")
-        if isinstance(max_tokens, int) and max_tokens > admission.public_max_budget_tokens:
-            raise AdmissionFailure(
-                reason_code=ADMISSION_BUDGET_EXCEEDS_PUBLIC_LIMIT,
-                detail=(
-                    "budget.max_tokens exceeds public exposure limit "
-                    f"({max_tokens} > {admission.public_max_budget_tokens})"
-                ),
-            )
-        max_duration_ms = budget.get("max_duration_ms")
-        if isinstance(max_duration_ms, int) and max_duration_ms > admission.public_max_budget_duration_ms:
-            raise AdmissionFailure(
-                reason_code=ADMISSION_BUDGET_EXCEEDS_PUBLIC_LIMIT,
-                detail=(
-                    "budget.max_duration_ms exceeds public exposure limit "
-                    f"({max_duration_ms} > {admission.public_max_budget_duration_ms})"
-                ),
-            )

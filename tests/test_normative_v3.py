@@ -6,6 +6,22 @@ from dbl_gateway.contracts import _normalize_decision
 
 
 class TestNormativeDecisionV3:
+    def test_request_policy_fields_in_normative(self):
+        """Request-policy governance fields appear in normative dict."""
+        decision = DecisionResult(
+            decision="ALLOW",
+            reason_codes=[],
+            request_class="execution_light",
+            budget_class="light",
+            budget_policy_reason="request.budget_clamped",
+        )
+        normative = build_normative_decision(
+            decision, assembly_digest=None, context_digest=None,
+        )
+        assert normative["request_class"] == "execution_light"
+        assert normative["budget_class"] == "light"
+        assert normative["budget_policy_reason"] == "request.budget_clamped"
+
     def test_tool_families_in_normative(self):
         """Tool-family governance fields appear in normative dict."""
         decision = DecisionResult(
@@ -66,6 +82,9 @@ class TestNormativeDecisionV3:
             "transforms": [],
             "result": "ALLOW",
             "reasons": [],
+            "request_class": "execution_light",
+            "budget_class": "light",
+            "budget_policy_reason": "request.budget_clamped",
             "declared_tool_families": ["web_read", "exec_like"],
             "allowed_tool_families": ["web_read"],
             "permitted_tool_families": ["web_read"],
@@ -84,6 +103,9 @@ class TestNormativeDecisionV3:
             "transforms": [],
             "result": "ALLOW",
             "reasons": [],
+            "request_class": None,
+            "budget_class": None,
+            "budget_policy_reason": None,
             "declared_tool_families": ["web_read", "exec_like"],
             "allowed_tool_families": ["web_read", "data_access"],
             "permitted_tool_families": ["web_read", "data_access"],
@@ -104,6 +126,9 @@ class TestNormativeDecisionV3:
             "transforms": [],
             "result": "ALLOW",
             "reasons": [],
+            "request_class": None,
+            "budget_class": None,
+            "budget_policy_reason": None,
             "declared_tool_families": ["web_read"],
             "allowed_tool_families": ["web_read"],
             "permitted_tool_families": ["web_read"],
@@ -123,6 +148,9 @@ class TestNormativeDecisionV3:
             "transforms": [],
             "result": "ALLOW",
             "reasons": [],
+            "request_class": None,
+            "budget_class": None,
+            "budget_policy_reason": None,
             "permitted_tools": None,
             "denied_tool_families": None,
             "enforced_budget": None,
@@ -140,6 +168,9 @@ class TestNormativeDecisionV3:
             "transforms": [],
             "result": "ALLOW",
             "reasons": [],
+            "request_class": None,
+            "budget_class": None,
+            "budget_policy_reason": None,
             "declared_tool_families": ["web_read"],
             "allowed_tool_families": ["web_read"],
             "permitted_tool_families": ["web_read"],

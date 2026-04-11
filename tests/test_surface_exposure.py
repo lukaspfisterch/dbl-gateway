@@ -70,6 +70,11 @@ def test_public_capabilities_hide_non_public_surfaces(monkeypatch: pytest.Monkey
             "retrieval",
             "llm_assist",
         ]
+        assert data["budget"]["current_request_policy"]["execution_heavy"]["decision"] == "deny"
+        assert data["budget"]["current_request_policy"]["intent"]["max_budget"] == {
+            "max_tokens": 2048,
+            "max_duration_ms": 12000,
+        }
 
     import asyncio
 
@@ -115,6 +120,7 @@ def test_demo_mode_exposes_ui(monkeypatch: pytest.MonkeyPatch) -> None:
         assert caps_data["intents"]["catalog"]["artifact.handle"]["risk_class"] == "high_risk_context"
         assert caps_data["tool_surface"]["trust_class_current"] == "internal"
         assert caps_data["tool_surface"]["allowed_families_current"] == ["*"]
+        assert caps_data["budget"]["current_request_policy"]["execution_heavy"]["decision"] == "allow"
 
     import asyncio
 

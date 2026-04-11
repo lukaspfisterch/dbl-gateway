@@ -39,6 +39,76 @@
       }
     }
   },
+  "request_policy": {
+    "classification": {
+      "light_budget": {
+        "max_tokens": 2048,
+        "max_duration_ms": 15000
+      }
+    },
+    "matrix": {
+      "public": {
+        "anonymous": {
+          "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+          "intent": {"decision": "allow", "max_budget": {"max_tokens": 1024, "max_duration_ms": 8000}},
+          "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+          "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"}
+        },
+        "user": {
+          "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+          "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+          "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 15000}},
+          "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"}
+        },
+        "operator": {
+          "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+          "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+          "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 15000}},
+          "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"}
+        },
+        "internal": {
+          "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+          "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 12000}},
+          "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 15000}},
+          "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"}
+        }
+      },
+      "operator": {
+        "anonymous": {
+          "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+          "intent": {"decision": "deny", "reason_code": "request.intent_requires_identity"},
+          "execution_light": {"decision": "deny", "reason_code": "request.execution_requires_identity"},
+          "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"}
+        },
+        "user": {
+          "probe": {"decision": "deny", "reason_code": "request.probe_denied"},
+          "intent": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+          "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000}},
+          "execution_heavy": {"decision": "deny", "reason_code": "request.execution_heavy_denied"}
+        },
+        "operator": {
+          "probe": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+          "intent": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000}},
+          "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+          "execution_heavy": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}}
+        },
+        "internal": {
+          "probe": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+          "intent": {"decision": "allow", "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000}},
+          "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+          "execution_heavy": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}}
+        }
+      },
+      "demo": {
+        "*": {
+          "probe": {"decision": "allow", "max_budget": {"max_tokens": 2048, "max_duration_ms": 15000}},
+          "intent": {"decision": "allow", "max_budget": {"max_tokens": 8192, "max_duration_ms": 60000}},
+          "execution_light": {"decision": "allow", "max_budget": {"max_tokens": 16384, "max_duration_ms": 120000}},
+          "execution_heavy": {"decision": "allow", "max_budget": {"max_tokens": 16384, "max_duration_ms": 120000}}
+        }
+      }
+    }
+  },
   "surface_rules": {
     "healthz": "public",
     "capabilities": "public",

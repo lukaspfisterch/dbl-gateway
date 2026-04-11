@@ -179,7 +179,7 @@ def test_public_mode_rejects_declared_tools_before_intent(tmp_path: Path, monkey
     run_with_client(app, scenario)
 
 
-def test_public_mode_rejects_budget_over_limit_before_intent(
+def test_public_mode_denies_heavy_budget_in_decision_trace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
@@ -190,10 +190,23 @@ def test_public_mode_rejects_budget_over_limit_before_intent(
         payload = _intent_envelope("hello")
         payload["payload"]["budget"] = {"max_tokens": 5000}
         resp = await client.post("/ingress/intent", json=payload)
-        assert resp.status_code == 400
-        assert resp.json()["reason_code"] == "admission.budget_exceeds_public_limit"
-        snap = app.state.store.snapshot(limit=10, offset=0)
-        assert snap["length"] == 0
+        assert resp.status_code == 202
+        snap = None
+        for _ in range(20):
+            candidate = app.state.store.snapshot(limit=10, offset=0)
+            if any(event.get("kind") == "DECISION" for event in candidate.get("events", [])):
+                snap = candidate
+                break
+            await asyncio.sleep(0.05)
+        assert snap is not None
+        assert snap["length"] >= 2
+        assert snap["events"][0]["kind"] == "INTENT"
+        decision = [event for event in snap["events"] if event["kind"] == "DECISION"][-1]["payload"]
+        assert decision["decision"] == "DENY"
+        assert decision["reason_codes"] == ["request.execution_heavy_denied"]
+        assert decision["request_class"] == "execution_heavy"
+        assert decision["budget_class"] == "heavy"
+        assert decision["budget_policy_reason"] == "request.execution_heavy_denied"
 
     run_with_client(app, scenario)
 
@@ -275,11 +288,17 @@ def test_gateway_injects_tool_policy_into_policy_inputs(
         inputs = capture.last_input["payload"]["inputs"]
         gateway_auth = inputs["extensions"]["gateway_auth"]
         policy_meta = inputs["extensions"]["gateway_tool_policy"]
+        request_meta = inputs["extensions"]["gateway_request_policy"]
         assert gateway_auth["trust_class"] == "internal"
         assert policy_meta["declared_tool_families"] == ["web_read", "exec_like"]
         assert policy_meta["allowed_tool_families"] == ["web_read", "retrieval", "llm_assist"]
         assert policy_meta["permitted_tool_families"] == ["web_read"]
         assert policy_meta["denied_tool_families"] == ["exec_like"]
+        assert request_meta["request_class"] == "execution_heavy"
+        assert request_meta["budget_class"] == "none"
+        assert request_meta["policy_budget"] == {"max_tokens": 8192, "max_duration_ms": 60000}
+        assert request_meta["permitted_budget"] == {"max_tokens": 8192, "max_duration_ms": 60000}
+        assert request_meta["denied_reason"] is None
 
     run_with_client(app, scenario)
 
@@ -302,9 +321,17 @@ def test_decision_payload_tracks_tool_family_governance(
         assert decision["allowed_tool_families"] == ["web_read", "retrieval", "llm_assist"]
         assert decision["permitted_tool_families"] == ["web_read"]
         assert decision["denied_tool_families"] == ["exec_like"]
+        assert decision["request_class"] == "execution_heavy"
+        assert decision["budget_class"] == "none"
+        assert decision["budget_policy_reason"] is None
         assert decision["permitted_tools"] == ["web.search"]
         assert decision["tools_denied"] == ["code.execute"]
         assert decision["tools_denied_reason"] == "tool.no_mix.exec_like"
+        assert decision["enforced_budget"] == {
+            "max_tokens": 8192,
+            "max_duration_ms": 60000,
+            "source": "intent_exact",
+        }
 
     run_with_client(app, scenario)
 
@@ -892,6 +919,17 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
         ]
         assert data["tool_surface"]["allowed_families_by_exposure"]["demo"]["*"] == ["*"]
         assert data["tool_surface"]["no_mix_rules"][0]["rule_id"] == "tool.no_mix.exec_like"
+        assert data["budget"]["request_classes"] == [
+            "probe",
+            "intent",
+            "execution_light",
+            "execution_heavy",
+        ]
+        assert data["budget"]["current_request_policy"]["execution_heavy"]["decision"] == "allow"
+        assert data["budget"]["current_request_policy"]["execution_heavy"]["max_budget"] == {
+            "max_tokens": 8192,
+            "max_duration_ms": 60000,
+        }
         providers = data["providers"]
         assert isinstance(providers, list)
         assert providers and providers[0]["id"] == "openai"

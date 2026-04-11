@@ -20,6 +20,7 @@ from .config import (
     exposure_mode_allows,
     get_boundary_config,
     get_context_config,
+    request_policy_rule_for_mode,
 )
 from .providers import get_provider_capabilities
 from .providers.contract import ProviderCapabilities
@@ -129,6 +130,10 @@ class CapabilitiesBudgetField(BaseModel):
 
 class CapabilitiesBudget(BaseModel):
     fields: dict[str, CapabilitiesBudgetField]
+    request_classes: list[str]
+    light_budget_classification: dict[str, int]
+    current_request_policy: dict[str, dict[str, Any]]
+    request_policy_by_exposure: dict[str, dict[str, dict[str, dict[str, Any]]]]
 
 
 class CapabilitiesResponse(BaseModel):
@@ -391,6 +396,27 @@ def get_capabilities(
         if models:
             providers.append({"id": "stub", "models": models})
 
+    def serialize_request_policy(mode: str, trust: str) -> dict[str, dict[str, Any]]:
+        policy_map: dict[str, dict[str, Any]] = {}
+        for request_class in cfg.request_policy.request_classes:
+            rule = request_policy_rule_for_mode(
+                cfg,
+                mode=mode, trust_class=trust, request_class=request_class,
+            )
+            policy_map[request_class] = {
+                "decision": rule.decision,
+                "reason_code": rule.reason_code,
+                "max_budget": (
+                    {
+                        "max_tokens": rule.max_budget.max_tokens,
+                        "max_duration_ms": rule.max_budget.max_duration_ms,
+                    }
+                    if rule.max_budget is not None
+                    else None
+                ),
+            }
+        return policy_map
+
     return {
         "schema_version": CAPABILITIES_SCHEMA_VERSION,
         "gateway_version": _gateway_version(),
@@ -443,6 +469,19 @@ def get_capabilities(
                     "max": limits["max"],
                 }
                 for name, limits in BUDGET_LIMITS.items()
+            },
+            "request_classes": list(cfg.request_policy.request_classes),
+            "light_budget_classification": {
+                "max_tokens": cfg.request_policy.light_budget.max_tokens,
+                "max_duration_ms": cfg.request_policy.light_budget.max_duration_ms,
+            },
+            "current_request_policy": serialize_request_policy(cfg.exposure_mode, trust_class),
+            "request_policy_by_exposure": {
+                mode: {
+                    trust: serialize_request_policy(mode, trust)
+                    for trust in cfg.request_policy.matrix.get(mode, {})
+                }
+                for mode in ("public", "operator", "demo")
             },
         },
         "providers": providers,

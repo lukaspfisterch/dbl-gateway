@@ -10,7 +10,7 @@ Secrets never appear in event payloads.
 | `DBL_GATEWAY_DB` | yes | `./data/trail.sqlite` | SQLite path for the event trail |
 | `DBL_GATEWAY_POLICY_MODULE` | yes | -- | Python module path for policy (e.g. `dbl_policy.allow_all`) |
 | `DBL_GATEWAY_POLICY_OBJECT` | no | `POLICY` | Attribute name of the policy object in the module |
-| `DBL_GATEWAY_BOUNDARY_CONFIG` | no | `config/boundary.json` | Path to the boundary config artifact controlling `exposure_mode`, surface rules, public admission limits, and the exposure-by-trust tool policy matrix |
+| `DBL_GATEWAY_BOUNDARY_CONFIG` | no | `config/boundary.json` | Path to the boundary config artifact controlling `exposure_mode`, surface rules, public admission limits, tool policy, and request/budget policy |
 | `GATEWAY_EXEC_MODE` | no | `embedded` | `embedded` (in-process provider calls) or `external` (sidecar) |
 | `GATEWAY_ENABLE_CONTEXT_RESOLUTION` | no | OFF | `true`/`1`/`yes` to enable declared_refs resolution and Workbench handle fetch. When OFF, refs are stored but not resolved; `artifact.handle` intents are rejected. |
 
@@ -38,6 +38,14 @@ Each boundary artifact also contains `tool_policy`:
 - `matrix.demo`
 
 The matrix defines the allowed tool families for each `(exposure_mode, trust_class)` pair and is published through `/capabilities`.
+
+Each boundary artifact also contains `request_policy`:
+- `classification.light_budget` — deterministic threshold for `execution_light` vs `execution_heavy`
+- `matrix.public`
+- `matrix.operator`
+- `matrix.demo`
+
+The request-policy matrix defines `allow|deny` plus optional budget ceilings for each `(exposure_mode, trust_class, request_class)` tuple and is published through `/capabilities`.
 
 These limits are enforced deterministically from request content plus boundary config. They do not depend on queue depth, load, timing, or other runtime observations.
 
