@@ -288,6 +288,10 @@ def test_load_valid_boundary_config(sample_boundary_config: Path) -> None:
     assert cfg.identity_policy.mode == "dev"
     assert cfg.identity_policy.actor_id_claims == ("oid", "sub")
     assert cfg.identity_policy.role_claims == ("roles", "groups")
+    assert cfg.identity_policy.tenant_mapping.claim == "tid"
+    assert cfg.identity_policy.tenant_mapping.fallback == "dev-tenant"
+    assert cfg.identity_policy.tenant_mapping.allow_all is True
+    assert cfg.identity_policy.tenant_mapping.allowlist == ()
     assert cfg.tool_policy.families["exec_like"] == ("code.*",)
     assert allowed_tool_families_for_mode(cfg, trust_class="internal") == ("web_read", "retrieval")
     assert allowed_tool_families_for_mode(cfg, mode="public", trust_class="anonymous") == ("web_read",)
@@ -592,6 +596,11 @@ def _sample_identity_policy() -> dict[str, object]:
             "actor_id": ["oid", "sub"],
             "issuer": "iss",
             "roles": ["roles", "groups"],
+        },
+        "tenant_mapping": {
+            "claim": "tid",
+            "fallback": "dev-tenant",
+            "allowlist": ["*"],
         },
         "role_map": {
             "group:admins": ["gateway.operator"],

@@ -12,6 +12,7 @@ class TestNormativeDecisionV3:
             decision="ALLOW",
             reason_codes=[],
             actor_id="dev-user",
+            tenant_id="tenant-1",
             trust_class="internal",
             identity_issuer="dev",
             identity_verified=True,
@@ -27,6 +28,7 @@ class TestNormativeDecisionV3:
             decision, assembly_digest=None, context_digest=None,
         )
         assert normative["actor_id"] == "dev-user"
+        assert normative["tenant_id"] == "tenant-1"
         assert normative["trust_class"] == "internal"
         assert normative["identity_issuer"] == "dev"
         assert normative["identity_verified"] is True
@@ -117,6 +119,7 @@ class TestNormativeDecisionV3:
             "result": "ALLOW",
             "reasons": [],
             "actor_id": "dev-user",
+            "tenant_id": "tenant-1",
             "trust_class": "internal",
             "identity_issuer": "dev",
             "identity_verified": True,
@@ -140,6 +143,7 @@ class TestNormativeDecisionV3:
         })
         assert norm["permitted_tools"] == ["a_tool", "z_tool"]
         assert norm["actor_id"] == "dev-user"
+        assert norm["tenant_id"] == "tenant-1"
         assert norm["trust_class"] == "internal"
         assert norm["identity_issuer"] == "dev"
         assert norm["identity_verified"] is True

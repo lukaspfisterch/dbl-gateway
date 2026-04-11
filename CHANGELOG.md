@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.26 — Boundary Tenant Mapping
+
+**Tenant derivation now follows the same hashed boundary contract as trust derivation, instead of hiding in auth env defaults.**
+- Add `identity_policy.tenant_mapping` to boundary config artifacts and schema, covering tenant claim, fallback tenant, and allowlist.
+- Make auth config resolve tenant derivation and tenant allowlist from the active boundary identity policy first, while leaving legacy tenant envs as fallback only.
+- Publish a compact operator-facing `auth.tenant_mapping` view in `/capabilities`, and omit it completely in `public` alongside the other identity-structure views.
+- Record `tenant_id` explicitly in normative DECISION payloads so replay/audit can reconstruct the full governance partition key, and use stable request-entry denial `identity.tenant_not_allowed` for rejected tenants.
+
 ## v0.9.25 — Controlled Identity Discovery
 
 **Operator discovery now explains the active identity-mapping structure without leaking raw identity topology into public capability views.**

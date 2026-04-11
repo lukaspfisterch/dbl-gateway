@@ -126,18 +126,20 @@ returned observer status/results.
 - The gateway resolves a minimal identity line into `actor_id`, `tenant_id`, `client_id`, `roles`, `issuer`, `verified`, and `trust_class`.
 - The OIDC adapter verifies signature/time plus issuer/audience allowlists before claims are mapped.
 - `identity_policy.claim_mapping` controls which claims feed `actor_id`, `issuer`, and role extraction.
+- `identity_policy.tenant_mapping` controls which claim feeds `tenant_id`, which fallback applies when the claim is absent, and which tenant ids are allowed at request entry.
 - `auth.mode` publishes the active auth lane (`dev` or `oidc` today).
 - `auth.identity_sources` publishes the request source expected for that lane:
   - `dev_headers` for local/demo header-derived identity
   - `oidc_jwt` for generic OIDC bearer-token identity
 - `auth.issuers_allowed` and `auth.audiences_allowed` publish the active OIDC allowlists.
 - `auth.claim_mapping` publishes only the configured claim field names used for `actor_id`, `issuer`, and role extraction.
+- `auth.tenant_mapping` publishes only the operator-relevant tenant shape (`source`, `fallback`, `allow_all`, `allowlist_count`) without exposing raw tenant enumerations.
 - `auth.role_mapping_summary` publishes a compact operator view of the active role-map shape (`mapped_sources`, `operator_sources`, `internal_sources`, `user_fallback`) without exposing raw tenant or group topology.
 - `auth.current_trust_class` publishes the trust class currently derived for the caller.
 - Trust classes remain stable: `anonymous`, `user`, `operator`, `internal`.
-- In `public`, `auth.claim_mapping` and `auth.role_mapping_summary` are omitted entirely.
+- In `public`, `auth.claim_mapping`, `auth.tenant_mapping`, and `auth.role_mapping_summary` are omitted entirely.
 - The gateway injects this identity as `payload.inputs.extensions.gateway_auth` before policy evaluation.
-- DECISION records `actor_id`, `trust_class`, `identity_issuer`, `identity_verified`, `identity_source`, and `claims_digest`.
+- DECISION records `actor_id`, `tenant_id`, `trust_class`, `identity_issuer`, `identity_verified`, `identity_source`, and `claims_digest`.
 
 ## Context Resolution Gate
 - Controlled by `GATEWAY_ENABLE_CONTEXT_RESOLUTION` env var (default OFF).

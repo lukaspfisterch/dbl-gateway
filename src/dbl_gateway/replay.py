@@ -93,6 +93,7 @@ def replay_decision_for_turn(
     stored_permitted_tools = decision_payload.get("permitted_tools")
     stored_enforced_budget = decision_payload.get("enforced_budget")
     stored_actor_id = decision_payload.get("actor_id")
+    stored_tenant_id = decision_payload.get("tenant_id")
     stored_trust_class = decision_payload.get("trust_class")
     stored_identity_issuer = decision_payload.get("identity_issuer")
     stored_identity_verified = decision_payload.get("identity_verified")
@@ -120,6 +121,7 @@ def replay_decision_for_turn(
         policy_version=stored_policy.get("policy_version") or policy_result.policy_version,
         gate_event=policy_result.gate_event,
         actor_id=stored_actor_id if isinstance(stored_actor_id, str) else None,
+        tenant_id=stored_tenant_id if isinstance(stored_tenant_id, str) else None,
         trust_class=stored_trust_class if isinstance(stored_trust_class, str) else None,
         identity_issuer=stored_identity_issuer if isinstance(stored_identity_issuer, str) else None,
         identity_verified=stored_identity_verified if isinstance(stored_identity_verified, bool) else None,

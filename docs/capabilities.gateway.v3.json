@@ -27,6 +27,12 @@
         "groups"
       ]
     },
+    "tenant_mapping": {
+      "source": "claim:tid",
+      "fallback": "dev-tenant",
+      "allow_all": true,
+      "allowlist_count": 0
+    },
     "role_mapping_summary": {
       "mapped_sources": 2,
       "operator_sources": 1,
@@ -36,7 +42,7 @@
   },
   "boundary": {
     "boundary_version": "1",
-    "boundary_config_digest": "sha256:fc97d0b2e90c5260d35bc5caa7802056e4bd91965098459e4c5b003fd0e2763f",
+    "boundary_config_digest": "sha256:278ad8bbc1ef2237fee522a27ac711fa828d3af6ec4370d969e0f195ba56d5f4",
     "exposure_mode": "operator"
   },
   "intents": {
@@ -864,5 +870,5 @@
       "description": "External execution submission surface when enabled."
     }
   ],
-  "generated_at": "2026-04-11T20:52:58.820301+00:00"
+  "generated_at": "2026-04-11T21:06:47.193415+00:00"
 }

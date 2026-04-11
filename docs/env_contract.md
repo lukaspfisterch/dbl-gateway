@@ -26,8 +26,8 @@ Secrets never appear in event payloads.
 | `DBL_GATEWAY_OIDC_AUDIENCE` | `oidc` only | -- | Expected JWT audience |
 | `DBL_GATEWAY_OIDC_AUDIENCES` | `oidc` only | -- | Comma-separated audience allowlist. Preferred over singular audience env. |
 | `DBL_GATEWAY_OIDC_JWKS_URL` | `oidc` only | -- | JWKS endpoint used for signature validation |
-| `DBL_GATEWAY_ALLOWED_TENANTS` | no | `*` | Allowed tenant ids or `*` |
-| `DBL_GATEWAY_TENANT_CLAIM` | no | `tid` | Claim name used for tenant extraction |
+| `DBL_GATEWAY_ALLOWED_TENANTS` | no | `*` | Fallback only. Prefer `boundary.identity_policy.tenant_mapping.allowlist`. |
+| `DBL_GATEWAY_TENANT_CLAIM` | no | `tid` | Fallback only. Prefer `boundary.identity_policy.tenant_mapping.claim`. |
 | `DBL_GATEWAY_ACTOR_ID_CLAIMS` | no | `oid,sub` | Comma-separated claim names searched for actor id extraction |
 | `DBL_GATEWAY_ISSUER_CLAIM` | no | `iss` | Claim name used for issuer extraction |
 | `DBL_GATEWAY_ROLE_CLAIMS` | no | `roles,groups` | Comma-separated claim names searched for role extraction |
@@ -45,13 +45,17 @@ Each boundary artifact now contains `identity_policy`:
 - `claim_mapping.actor_id`
 - `claim_mapping.issuer`
 - `claim_mapping.roles`
+- `tenant_mapping.claim`
+- `tenant_mapping.fallback`
+- `tenant_mapping.allowlist`
 - `role_map`
 
 This makes the effective identity mapping part of the hashed boundary contract instead of a hidden runtime detail.
 Operator discovery reuses that same boundary truth:
 - `/capabilities.auth.claim_mapping` shows only the configured claim field names
+- `/capabilities.auth.tenant_mapping` shows only the configured source/fallback plus allowlist shape
 - `/capabilities.auth.role_mapping_summary` shows only compact mapping counts and fallback behavior
-- `public` omits both fields to avoid unnecessary identity-structure recon
+- `public` omits all three fields to avoid unnecessary identity-structure recon
 
 ## Boundary Profiles
 

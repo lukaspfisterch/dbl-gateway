@@ -163,6 +163,16 @@ class BoundaryEconomicPolicyConfig:
 
 
 @dataclass(frozen=True)
+class BoundaryTenantMappingConfig:
+    """Immutable tenant mapping derived from boundary identity policy."""
+
+    claim: str
+    fallback: str
+    allowlist: tuple[str, ...]
+    allow_all: bool
+
+
+@dataclass(frozen=True)
 class BoundaryIdentityPolicyConfig:
     """Immutable identity policy derived from boundary config."""
 
@@ -173,6 +183,7 @@ class BoundaryIdentityPolicyConfig:
     issuer_claim: str
     role_claims: tuple[str, ...]
     role_map: Mapping[str, tuple[str, ...]]
+    tenant_mapping: BoundaryTenantMappingConfig
     _raw: Mapping[str, Any]
 
 
@@ -412,6 +423,28 @@ def _parse_boundary_config(raw: Mapping[str, Any]) -> BoundaryConfig:
     )
     if not role_claims:
         raise ValueError("identity_policy.claim_mapping.roles must contain non-empty strings")
+    raw_tenant_mapping = raw_identity_policy.get("tenant_mapping")
+    if not isinstance(raw_tenant_mapping, Mapping):
+        raise ValueError("identity_policy.tenant_mapping must be an object")
+    raw_tenant_claim = raw_tenant_mapping.get("claim")
+    if not isinstance(raw_tenant_claim, str) or not raw_tenant_claim.strip():
+        raise ValueError("identity_policy.tenant_mapping.claim must be a non-empty string")
+    raw_tenant_fallback = raw_tenant_mapping.get("fallback")
+    if not isinstance(raw_tenant_fallback, str) or not raw_tenant_fallback.strip():
+        raise ValueError("identity_policy.tenant_mapping.fallback must be a non-empty string")
+    raw_tenant_allowlist = raw_tenant_mapping.get("allowlist")
+    if not isinstance(raw_tenant_allowlist, list) or not raw_tenant_allowlist:
+        raise ValueError("identity_policy.tenant_mapping.allowlist must be a non-empty list[str]")
+    tenant_allowlist_items = tuple(
+        str(item).strip()
+        for item in raw_tenant_allowlist
+        if isinstance(item, str) and item.strip()
+    )
+    if not tenant_allowlist_items:
+        raise ValueError("identity_policy.tenant_mapping.allowlist must contain non-empty strings")
+    tenant_allow_all = "*" in tenant_allowlist_items
+    tenant_allowlist = tuple(item for item in tenant_allowlist_items if item != "*")
+
     raw_role_map = raw_identity_policy.get("role_map", {})
     if not isinstance(raw_role_map, Mapping):
         raise ValueError("identity_policy.role_map must be an object")
@@ -667,6 +700,12 @@ def _parse_boundary_config(raw: Mapping[str, Any]) -> BoundaryConfig:
             issuer_claim=raw_issuer_claim.strip(),
             role_claims=role_claims,
             role_map=role_map,
+            tenant_mapping=BoundaryTenantMappingConfig(
+                claim=raw_tenant_claim.strip(),
+                fallback=raw_tenant_fallback.strip(),
+                allowlist=tenant_allowlist,
+                allow_all=tenant_allow_all,
+            ),
             _raw=dict(raw_identity_policy),
         ),
         tool_policy=BoundaryToolPolicyConfig(

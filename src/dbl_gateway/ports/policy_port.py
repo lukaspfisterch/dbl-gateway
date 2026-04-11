@@ -12,6 +12,7 @@ class DecisionResult:
     policy_version: str | None = None
     gate_event: object | None = None
     actor_id: str | None = None
+    tenant_id: str | None = None
     trust_class: str | None = None
     identity_issuer: str | None = None
     identity_verified: bool | None = None

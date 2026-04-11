@@ -72,7 +72,7 @@
     },
     "identity_policy": {
       "type": "object",
-      "required": ["mode", "issuers_allowed", "audiences_allowed", "claim_mapping", "role_map"],
+      "required": ["mode", "issuers_allowed", "audiences_allowed", "claim_mapping", "tenant_mapping", "role_map"],
       "properties": {
         "mode": {
           "type": "string",
@@ -96,6 +96,24 @@
               "minLength": 1
             },
             "roles": {
+              "$ref": "#/$defs/nonEmptyStringList"
+            }
+          },
+          "additionalProperties": false
+        },
+        "tenant_mapping": {
+          "type": "object",
+          "required": ["claim", "fallback", "allowlist"],
+          "properties": {
+            "claim": {
+              "type": "string",
+              "minLength": 1
+            },
+            "fallback": {
+              "type": "string",
+              "minLength": 1
+            },
+            "allowlist": {
               "$ref": "#/$defs/nonEmptyStringList"
             }
           },

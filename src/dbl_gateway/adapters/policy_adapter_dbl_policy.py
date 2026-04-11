@@ -53,6 +53,7 @@ class DblPolicyAdapter(PolicyPort):
                 reason_codes=["HANDLE_METADATA_ONLY"],
                 policy_id="builtin",
                 policy_version="1",
+                tenant_id=_tenant_id_value(authoritative_input),
             )
 
         policy = self.policy or _load_policy()
@@ -69,6 +70,7 @@ class DblPolicyAdapter(PolicyPort):
             policy_id=decision.policy_id.value,
             policy_version=policy_version,
             gate_event=gate_event,
+            tenant_id=_tenant_id_value(authoritative_input),
         )
 
 

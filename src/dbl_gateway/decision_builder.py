@@ -32,6 +32,7 @@ def build_normative_decision(
         "reasons": reasons,
         "transforms": norm_transforms,
         "actor_id": decision.actor_id,
+        "tenant_id": decision.tenant_id,
         "trust_class": decision.trust_class,
         "identity_issuer": decision.identity_issuer,
         "identity_verified": decision.identity_verified,

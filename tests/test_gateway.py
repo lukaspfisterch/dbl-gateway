@@ -357,6 +357,7 @@ def test_decision_payload_tracks_tool_family_governance(
         assert decision["budget_class"] == "none"
         assert decision["actor_id"] == "dev-user"
         assert decision["trust_class"] == "internal"
+        assert decision["tenant_id"] == "dev-tenant"
         assert decision["identity_issuer"] == "dev"
         assert decision["identity_verified"] is True
         assert decision["identity_source"] == "dev"
@@ -983,6 +984,12 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
             "issuer": "iss",
             "roles": ["roles", "groups"],
         }
+        assert data["auth"]["tenant_mapping"] == {
+            "source": "claim:tid",
+            "fallback": "dev-tenant",
+            "allow_all": True,
+            "allowlist_count": 0,
+        }
         assert data["auth"]["role_mapping_summary"] == {
             "mapped_sources": 2,
             "operator_sources": 1,
@@ -1093,6 +1100,12 @@ def test_config_audit_summary_matches_boundary_auth_mode(
         "actor_id": ["oid", "sub"],
         "issuer": "iss",
         "roles": ["roles", "groups"],
+    }
+    assert data["auth"]["tenant_mapping"] == {
+        "source": "claim:tid",
+        "fallback": "dev-tenant",
+        "allow_all": True,
+        "allowlist_count": 0,
     }
     assert data["auth"]["role_mapping_summary"] == {
         "mapped_sources": 2,

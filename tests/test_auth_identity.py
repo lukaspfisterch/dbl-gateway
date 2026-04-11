@@ -15,6 +15,7 @@ from dbl_gateway.auth import (
     _get_jwks,
     identity_fields_for_actor,
     load_auth_config_with_identity_policy,
+    require_tenant,
     trust_class_for_actor,
 )
 
@@ -28,6 +29,7 @@ def _oidc_config() -> AuthConfig:
         allowed_tenants=(),
         allow_all_tenants=True,
         tenant_claim="tid",
+        tenant_fallback="tenant-default",
         actor_id_claims=("sub",),
         issuer_claim="iss",
         role_claims=("roles", "groups"),
@@ -126,6 +128,17 @@ def test_authorize_oidc_claims_maps_roles_and_digest() -> None:
     assert trust_class_for_actor(actor) == "operator"
 
 
+def test_authorize_oidc_claims_uses_tenant_fallback_when_claim_missing() -> None:
+    claims = {
+        "sub": "user-123",
+        "azp": "client-123",
+        "iss": "https://issuer.example",
+        "roles": [],
+    }
+    actor = _authorize_oidc_claims(claims, _oidc_config())
+    assert actor.tenant_id == "tenant-default"
+
+
 def test_authorize_oidc_claims_requires_allowed_issuer() -> None:
     claims = {
         "sub": "user-123",
@@ -191,6 +204,11 @@ def test_load_auth_config_uses_identity_policy_overrides(
                 "issuer": "iss",
                 "roles": ["groups"],
             },
+            "tenant_mapping": {
+                "claim": "tenant",
+                "fallback": "tenant-default",
+                "allowlist": ["tenant-a", "tenant-b"],
+            },
             "role_map": {
                 "group:admins": ["gateway.operator"],
             },
@@ -199,7 +217,43 @@ def test_load_auth_config_uses_identity_policy_overrides(
     assert cfg.mode == "oidc"
     assert cfg.issuers_allowed == ("https://issuer.example",)
     assert cfg.audiences_allowed == ("api://gateway",)
+    assert cfg.allowed_tenants == ("tenant-a", "tenant-b")
+    assert cfg.allow_all_tenants is False
+    assert cfg.tenant_claim == "tenant"
+    assert cfg.tenant_fallback == "tenant-default"
     assert cfg.actor_id_claims == ("sub",)
     assert cfg.issuer_claim == "iss"
     assert cfg.role_claims == ("groups",)
     assert cfg.role_map == {"group:admins": ["gateway.operator"]}
+
+
+def test_require_tenant_rejects_unmapped_tenant() -> None:
+    actor = Actor(
+        actor_id="user-1",
+        tenant_id="tenant-x",
+        client_id="client-1",
+        roles=("gateway.snapshot.read",),
+        issuer="https://issuer.example",
+        verified=True,
+        identity_source="oidc",
+        claims_digest="sha256:test",
+        raw_claims={},
+    )
+    cfg = AuthConfig(
+        mode="oidc",
+        issuers_allowed=("https://issuer.example",),
+        audiences_allowed=("api://gateway",),
+        jwks_url="https://issuer.example/keys",
+        allowed_tenants=("tenant-a",),
+        allow_all_tenants=False,
+        tenant_claim="tid",
+        tenant_fallback="tenant-default",
+        actor_id_claims=("sub",),
+        issuer_claim="iss",
+        role_claims=("roles",),
+        role_map=None,
+        dev_actor="dev-user",
+        dev_roles=("gateway.snapshot.read",),
+    )
+    with pytest.raises(auth_module.ForbiddenError, match="identity.tenant_not_allowed"):
+        require_tenant(actor, cfg)

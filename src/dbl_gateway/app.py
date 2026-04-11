@@ -144,6 +144,7 @@ class EconomicPolicyEvaluation:
 @dataclass(frozen=True)
 class IdentityEvaluation:
     actor_id: str | None
+    tenant_id: str | None
     trust_class: str
     identity_issuer: str | None
     identity_verified: bool
@@ -863,6 +864,7 @@ async def _process_intent(
                             decision="DENY",
                             reason_codes=[exc.code],
                             actor_id=identity_evaluation.actor_id,
+                            tenant_id=identity_evaluation.tenant_id,
                             trust_class=identity_evaluation.trust_class,
                             identity_issuer=identity_evaluation.identity_issuer,
                             identity_verified=identity_evaluation.identity_verified,
@@ -922,6 +924,7 @@ async def _process_intent(
                             decision="DENY",
                             reason_codes=["evaluation_error"],
                             actor_id=identity_evaluation.actor_id,
+                            tenant_id=identity_evaluation.tenant_id,
                             trust_class=identity_evaluation.trust_class,
                             identity_issuer=identity_evaluation.identity_issuer,
                             identity_verified=identity_evaluation.identity_verified,
@@ -1029,6 +1032,7 @@ async def _process_intent(
                         decision="DENY",
                         reason_codes=["evaluation_error"],
                         actor_id=identity_evaluation.actor_id,
+                        tenant_id=identity_evaluation.tenant_id,
                         trust_class=identity_evaluation.trust_class,
                         identity_issuer=identity_evaluation.identity_issuer,
                         identity_verified=identity_evaluation.identity_verified,
@@ -1071,6 +1075,7 @@ async def _process_intent(
                 policy_version=decision.policy_version,
                 gate_event=decision.gate_event,
                 actor_id=decision.actor_id,
+                tenant_id=decision.tenant_id,
                 trust_class=decision.trust_class,
                 identity_issuer=decision.identity_issuer,
                 identity_verified=decision.identity_verified,
@@ -1104,6 +1109,7 @@ async def _process_intent(
             policy_version=decision.policy_version,
             gate_event=decision.gate_event,
             actor_id=identity_evaluation.actor_id,
+            tenant_id=identity_evaluation.tenant_id,
             trust_class=identity_evaluation.trust_class,
             identity_issuer=identity_evaluation.identity_issuer,
             identity_verified=identity_evaluation.identity_verified,
@@ -1159,6 +1165,7 @@ async def _process_intent(
                 policy_version=decision.policy_version,
                 gate_event=decision.gate_event,
                 actor_id=identity_evaluation.actor_id,
+                tenant_id=identity_evaluation.tenant_id,
                 trust_class=identity_evaluation.trust_class,
                 identity_issuer=identity_evaluation.identity_issuer,
                 identity_verified=identity_evaluation.identity_verified,
@@ -1202,6 +1209,7 @@ async def _process_intent(
                 policy_version=decision.policy_version,
                 gate_event=decision.gate_event,
                 actor_id=identity_evaluation.actor_id,
+                tenant_id=identity_evaluation.tenant_id,
                 trust_class=identity_evaluation.trust_class,
                 identity_issuer=identity_evaluation.identity_issuer,
                 identity_verified=identity_evaluation.identity_verified,
@@ -1235,6 +1243,7 @@ async def _process_intent(
                 policy_version=decision.policy_version,
                 gate_event=decision.gate_event,
                 actor_id=identity_evaluation.actor_id,
+                tenant_id=identity_evaluation.tenant_id,
                 trust_class=identity_evaluation.trust_class,
                 identity_issuer=identity_evaluation.identity_issuer,
                 identity_verified=identity_evaluation.identity_verified,
@@ -2198,6 +2207,7 @@ def _identity_evaluation(authoritative: Mapping[str, Any]) -> IdentityEvaluation
     if not isinstance(payload, Mapping):
         return IdentityEvaluation(
             actor_id=None,
+            tenant_id=None,
             trust_class="anonymous",
             identity_issuer=None,
             identity_verified=False,
@@ -2208,6 +2218,7 @@ def _identity_evaluation(authoritative: Mapping[str, Any]) -> IdentityEvaluation
     if not isinstance(inputs, Mapping):
         return IdentityEvaluation(
             actor_id=None,
+            tenant_id=None,
             trust_class="anonymous",
             identity_issuer=None,
             identity_verified=False,
@@ -2218,6 +2229,7 @@ def _identity_evaluation(authoritative: Mapping[str, Any]) -> IdentityEvaluation
     if not isinstance(extensions, Mapping):
         return IdentityEvaluation(
             actor_id=None,
+            tenant_id=None,
             trust_class="anonymous",
             identity_issuer=None,
             identity_verified=False,
@@ -2228,6 +2240,7 @@ def _identity_evaluation(authoritative: Mapping[str, Any]) -> IdentityEvaluation
     if not isinstance(gateway_auth, Mapping):
         return IdentityEvaluation(
             actor_id=None,
+            tenant_id=None,
             trust_class="anonymous",
             identity_issuer=None,
             identity_verified=False,
@@ -2239,6 +2252,11 @@ def _identity_evaluation(authoritative: Mapping[str, Any]) -> IdentityEvaluation
         actor_id=(
             gateway_auth.get("actor_id").strip()
             if isinstance(gateway_auth.get("actor_id"), str) and gateway_auth.get("actor_id").strip()
+            else None
+        ),
+        tenant_id=(
+            gateway_auth.get("tenant_id").strip()
+            if isinstance(gateway_auth.get("tenant_id"), str) and gateway_auth.get("tenant_id").strip()
             else None
         ),
         trust_class=(

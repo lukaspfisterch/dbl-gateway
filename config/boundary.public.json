@@ -23,6 +23,11 @@
       "issuer": "iss",
       "roles": ["roles", "groups"]
     },
+    "tenant_mapping": {
+      "claim": "tid",
+      "fallback": "dev-tenant",
+      "allowlist": ["*"]
+    },
     "role_map": {
       "group:admins": ["gateway.operator"],
       "group:internal": ["gateway.internal"]

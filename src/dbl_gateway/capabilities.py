@@ -98,6 +98,7 @@ class CapabilitiesAuth(BaseModel):
     issuers_allowed: list[str]
     audiences_allowed: list[str]
     claim_mapping: dict[str, Any] | None = None
+    tenant_mapping: dict[str, Any] | None = None
     role_mapping_summary: dict[str, Any] | None = None
 
     @model_serializer(mode="wrap")
@@ -105,6 +106,8 @@ class CapabilitiesAuth(BaseModel):
         data = handler(self)
         if data.get("claim_mapping") is None:
             data.pop("claim_mapping", None)
+        if data.get("tenant_mapping") is None:
+            data.pop("tenant_mapping", None)
         if data.get("role_mapping_summary") is None:
             data.pop("role_mapping_summary", None)
         return data
@@ -403,6 +406,16 @@ def _identity_role_mapping_summary(cfg: BoundaryConfig) -> dict[str, Any]:
     }
 
 
+def _identity_tenant_mapping_summary(cfg: BoundaryConfig) -> dict[str, Any]:
+    tenant_mapping = cfg.identity_policy.tenant_mapping
+    return {
+        "source": f"claim:{tenant_mapping.claim}",
+        "fallback": tenant_mapping.fallback,
+        "allow_all": tenant_mapping.allow_all,
+        "allowlist_count": 0 if tenant_mapping.allow_all else len(tenant_mapping.allowlist),
+    }
+
+
 def get_capabilities_cached(
     boundary_config: BoundaryConfig | None = None,
     *,
@@ -525,6 +538,7 @@ def get_capabilities(
     }
     if cfg.exposure_mode != "public":
         auth_payload["claim_mapping"] = _identity_claim_mapping(cfg)
+        auth_payload["tenant_mapping"] = _identity_tenant_mapping_summary(cfg)
         auth_payload["role_mapping_summary"] = _identity_role_mapping_summary(cfg)
 
     return {

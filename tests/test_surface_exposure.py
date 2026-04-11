@@ -61,6 +61,7 @@ def test_public_capabilities_hide_non_public_surfaces(monkeypatch: pytest.Monkey
         assert data["boundary"]["exposure_mode"] == "public"
         assert data["auth"]["current_trust_class"] == "internal"
         assert "claim_mapping" not in data["auth"]
+        assert "tenant_mapping" not in data["auth"]
         assert "role_mapping_summary" not in data["auth"]
         assert ids == {"healthz", "capabilities", "ingress_intent"}
         assert data["intents"]["supported"] == ["chat.message"]
@@ -127,6 +128,12 @@ def test_demo_mode_exposes_ui(monkeypatch: pytest.MonkeyPatch) -> None:
             "actor_id": ["oid", "sub"],
             "issuer": "iss",
             "roles": ["roles", "groups"],
+        }
+        assert caps_data["auth"]["tenant_mapping"] == {
+            "source": "claim:tid",
+            "fallback": "dev-tenant",
+            "allow_all": True,
+            "allowlist_count": 0,
         }
         assert caps_data["auth"]["role_mapping_summary"] == {
             "mapped_sources": 2,

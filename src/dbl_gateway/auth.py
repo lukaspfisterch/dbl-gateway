@@ -17,6 +17,7 @@ class AuthConfig:
     allowed_tenants: tuple[str, ...]
     allow_all_tenants: bool
     tenant_claim: str
+    tenant_fallback: str
     actor_id_claims: tuple[str, ...]
     issuer_claim: str
     role_claims: tuple[str, ...]
@@ -116,6 +117,7 @@ def load_auth_config_with_identity_policy(
     jwks_url = os.getenv("DBL_GATEWAY_OIDC_JWKS_URL", "").strip()
     allowed_tenants_raw = os.getenv("DBL_GATEWAY_ALLOWED_TENANTS", "*").strip()
     tenant_claim = os.getenv("DBL_GATEWAY_TENANT_CLAIM", "tid").strip() or "tid"
+    tenant_fallback = "dev-tenant"
     actor_id_claims_raw = os.getenv("DBL_GATEWAY_ACTOR_ID_CLAIMS", "oid,sub").strip()
     issuer_claim = os.getenv("DBL_GATEWAY_ISSUER_CLAIM", "iss").strip() or "iss"
     role_claims_raw = os.getenv("DBL_GATEWAY_ROLE_CLAIMS", "roles,groups").strip()
@@ -169,6 +171,23 @@ def load_auth_config_with_identity_policy(
                     for item in policy_role_claims
                     if isinstance(item, str) and item.strip()
                 )
+        tenant_mapping = identity_policy.get("tenant_mapping")
+        if isinstance(tenant_mapping, Mapping):
+            policy_tenant_claim = tenant_mapping.get("claim")
+            if isinstance(policy_tenant_claim, str) and policy_tenant_claim.strip():
+                tenant_claim = policy_tenant_claim.strip()
+            policy_tenant_fallback = tenant_mapping.get("fallback")
+            if isinstance(policy_tenant_fallback, str) and policy_tenant_fallback.strip():
+                tenant_fallback = policy_tenant_fallback.strip()
+            policy_tenant_allowlist = tenant_mapping.get("allowlist")
+            if isinstance(policy_tenant_allowlist, Sequence) and not isinstance(policy_tenant_allowlist, (str, bytes)):
+                parsed_allowlist = tuple(
+                    str(item).strip()
+                    for item in policy_tenant_allowlist
+                    if isinstance(item, str) and item.strip()
+                )
+                allow_all_tenants = "*" in parsed_allowlist
+                allowed_tenants = tuple(item for item in parsed_allowlist if item != "*")
         policy_role_map = identity_policy.get("role_map")
         if isinstance(policy_role_map, Mapping):
             normalized_role_map: dict[str, list[str]] = {}
@@ -190,6 +209,7 @@ def load_auth_config_with_identity_policy(
         allowed_tenants=allowed_tenants,
         allow_all_tenants=allow_all_tenants,
         tenant_claim=tenant_claim,
+        tenant_fallback=tenant_fallback,
         actor_id_claims=actor_id_claims,
         issuer_claim=issuer_claim,
         role_claims=role_claims,
@@ -211,7 +231,7 @@ def require_tenant(actor: Actor, cfg: AuthConfig | None = None) -> None:
         return
     if actor.tenant_id in cfg.allowed_tenants:
         return
-    raise ForbiddenError("tenant not allowed")
+    raise ForbiddenError("identity.tenant_not_allowed")
 
 
 async def authenticate_request(headers: Mapping[str, str], cfg: AuthConfig | None = None) -> Actor:
@@ -267,7 +287,7 @@ def _authenticate_dev(headers: Mapping[str, str], cfg: AuthConfig) -> Actor:
 
     return Actor(
         actor_id=actor_id,
-        tenant_id=headers.get("x-dev-tenant", "dev-tenant").strip() or "dev-tenant",
+        tenant_id=headers.get("x-dev-tenant", cfg.tenant_fallback).strip() or cfg.tenant_fallback,
         client_id=headers.get("x-dev-client", "dev-client").strip() or "dev-client",
         roles=roles,
         issuer="dev",
@@ -385,7 +405,7 @@ def _authorize_oidc_claims(claims: Mapping[str, Any], cfg: AuthConfig) -> Actor:
     actor_id = _pick_first_str(claims, list(cfg.actor_id_claims), default="")
     if not actor_id:
         raise AuthError("token missing actor id claim")
-    tenant_id = _pick_first_str(claims, [cfg.tenant_claim], default="unknown")
+    tenant_id = _pick_first_str(claims, [cfg.tenant_claim], default=cfg.tenant_fallback)
     client_id = _pick_first_str(claims, ["azp", "appid"], default="unknown")
     roles = _extract_roles(claims, cfg.role_claims)
     roles = _apply_role_map(roles, cfg.role_map)
