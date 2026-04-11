@@ -64,11 +64,13 @@ The default runtime boundary profile is `operator`:
 - `/ingress/intent`, `/capabilities`, `/snapshot`, `/tail`, `/status`, `/surfaces`, and `/intent-template` stay available
 - `/ui/*` is not exposed
 
-The full built-in observer is demo-only unless you explicitly select the demo boundary config. In `public`, the boundary blocks high-risk shapes like `artifact.handle`, `declared_refs`, and over-broad tool declarations before any `INTENT` is appended.
+## Active Boundary Topics
 
-Tool, request, budget, and economic shaping now live in the versioned boundary artifact instead of being hidden in execution paths. That keeps request classes, tool-family permissions, budget ceilings, and economic constraints discoverable, explicit in `DECISION`, and replay-stable.
-
-Identity follows the same pattern. The gateway derives a minimal verified identity line, injects it into policy-visible inputs, and records it in `DECISION`. Local dev headers work today, and later OIDC issuers can plug into the same trust seam without changing the boundary policy structure.
+- Exposure modes — `operator` by default, full built-in observer only in `demo`
+- High-risk ingress — `public` blocks shapes like `artifact.handle`, `declared_refs`, and over-broad tool declarations before any `INTENT` is appended
+- Tool and request shaping — tool families, request classes, and budget ceilings live in the versioned boundary artifact
+- Economic shaping — slot and cost classes are declared in the boundary and carried into `DECISION`
+- Identity — a minimal verified identity line is injected into policy-visible inputs and recorded in `DECISION`
 
 See [env_contract.md](docs/env_contract.md), [wire_contract.md](docs/wire_contract.md), and [CAPABILITIES.md](docs/CAPABILITIES.md) for the boundary contract in detail.
 
