@@ -64,6 +64,7 @@ Request classification now stays explicit in the decision line: `request_class`,
 The boundary now also declares economic shaping per request class. `slot_class`, `cost_class`, `reservation_required`, and `economic_policy_reason` enter DECISION normatively, but actual slot availability still remains an execution concern instead of feeding back into governance.
 Identity now follows the same pattern: the gateway resolves a minimal verified identity line into `actor_id`, `tenant_id`, `roles`, `issuer`, `verified`, and `trust_class`, injects that into policy-visible inputs, and records the result in DECISION. The runtime stays generic: local dev headers work today, and later OIDC issuers such as Azure AD can plug into the same trust seam without changing tool, request, or economic policy structure.
 OIDC is now treated as an adapter seam above that boundary logic: the adapter verifies JWTs against cached JWKS plus issuer/audience allowlists, maps claims into gateway roles, and emits `identity_source` plus `claims_digest` for audit without introducing gateway-owned user state.
+The allowed identity mode and claim mapping are now part of the versioned boundary artifact as `identity_policy`, so trust derivation is no longer just an env/runtime concern.
 In `public`, capabilities only advertise request classes that are actually allowed for the current caller instead of leaking denied heavy classes through discovery.
 Startup logging now emits a concise config summary instead of listing every possible provider env var.
 

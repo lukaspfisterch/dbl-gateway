@@ -26,6 +26,7 @@ __all__ = [
     "BoundaryConfig",
     "BoundaryEconomicPolicyConfig",
     "BoundaryEconomicPolicyRule",
+    "BoundaryIdentityPolicyConfig",
     "BoundaryRequestPolicyConfig",
     "BoundaryRequestPolicyRule",
     "BoundaryToolPolicyConfig",
@@ -162,6 +163,20 @@ class BoundaryEconomicPolicyConfig:
 
 
 @dataclass(frozen=True)
+class BoundaryIdentityPolicyConfig:
+    """Immutable identity policy derived from boundary config."""
+
+    mode: Literal["dev", "oidc"]
+    issuers_allowed: tuple[str, ...]
+    audiences_allowed: tuple[str, ...]
+    actor_id_claims: tuple[str, ...]
+    issuer_claim: str
+    role_claims: tuple[str, ...]
+    role_map: Mapping[str, tuple[str, ...]]
+    _raw: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
 class BoundaryConfig:
     """Immutable boundary configuration for surface exposure."""
 
@@ -170,6 +185,7 @@ class BoundaryConfig:
     exposure_mode: Literal["public", "operator", "demo"]
     surface_rules: Mapping[str, Literal["public", "operator", "demo"]]
     admission: BoundaryAdmissionConfig
+    identity_policy: BoundaryIdentityPolicyConfig
     tool_policy: BoundaryToolPolicyConfig
     request_policy: BoundaryRequestPolicyConfig
     economic_policy: BoundaryEconomicPolicyConfig
@@ -347,6 +363,75 @@ def _parse_boundary_config(raw: Mapping[str, Any]) -> BoundaryConfig:
     max_budget_duration_ms = max_budget.get("max_duration_ms", 30000)
     if not isinstance(max_budget_duration_ms, int) or max_budget_duration_ms < 1000:
         raise ValueError("admission.public.max_budget.max_duration_ms must be int >= 1000")
+
+    raw_identity_policy = raw.get("identity_policy")
+    if not isinstance(raw_identity_policy, Mapping):
+        raise ValueError("identity_policy must be an object")
+    identity_mode = raw_identity_policy.get("mode")
+    if identity_mode not in {"dev", "oidc"}:
+        raise ValueError("identity_policy.mode must be dev or oidc")
+    raw_issuers_allowed = raw_identity_policy.get("issuers_allowed", [])
+    if not isinstance(raw_issuers_allowed, list):
+        raise ValueError("identity_policy.issuers_allowed must be list[str]")
+    issuers_allowed = tuple(
+        str(item).strip()
+        for item in raw_issuers_allowed
+        if isinstance(item, str) and item.strip()
+    )
+    raw_audiences_allowed = raw_identity_policy.get("audiences_allowed", [])
+    if not isinstance(raw_audiences_allowed, list):
+        raise ValueError("identity_policy.audiences_allowed must be list[str]")
+    audiences_allowed = tuple(
+        str(item).strip()
+        for item in raw_audiences_allowed
+        if isinstance(item, str) and item.strip()
+    )
+    raw_claim_mapping = raw_identity_policy.get("claim_mapping")
+    if not isinstance(raw_claim_mapping, Mapping):
+        raise ValueError("identity_policy.claim_mapping must be an object")
+    raw_actor_id_claims = raw_claim_mapping.get("actor_id")
+    if not isinstance(raw_actor_id_claims, list) or not raw_actor_id_claims:
+        raise ValueError("identity_policy.claim_mapping.actor_id must be a non-empty list[str]")
+    actor_id_claims = tuple(
+        str(item).strip()
+        for item in raw_actor_id_claims
+        if isinstance(item, str) and item.strip()
+    )
+    if not actor_id_claims:
+        raise ValueError("identity_policy.claim_mapping.actor_id must contain non-empty strings")
+    raw_issuer_claim = raw_claim_mapping.get("issuer")
+    if not isinstance(raw_issuer_claim, str) or not raw_issuer_claim.strip():
+        raise ValueError("identity_policy.claim_mapping.issuer must be a non-empty string")
+    raw_role_claims = raw_claim_mapping.get("roles")
+    if not isinstance(raw_role_claims, list) or not raw_role_claims:
+        raise ValueError("identity_policy.claim_mapping.roles must be a non-empty list[str]")
+    role_claims = tuple(
+        str(item).strip()
+        for item in raw_role_claims
+        if isinstance(item, str) and item.strip()
+    )
+    if not role_claims:
+        raise ValueError("identity_policy.claim_mapping.roles must contain non-empty strings")
+    raw_role_map = raw_identity_policy.get("role_map", {})
+    if not isinstance(raw_role_map, Mapping):
+        raise ValueError("identity_policy.role_map must be an object")
+    role_map: dict[str, tuple[str, ...]] = {}
+    for key, value in raw_role_map.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("identity_policy.role_map keys must be non-empty strings")
+        if isinstance(value, str):
+            mapped = (value.strip(),) if value.strip() else ()
+        elif isinstance(value, list):
+            mapped = tuple(
+                str(item).strip()
+                for item in value
+                if isinstance(item, str) and item.strip()
+            )
+        else:
+            raise ValueError(
+                f"identity_policy.role_map.{key} must be a string or list[str]"
+            )
+        role_map[key.strip()] = mapped
 
     raw_tool_policy = raw.get("tool_policy")
     if not isinstance(raw_tool_policy, Mapping):
@@ -573,6 +658,16 @@ def _parse_boundary_config(raw: Mapping[str, Any]) -> BoundaryConfig:
             public_max_declared_tools=max_declared_tools,
             public_max_budget_tokens=max_budget_tokens,
             public_max_budget_duration_ms=max_budget_duration_ms,
+        ),
+        identity_policy=BoundaryIdentityPolicyConfig(
+            mode=identity_mode,
+            issuers_allowed=issuers_allowed,
+            audiences_allowed=audiences_allowed,
+            actor_id_claims=actor_id_claims,
+            issuer_claim=raw_issuer_claim.strip(),
+            role_claims=role_claims,
+            role_map=role_map,
+            _raw=dict(raw_identity_policy),
         ),
         tool_policy=BoundaryToolPolicyConfig(
             families=families,

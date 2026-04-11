@@ -171,6 +171,7 @@ def sample_boundary_config(tmp_path: Path) -> Path:
                 },
             },
         },
+        "identity_policy": _sample_identity_policy(),
         "tool_policy": {
             "families": {
                 "exec_like": ["code.*"],
@@ -284,6 +285,9 @@ def test_load_valid_boundary_config(sample_boundary_config: Path) -> None:
     assert cfg.surface_rules["surfaces"] == "operator"
     assert cfg.admission.public_allow_artifact_handle is False
     assert cfg.admission.public_max_declared_tools == 0
+    assert cfg.identity_policy.mode == "dev"
+    assert cfg.identity_policy.actor_id_claims == ("oid", "sub")
+    assert cfg.identity_policy.role_claims == ("roles", "groups")
     assert cfg.tool_policy.families["exec_like"] == ("code.*",)
     assert allowed_tool_families_for_mode(cfg, trust_class="internal") == ("web_read", "retrieval")
     assert allowed_tool_families_for_mode(cfg, mode="public", trust_class="anonymous") == ("web_read",)
@@ -316,6 +320,7 @@ def test_boundary_config_digest_changes_on_content_change(tmp_path: Path) -> Non
                 "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000},
             },
         },
+        "identity_policy": _sample_identity_policy(),
         "tool_policy": {
             "families": {"web_read": ["web.*"]},
             "matrix": {
@@ -416,6 +421,7 @@ def test_boundary_config_digest_changes_on_content_change(tmp_path: Path) -> Non
                 "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000},
             },
         },
+        "identity_policy": _sample_identity_policy(),
         "tool_policy": {
             "families": {"web_read": ["web.*"]},
             "matrix": {
@@ -574,4 +580,21 @@ def _sample_economic_policy() -> dict[str, object]:
                 }
             },
         }
+    }
+
+
+def _sample_identity_policy() -> dict[str, object]:
+    return {
+        "mode": "dev",
+        "issuers_allowed": [],
+        "audiences_allowed": [],
+        "claim_mapping": {
+            "actor_id": ["oid", "sub"],
+            "issuer": "iss",
+            "roles": ["roles", "groups"],
+        },
+        "role_map": {
+            "group:admins": ["gateway.operator"],
+            "group:internal": ["gateway.internal"],
+        },
     }

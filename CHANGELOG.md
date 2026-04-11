@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.24 — Boundary Identity Policy
+
+**Identity mode and claim mapping now live in the hashed boundary contract instead of hiding in auth env alone.**
+- Add `identity_policy` to boundary config artifacts and schema, covering auth mode, issuer/audience allowlists, claim mapping, and role mapping.
+- Make auth config resolve from the active boundary identity policy first, while leaving runtime-only values like JWKS URL and tenant envs outside the contract.
+- Keep the existing adapter seam, but tie `/capabilities` and startup auth behavior to the versioned boundary identity policy so operator discovery matches the real trust derivation path.
+- Add focused regression coverage for boundary identity-policy parsing and auth override behavior.
+
 ## v0.9.23 — OIDC Identity Adapter
 
 **OIDC now sits as an explicit identity adapter seam above the existing boundary matrix instead of being an ad hoc auth branch.**

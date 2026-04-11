@@ -34,6 +34,7 @@ unless it affects wire behavior.
 - Boundary artifacts also declare `tool_policy`, which contains family patterns plus the allowed-family matrix per exposure mode and trust class.
 - Boundary artifacts now also declare `request_policy`, which classifies requests (`probe`, `intent`, `execution_light`, `execution_heavy`) and publishes budget ceilings per `(exposure_mode, trust_class, request_class)`.
 - Boundary artifacts now also declare `economic_policy`, which maps each `(exposure_mode, trust_class, request_class)` tuple to `slot_class`, `cost_class`, and `reservation_required`.
+- Boundary artifacts now also declare `identity_policy`, which pins the active identity mode plus claim/role mapping in the same hashed contract.
 - `GET /capabilities` now also publishes `auth.mode`, `auth.current_trust_class`, `auth.trust_classes`, and `auth.identity_sources`.
 - In `oidc` mode it also publishes `auth.issuers_allowed` and `auth.audiences_allowed`.
 
@@ -124,6 +125,7 @@ returned observer status/results.
 - Identity stays a boundary input, not a gateway-owned user store.
 - The gateway resolves a minimal identity line into `actor_id`, `tenant_id`, `client_id`, `roles`, `issuer`, `verified`, and `trust_class`.
 - The OIDC adapter verifies signature/time plus issuer/audience allowlists before claims are mapped.
+- `identity_policy.claim_mapping` controls which claims feed `actor_id`, `issuer`, and role extraction.
 - `auth.mode` publishes the active auth lane (`dev` or `oidc` today).
 - `auth.identity_sources` publishes the request source expected for that lane:
   - `dev_headers` for local/demo header-derived identity

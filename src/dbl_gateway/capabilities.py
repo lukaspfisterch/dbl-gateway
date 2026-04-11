@@ -23,7 +23,7 @@ from .config import (
     get_context_config,
     request_policy_rule_for_mode,
 )
-from .auth import TRUST_CLASSES, load_auth_config
+from .auth import TRUST_CLASSES, load_auth_config_with_identity_policy
 from .providers import get_provider_capabilities
 from .providers.contract import ProviderCapabilities
 from .wire_contract import (
@@ -388,7 +388,7 @@ def get_capabilities(
     trust_class: str = "anonymous",
 ) -> dict[str, object]:
     cfg = boundary_config or get_boundary_config()
-    auth_cfg = load_auth_config()
+    auth_cfg = load_auth_config_with_identity_policy(identity_policy=cfg.identity_policy._raw)
     checked_at = datetime.now(timezone.utc).isoformat()
     providers: list[dict[str, Any]] = []
     intent_catalog = get_intent_catalog(cfg)

@@ -18,7 +18,7 @@ Secrets never appear in event payloads.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DBL_GATEWAY_AUTH_MODE` | no | `dev` | `dev` for local header-derived identity, `oidc` for generic bearer JWT validation |
+| `DBL_GATEWAY_AUTH_MODE` | no | `dev` | Fallback only. The active auth mode should come from `boundary.identity_policy.mode`. |
 | `DBL_GATEWAY_DEV_ACTOR` | no | `dev-user` | Default actor id in `dev` mode |
 | `DBL_GATEWAY_DEV_ROLES` | no | `gateway.intent.write,gateway.decision.write,gateway.snapshot.read` | Default dev roles |
 | `DBL_GATEWAY_OIDC_ISSUER` | `oidc` only | -- | Expected JWT issuer |
@@ -35,6 +35,19 @@ Secrets never appear in event payloads.
 
 Identity stays stateless inside the gateway. The request is verified, mapped into `gateway_auth`, and reduced to a deterministic `trust_class`. No session store or gateway-owned user database is required.
 OIDC verification uses cached JWKS only. The gateway does not call online token introspection endpoints or maintain server-side sessions.
+
+## Boundary Identity Policy
+
+Each boundary artifact now contains `identity_policy`:
+- `mode`
+- `issuers_allowed`
+- `audiences_allowed`
+- `claim_mapping.actor_id`
+- `claim_mapping.issuer`
+- `claim_mapping.roles`
+- `role_map`
+
+This makes the effective identity mapping part of the hashed boundary contract instead of a hidden runtime detail.
 
 ## Boundary Profiles
 

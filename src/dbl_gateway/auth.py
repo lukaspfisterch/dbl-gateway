@@ -97,6 +97,13 @@ def identity_fields_for_actor(
 
 
 def load_auth_config() -> AuthConfig:
+    return load_auth_config_with_identity_policy()
+
+
+def load_auth_config_with_identity_policy(
+    *,
+    identity_policy: Mapping[str, Any] | None = None,
+) -> AuthConfig:
     mode = os.getenv("DBL_GATEWAY_AUTH_MODE", "dev").strip().lower()
     issuers_raw = (
         os.getenv("DBL_GATEWAY_OIDC_ISSUERS", "").strip()
@@ -128,6 +135,52 @@ def load_auth_config() -> AuthConfig:
     actor_id_claims = tuple([c.strip() for c in actor_id_claims_raw.split(",") if c.strip()])
     role_claims = tuple([c.strip() for c in role_claims_raw.split(",") if c.strip()])
     role_map = _parse_role_map(role_map_raw)
+
+    if isinstance(identity_policy, Mapping):
+        policy_mode = identity_policy.get("mode")
+        if isinstance(policy_mode, str) and policy_mode.strip():
+            mode = policy_mode.strip().lower()
+        policy_issuers = identity_policy.get("issuers_allowed")
+        if isinstance(policy_issuers, Sequence) and not isinstance(policy_issuers, (str, bytes)):
+            issuers_allowed = tuple(
+                str(item).strip() for item in policy_issuers if isinstance(item, str) and item.strip()
+            )
+        policy_audiences = identity_policy.get("audiences_allowed")
+        if isinstance(policy_audiences, Sequence) and not isinstance(policy_audiences, (str, bytes)):
+            audiences_allowed = tuple(
+                str(item).strip() for item in policy_audiences if isinstance(item, str) and item.strip()
+            )
+        claim_mapping = identity_policy.get("claim_mapping")
+        if isinstance(claim_mapping, Mapping):
+            policy_actor_id = claim_mapping.get("actor_id")
+            if isinstance(policy_actor_id, Sequence) and not isinstance(policy_actor_id, (str, bytes)):
+                actor_id_claims = tuple(
+                    str(item).strip()
+                    for item in policy_actor_id
+                    if isinstance(item, str) and item.strip()
+                )
+            policy_issuer_claim = claim_mapping.get("issuer")
+            if isinstance(policy_issuer_claim, str) and policy_issuer_claim.strip():
+                issuer_claim = policy_issuer_claim.strip()
+            policy_role_claims = claim_mapping.get("roles")
+            if isinstance(policy_role_claims, Sequence) and not isinstance(policy_role_claims, (str, bytes)):
+                role_claims = tuple(
+                    str(item).strip()
+                    for item in policy_role_claims
+                    if isinstance(item, str) and item.strip()
+                )
+        policy_role_map = identity_policy.get("role_map")
+        if isinstance(policy_role_map, Mapping):
+            normalized_role_map: dict[str, list[str]] = {}
+            for key, value in policy_role_map.items():
+                if not isinstance(key, str) or not key.strip():
+                    continue
+                if isinstance(value, str) and value.strip():
+                    normalized_role_map[key.strip()] = [value.strip()]
+                elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                    mapped = [str(item).strip() for item in value if isinstance(item, str) and item.strip()]
+                    normalized_role_map[key.strip()] = mapped
+            role_map = normalized_role_map
 
     return AuthConfig(
         mode=mode,

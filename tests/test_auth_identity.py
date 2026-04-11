@@ -14,6 +14,7 @@ from dbl_gateway.auth import (
     _claims_digest,
     _get_jwks,
     identity_fields_for_actor,
+    load_auth_config_with_identity_policy,
     trust_class_for_actor,
 )
 
@@ -174,3 +175,31 @@ def test_get_jwks_uses_stale_cache_on_refresh_failure(monkeypatch: pytest.Monkey
     finally:
         auth_module._JWKS_BY_URL.clear()
         auth_module._JWKS_TS_BY_URL.clear()
+
+
+def test_load_auth_config_uses_identity_policy_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_AUTH_MODE", "dev")
+    cfg = load_auth_config_with_identity_policy(
+        identity_policy={
+            "mode": "oidc",
+            "issuers_allowed": ["https://issuer.example"],
+            "audiences_allowed": ["api://gateway"],
+            "claim_mapping": {
+                "actor_id": ["sub"],
+                "issuer": "iss",
+                "roles": ["groups"],
+            },
+            "role_map": {
+                "group:admins": ["gateway.operator"],
+            },
+        }
+    )
+    assert cfg.mode == "oidc"
+    assert cfg.issuers_allowed == ("https://issuer.example",)
+    assert cfg.audiences_allowed == ("api://gateway",)
+    assert cfg.actor_id_claims == ("sub",)
+    assert cfg.issuer_claim == "iss"
+    assert cfg.role_claims == ("groups",)
+    assert cfg.role_map == {"group:admins": ["gateway.operator"]}

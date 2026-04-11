@@ -14,6 +14,20 @@
       }
     }
   },
+  "identity_policy": {
+    "mode": "dev",
+    "issuers_allowed": [],
+    "audiences_allowed": [],
+    "claim_mapping": {
+      "actor_id": ["oid", "sub"],
+      "issuer": "iss",
+      "roles": ["roles", "groups"]
+    },
+    "role_map": {
+      "group:admins": ["gateway.operator"],
+      "group:internal": ["gateway.internal"]
+    }
+  },
   "tool_policy": {
     "families": {
       "exec_like": ["code.*", "shell.*", "exec.*"],

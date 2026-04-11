@@ -260,6 +260,8 @@ This identity line is derived deterministically from the active auth lane:
 - `dev` mode: local headers such as `x-dev-actor`, `x-dev-roles`, `x-dev-tenant`, `x-dev-client`
 - `oidc` mode: generic bearer JWT claims after signature/time validation plus issuer/audience allowlists
 
+The active auth lane and claim mapping are now taken from `boundary.identity_policy`, so identity derivation participates in the versioned boundary contract alongside tool/request/economic policy.
+
 ### EXECUTION Fields
 
 | Field | Description |

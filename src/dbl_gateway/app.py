@@ -65,10 +65,10 @@ from .auth import (
     ForbiddenError,
     authenticate_request,
     identity_fields_for_actor,
+    load_auth_config_with_identity_policy,
     warm_identity_adapter,
     require_roles,
     require_tenant,
-    load_auth_config,
     trust_class_for_actor,
 )
 
@@ -375,7 +375,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
     async def lifespan(app: FastAPI):
         _configure_logging()
         _audit_env()
-        auth_cfg = load_auth_config()
+        auth_cfg = load_auth_config_with_identity_policy(identity_policy=boundary_cfg.identity_policy._raw)
         policy = _load_policy_with_fallback()
         if policy is None:
             policy = ObserverPolicy()  # type: ignore
@@ -1852,7 +1852,7 @@ async def _require_actor(request: Request) -> Actor:
         app = request.app
     except KeyError:
         app = None
-    cfg = getattr(getattr(app, "state", None), "auth_config", None) or load_auth_config()
+    cfg = getattr(getattr(app, "state", None), "auth_config", None) or load_auth_config_with_identity_policy()
     try:
         actor = await authenticate_request(request.headers, cfg)
         require_tenant(actor, cfg)
