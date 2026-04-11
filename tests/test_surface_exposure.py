@@ -76,6 +76,8 @@ def test_public_capabilities_hide_non_public_surfaces(monkeypatch: pytest.Monkey
             "max_tokens": 2048,
             "max_duration_ms": 12000,
         }
+        assert set(data["economic"]["current_policy"]) == {"intent", "execution_light"}
+        assert "execution_heavy" not in data["economic"]["current_policy"]
 
     import asyncio
 
@@ -128,6 +130,8 @@ def test_demo_mode_exposes_ui(monkeypatch: pytest.MonkeyPatch) -> None:
             "execution_heavy",
         ]
         assert caps_data["budget"]["current_request_policy"]["execution_heavy"]["decision"] == "allow"
+        assert caps_data["economic"]["current_policy"]["execution_heavy"]["slot_class"] == "reserved"
+        assert caps_data["economic"]["current_policy"]["execution_heavy"]["reservation_required"] is True
 
     import asyncio
 

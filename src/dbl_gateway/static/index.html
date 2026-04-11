@@ -1384,6 +1384,8 @@ button:hover { background: #3a3a5a; }
       summary += detailRow("Constraints", (payload.request_constraints_applied || []).join(", ") || "\u2014");
       summary += detailRow("Budget Class", payload.budget_class || "\u2014");
       summary += detailRow("Budget Policy", payload.budget_policy_reason || "\u2014");
+      summary += detailRow("Slot Class", payload.slot_class || "\u2014");
+      summary += detailRow("Cost Class", payload.cost_class || "\u2014");
       summary += detailRow("Intent Index", payload.intent_index != null ? "#" + payload.intent_index : "\u2014");
       summary += detailRow("Permitted Tools", (payload.permitted_tools || []).join(", ") || "\u2014");
       if (payload.enforced_budget) {

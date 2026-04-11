@@ -17,6 +17,7 @@ from .config import (
     allowed_tool_families_for_mode,
     BoundaryConfig,
     context_resolution_enabled,
+    economic_policy_rule_for_mode,
     exposure_mode_allows,
     get_boundary_config,
     get_context_config,
@@ -137,6 +138,13 @@ class CapabilitiesBudget(BaseModel):
     request_policy_by_exposure: dict[str, dict[str, dict[str, dict[str, Any]]]]
 
 
+class CapabilitiesEconomic(BaseModel):
+    slot_classes: list[str]
+    cost_classes: list[str]
+    current_policy: dict[str, dict[str, Any]]
+    policy_by_exposure: dict[str, dict[str, dict[str, dict[str, Any]]]]
+
+
 class CapabilitiesResponse(BaseModel):
     schema_version: str
     gateway_version: str
@@ -145,6 +153,7 @@ class CapabilitiesResponse(BaseModel):
     intents: CapabilitiesIntents
     tool_surface: CapabilitiesToolSurface
     budget: CapabilitiesBudget
+    economic: CapabilitiesEconomic
     providers: list[CapabilitiesProvider]
     surfaces: CapabilitiesSurfaces
     surface_catalog: list[SurfaceDescriptor]
@@ -418,6 +427,23 @@ def get_capabilities(
             }
         return policy_map
 
+    def serialize_economic_policy(mode: str, trust: str) -> dict[str, dict[str, Any]]:
+        policy_map: dict[str, dict[str, Any]] = {}
+        for request_class in cfg.request_policy.request_classes:
+            rule = economic_policy_rule_for_mode(
+                cfg,
+                mode=mode,
+                trust_class=trust,
+                request_class=request_class,
+            )
+            policy_map[request_class] = {
+                "slot_class": rule.slot_class,
+                "cost_class": rule.cost_class,
+                "reservation_required": rule.reservation_required,
+                "reason_code": rule.reason_code,
+            }
+        return policy_map
+
     current_request_policy = serialize_request_policy(cfg.exposure_mode, trust_class)
     if cfg.exposure_mode == "public":
         current_request_policy = {
@@ -426,6 +452,11 @@ def get_capabilities(
             if rule.get("decision") == "allow"
         }
     visible_request_classes_current = list(current_request_policy.keys())
+    current_economic_policy = {
+        request_class: rule
+        for request_class, rule in serialize_economic_policy(cfg.exposure_mode, trust_class).items()
+        if request_class in visible_request_classes_current
+    }
 
     return {
         "schema_version": CAPABILITIES_SCHEMA_VERSION,
@@ -491,6 +522,18 @@ def get_capabilities(
                 mode: {
                     trust: serialize_request_policy(mode, trust)
                     for trust in cfg.request_policy.matrix.get(mode, {})
+                }
+                for mode in ("public", "operator", "demo")
+            },
+        },
+        "economic": {
+            "slot_classes": list(cfg.economic_policy.slot_classes),
+            "cost_classes": list(cfg.economic_policy.cost_classes),
+            "current_policy": current_economic_policy,
+            "policy_by_exposure": {
+                mode: {
+                    trust: serialize_economic_policy(mode, trust)
+                    for trust in cfg.economic_policy.matrix.get(mode, {})
                 }
                 for mode in ("public", "operator", "demo")
             },

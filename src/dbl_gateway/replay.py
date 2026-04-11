@@ -97,6 +97,10 @@ def replay_decision_for_turn(
     stored_request_semantic_reason = decision_payload.get("request_semantic_reason")
     stored_request_constraints_applied = decision_payload.get("request_constraints_applied")
     stored_budget_policy_reason = decision_payload.get("budget_policy_reason")
+    stored_slot_class = decision_payload.get("slot_class")
+    stored_cost_class = decision_payload.get("cost_class")
+    stored_reservation_required = decision_payload.get("reservation_required")
+    stored_economic_policy_reason = decision_payload.get("economic_policy_reason")
     stored_declared_tool_families = decision_payload.get("declared_tool_families")
     stored_allowed_tool_families = decision_payload.get("allowed_tool_families")
     stored_permitted_tool_families = decision_payload.get("permitted_tool_families")
@@ -119,6 +123,12 @@ def replay_decision_for_turn(
         ),
         budget_policy_reason=(
             stored_budget_policy_reason if isinstance(stored_budget_policy_reason, str) else None
+        ),
+        slot_class=stored_slot_class if isinstance(stored_slot_class, str) else None,
+        cost_class=stored_cost_class if isinstance(stored_cost_class, str) else None,
+        reservation_required=stored_reservation_required if isinstance(stored_reservation_required, bool) else None,
+        economic_policy_reason=(
+            stored_economic_policy_reason if isinstance(stored_economic_policy_reason, str) else None
         ),
         declared_tool_families=(
             stored_declared_tool_families if isinstance(stored_declared_tool_families, list) else None

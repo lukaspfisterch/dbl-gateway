@@ -33,6 +33,7 @@ unless it affects wire behavior.
 - Public ingress is additionally bounded by the active boundary artifact's deterministic admission limits for `artifact.handle`, `declared_refs`, and declared tool count.
 - Boundary artifacts also declare `tool_policy`, which contains family patterns plus the allowed-family matrix per exposure mode and trust class.
 - Boundary artifacts now also declare `request_policy`, which classifies requests (`probe`, `intent`, `execution_light`, `execution_heavy`) and publishes budget ceilings per `(exposure_mode, trust_class, request_class)`.
+- Boundary artifacts now also declare `economic_policy`, which maps each `(exposure_mode, trust_class, request_class)` tuple to `slot_class`, `cost_class`, and `reservation_required`.
 
 ## Observer UI Endpoints
 
@@ -108,6 +109,14 @@ returned observer status/results.
 - DECISION records `request_class`, `budget_class`, `request_semantic_reason`, `request_constraints_applied`, `budget_policy_reason`, and `enforced_budget`.
 - `enforced_budget.source` is one of `client`, `boundary_default`, or `boundary_cap`.
 - EXECUTION records `usage.duration_ms`.
+
+## Economic Policy
+- `economic.slot_classes` publishes the deterministic slot taxonomy: `none`, `shared`, `reserved`.
+- `economic.cost_classes` publishes the deterministic cost taxonomy: `low`, `bounded`, `capped`.
+- `economic.current_policy` publishes the active `(exposure_mode, trust_class)` economic policy, filtered to request classes currently visible for the caller.
+- `economic.policy_by_exposure` publishes the full `exposure -> trust_class -> request_class -> economic rule` matrix.
+- DECISION records `slot_class`, `cost_class`, `reservation_required`, and `economic_policy_reason`.
+- These fields describe the required execution class only. They do not encode current queue depth, provider health, or real-time slot availability.
 
 ## Context Resolution Gate
 - Controlled by `GATEWAY_ENABLE_CONTEXT_RESOLUTION` env var (default OFF).

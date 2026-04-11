@@ -9,7 +9,8 @@
     "admission",
     "surface_rules",
     "tool_policy",
-    "request_policy"
+    "request_policy",
+    "economic_policy"
   ],
   "properties": {
     "schema_version": {
@@ -137,6 +138,29 @@
         }
       },
       "additionalProperties": false
+    },
+    "economic_policy": {
+      "type": "object",
+      "required": ["matrix"],
+      "properties": {
+        "matrix": {
+          "type": "object",
+          "required": ["public", "operator", "demo"],
+          "properties": {
+            "public": {
+              "$ref": "#/$defs/economicPolicyMode"
+            },
+            "operator": {
+              "$ref": "#/$defs/economicPolicyMode"
+            },
+            "demo": {
+              "$ref": "#/$defs/economicPolicyMode"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   },
   "$defs": {
@@ -219,6 +243,54 @@
       "minProperties": 1,
       "additionalProperties": {
         "$ref": "#/$defs/requestPolicyClassMap"
+      }
+    },
+    "economicPolicyRule": {
+      "type": "object",
+      "required": ["slot_class", "cost_class", "reservation_required"],
+      "properties": {
+        "slot_class": {
+          "type": "string",
+          "enum": ["none", "shared", "reserved"]
+        },
+        "cost_class": {
+          "type": "string",
+          "enum": ["low", "bounded", "capped"]
+        },
+        "reservation_required": {
+          "type": "boolean"
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "economicPolicyClassMap": {
+      "type": "object",
+      "required": ["probe", "intent", "execution_light", "execution_heavy"],
+      "properties": {
+        "probe": {
+          "$ref": "#/$defs/economicPolicyRule"
+        },
+        "intent": {
+          "$ref": "#/$defs/economicPolicyRule"
+        },
+        "execution_light": {
+          "$ref": "#/$defs/economicPolicyRule"
+        },
+        "execution_heavy": {
+          "$ref": "#/$defs/economicPolicyRule"
+        }
+      },
+      "additionalProperties": false
+    },
+    "economicPolicyMode": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/economicPolicyClassMap"
       }
     }
   },

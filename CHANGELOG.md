@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.21 — Economic Policy Classification
+
+**Boundary economics now live beside request and tool policy instead of being left implicit for later runtime adapters.**
+- Add versioned `economic_policy` artifacts to boundary config so each `(exposure_mode, trust_class, request_class)` tuple deterministically yields `slot_class`, `cost_class`, and `reservation_required`.
+- Inject the resulting `gateway_economic_policy` into policy-visible inputs and record `slot_class`, `cost_class`, `reservation_required`, and `economic_policy_reason` in normative DECISION payloads.
+- Publish current and per-exposure economic policy through `/capabilities`, filtered so `public` does not advertise deny-only heavy request classes through the active view.
+- Keep the seam descriptive only: the gateway now states which execution class a request needs, without turning current queue/load/provider state into governance input.
+
 ## v0.9.20 — Explicit Request Semantics
 
 **Request classification now explains itself normatively instead of leaving heavy-vs-light as an implicit classifier result.**

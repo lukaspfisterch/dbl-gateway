@@ -4,7 +4,7 @@
   "interface_version": 3,
   "boundary": {
     "boundary_version": "1",
-    "boundary_config_digest": "sha256:e371c349687fe7a32bc8818757ce2ae1dd41499ed88a224178a08f2df6179886",
+    "boundary_config_digest": "sha256:63883e44463fff0ac6c7c45fc70087fb12736b7ce58b9ff45f286715a50f6aa5",
     "exposure_mode": "operator"
   },
   "intents": {
@@ -444,6 +444,286 @@
       }
     }
   },
+  "economic": {
+    "slot_classes": [
+      "none",
+      "shared",
+      "reserved"
+    ],
+    "cost_classes": [
+      "low",
+      "bounded",
+      "capped"
+    ],
+    "current_policy": {
+      "probe": {
+        "slot_class": "none",
+        "cost_class": "low",
+        "reservation_required": false,
+        "reason_code": null
+      },
+      "intent": {
+        "slot_class": "none",
+        "cost_class": "low",
+        "reservation_required": false,
+        "reason_code": null
+      },
+      "execution_light": {
+        "slot_class": "shared",
+        "cost_class": "bounded",
+        "reservation_required": false,
+        "reason_code": null
+      },
+      "execution_heavy": {
+        "slot_class": "reserved",
+        "cost_class": "capped",
+        "reservation_required": true,
+        "reason_code": null
+      }
+    },
+    "policy_by_exposure": {
+      "public": {
+        "anonymous": {
+          "probe": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "intent": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_light": {
+            "slot_class": "shared",
+            "cost_class": "bounded",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_heavy": {
+            "slot_class": "reserved",
+            "cost_class": "capped",
+            "reservation_required": true,
+            "reason_code": null
+          }
+        },
+        "user": {
+          "probe": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "intent": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_light": {
+            "slot_class": "shared",
+            "cost_class": "bounded",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_heavy": {
+            "slot_class": "reserved",
+            "cost_class": "capped",
+            "reservation_required": true,
+            "reason_code": null
+          }
+        },
+        "operator": {
+          "probe": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "intent": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_light": {
+            "slot_class": "shared",
+            "cost_class": "bounded",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_heavy": {
+            "slot_class": "reserved",
+            "cost_class": "capped",
+            "reservation_required": true,
+            "reason_code": null
+          }
+        },
+        "internal": {
+          "probe": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "intent": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_light": {
+            "slot_class": "shared",
+            "cost_class": "bounded",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_heavy": {
+            "slot_class": "reserved",
+            "cost_class": "capped",
+            "reservation_required": true,
+            "reason_code": null
+          }
+        }
+      },
+      "operator": {
+        "anonymous": {
+          "probe": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "intent": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_light": {
+            "slot_class": "shared",
+            "cost_class": "bounded",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_heavy": {
+            "slot_class": "reserved",
+            "cost_class": "capped",
+            "reservation_required": true,
+            "reason_code": null
+          }
+        },
+        "user": {
+          "probe": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "intent": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_light": {
+            "slot_class": "shared",
+            "cost_class": "bounded",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_heavy": {
+            "slot_class": "reserved",
+            "cost_class": "capped",
+            "reservation_required": true,
+            "reason_code": null
+          }
+        },
+        "operator": {
+          "probe": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "intent": {
+            "slot_class": "shared",
+            "cost_class": "bounded",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_light": {
+            "slot_class": "shared",
+            "cost_class": "bounded",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_heavy": {
+            "slot_class": "reserved",
+            "cost_class": "capped",
+            "reservation_required": true,
+            "reason_code": null
+          }
+        },
+        "internal": {
+          "probe": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "intent": {
+            "slot_class": "shared",
+            "cost_class": "bounded",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_light": {
+            "slot_class": "shared",
+            "cost_class": "bounded",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_heavy": {
+            "slot_class": "reserved",
+            "cost_class": "capped",
+            "reservation_required": true,
+            "reason_code": null
+          }
+        }
+      },
+      "demo": {
+        "*": {
+          "probe": {
+            "slot_class": "none",
+            "cost_class": "low",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "intent": {
+            "slot_class": "shared",
+            "cost_class": "bounded",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_light": {
+            "slot_class": "shared",
+            "cost_class": "bounded",
+            "reservation_required": false,
+            "reason_code": null
+          },
+          "execution_heavy": {
+            "slot_class": "reserved",
+            "cost_class": "capped",
+            "reservation_required": true,
+            "reason_code": null
+          }
+        }
+      }
+    }
+  },
   "surfaces": {
     "tail": true,
     "snapshot": true,
@@ -552,5 +832,5 @@
       "description": "External execution submission surface when enabled."
     }
   ],
-  "generated_at": "2026-04-11T18:35:14.733226+00:00"
+  "generated_at": "2026-04-11T18:51:12.791454+00:00"
 }

@@ -39,6 +39,7 @@ from .adapters.policy_adapter_dbl_policy import DblPolicyAdapter, ObserverPolicy
 from .context_builder import build_context_with_refs, RefResolutionError
 from .config import (
     allowed_tool_families_for_mode,
+    economic_policy_rule_for_mode,
     get_boundary_config,
     get_context_config,
     context_resolution_enabled,
@@ -126,6 +127,16 @@ class RequestPolicyEvaluation:
     permitted_budget: dict[str, int] | None
     denied_reason: str | None
     was_clamped: bool
+
+
+@dataclass(frozen=True)
+class EconomicPolicyEvaluation:
+    trust_class: str
+    request_class: str
+    slot_class: str
+    cost_class: str
+    reservation_required: bool
+    economic_policy_reason: str
 
 
 def _assert_governance_input(authoritative: Mapping[str, Any]) -> None:
@@ -921,6 +932,11 @@ async def _process_intent(
             trust_class=_trust_class,
             boundary_config=app.state.boundary_config,
         )
+        economic_policy_evaluation = _compute_economic_policy_evaluation(
+            request_class=request_policy_evaluation.request_class,
+            trust_class=_trust_class,
+            boundary_config=app.state.boundary_config,
+        )
         authoritative_for_policy = _authoritative_with_gateway_tool_policy(
             authoritative,
             tool_policy_evaluation,
@@ -928,6 +944,10 @@ async def _process_intent(
         authoritative_for_policy = _authoritative_with_gateway_request_policy(
             authoritative_for_policy,
             request_policy_evaluation,
+        )
+        authoritative_for_policy = _authoritative_with_gateway_economic_policy(
+            authoritative_for_policy,
+            economic_policy_evaluation,
         )
 
         _assert_governance_input(authoritative_for_policy)
@@ -1007,6 +1027,10 @@ async def _process_intent(
                 request_semantic_reason=decision.request_semantic_reason,
                 request_constraints_applied=decision.request_constraints_applied,
                 budget_policy_reason=decision.budget_policy_reason,
+                slot_class=decision.slot_class,
+                cost_class=decision.cost_class,
+                reservation_required=decision.reservation_required,
+                economic_policy_reason=decision.economic_policy_reason,
                 declared_tool_families=decision.declared_tool_families,
                 allowed_tool_families=decision.allowed_tool_families,
                 permitted_tool_families=decision.permitted_tool_families,
@@ -1030,6 +1054,10 @@ async def _process_intent(
             request_semantic_reason=decision.request_semantic_reason,
             request_constraints_applied=decision.request_constraints_applied,
             budget_policy_reason=decision.budget_policy_reason,
+            slot_class=economic_policy_evaluation.slot_class,
+            cost_class=economic_policy_evaluation.cost_class,
+            reservation_required=economic_policy_evaluation.reservation_required,
+            economic_policy_reason=economic_policy_evaluation.economic_policy_reason,
             declared_tool_families=list(tool_policy_evaluation.declared_families),
             allowed_tool_families=list(tool_policy_evaluation.allowed_families),
             permitted_tool_families=list(tool_policy_evaluation.permitted_families),
@@ -1075,6 +1103,10 @@ async def _process_intent(
                 request_semantic_reason=request_policy_evaluation.request_semantic_reason,
                 request_constraints_applied=list(request_policy_evaluation.request_constraints_applied),
                 budget_policy_reason=request_policy_evaluation.denied_reason,
+                slot_class=economic_policy_evaluation.slot_class,
+                cost_class=economic_policy_evaluation.cost_class,
+                reservation_required=economic_policy_evaluation.reservation_required,
+                economic_policy_reason=economic_policy_evaluation.economic_policy_reason,
                 declared_tool_families=decision.declared_tool_families,
                 allowed_tool_families=decision.allowed_tool_families,
                 permitted_tool_families=decision.permitted_tool_families,
@@ -1108,6 +1140,10 @@ async def _process_intent(
                 request_semantic_reason=request_policy_evaluation.request_semantic_reason,
                 request_constraints_applied=request_constraints_applied,
                 budget_policy_reason=request_policy_evaluation.denied_reason,
+                slot_class=economic_policy_evaluation.slot_class,
+                cost_class=economic_policy_evaluation.cost_class,
+                reservation_required=economic_policy_evaluation.reservation_required,
+                economic_policy_reason=economic_policy_evaluation.economic_policy_reason,
                 declared_tool_families=decision.declared_tool_families,
                 allowed_tool_families=decision.allowed_tool_families,
                 permitted_tool_families=decision.permitted_tool_families,
@@ -1131,6 +1167,10 @@ async def _process_intent(
                 request_semantic_reason=request_policy_evaluation.request_semantic_reason,
                 request_constraints_applied=list(request_policy_evaluation.request_constraints_applied),
                 budget_policy_reason=request_policy_evaluation.denied_reason,
+                slot_class=economic_policy_evaluation.slot_class,
+                cost_class=economic_policy_evaluation.cost_class,
+                reservation_required=economic_policy_evaluation.reservation_required,
+                economic_policy_reason=economic_policy_evaluation.economic_policy_reason,
                 declared_tool_families=decision.declared_tool_families,
                 allowed_tool_families=decision.allowed_tool_families,
                 permitted_tool_families=decision.permitted_tool_families,
@@ -2288,6 +2328,65 @@ def _authoritative_with_gateway_request_policy(
         "permitted_budget": dict(evaluation.permitted_budget) if evaluation.permitted_budget else None,
         "denied_reason": evaluation.denied_reason,
         "was_clamped": evaluation.was_clamped,
+    }
+    inputs["extensions"] = extensions
+    payload_copy = dict(payload)
+    payload_copy["inputs"] = inputs
+    authoritative_copy = dict(authoritative)
+    authoritative_copy["payload"] = payload_copy
+    return authoritative_copy
+
+
+def _economic_policy_reason(slot_class: str, cost_class: str, reservation_required: bool) -> str:
+    reason = f"economic.{slot_class}.{cost_class}"
+    if reservation_required:
+        reason = f"{reason}.reservation_required"
+    return reason
+
+
+def _compute_economic_policy_evaluation(
+    *,
+    request_class: str,
+    trust_class: str,
+    boundary_config=None,
+) -> EconomicPolicyEvaluation:
+    cfg = boundary_config or get_boundary_config()
+    rule = economic_policy_rule_for_mode(
+        cfg,
+        request_class=request_class,
+        trust_class=trust_class,
+    )
+    return EconomicPolicyEvaluation(
+        trust_class=trust_class,
+        request_class=request_class,
+        slot_class=rule.slot_class,
+        cost_class=rule.cost_class,
+        reservation_required=rule.reservation_required,
+        economic_policy_reason=(
+            rule.reason_code
+            or _economic_policy_reason(rule.slot_class, rule.cost_class, rule.reservation_required)
+        ),
+    )
+
+
+def _authoritative_with_gateway_economic_policy(
+    authoritative: Mapping[str, Any],
+    evaluation: EconomicPolicyEvaluation,
+) -> dict[str, Any]:
+    payload = authoritative.get("payload")
+    if not isinstance(payload, Mapping):
+        return dict(authoritative)
+    inputs_raw = payload.get("inputs")
+    inputs = dict(inputs_raw) if isinstance(inputs_raw, Mapping) else {}
+    extensions_raw = inputs.get("extensions")
+    extensions = dict(extensions_raw) if isinstance(extensions_raw, Mapping) else {}
+    extensions["gateway_economic_policy"] = {
+        "trust_class": evaluation.trust_class,
+        "request_class": evaluation.request_class,
+        "slot_class": evaluation.slot_class,
+        "cost_class": evaluation.cost_class,
+        "reservation_required": evaluation.reservation_required,
+        "economic_policy_reason": evaluation.economic_policy_reason,
     }
     inputs["extensions"] = extensions
     payload_copy = dict(payload)

@@ -5,6 +5,7 @@ from pathlib import Path
 from dbl_gateway.config import (
     BoundaryConfig,
     allowed_tool_families_for_mode,
+    economic_policy_rule_for_mode,
     load_context_config,
     load_boundary_config,
     get_context_config,
@@ -261,6 +262,7 @@ def sample_boundary_config(tmp_path: Path) -> Path:
                 },
             },
         },
+        "economic_policy": _sample_economic_policy(),
         "surface_rules": {
             "healthz": "public",
             "capabilities": "public",
@@ -292,6 +294,12 @@ def test_load_valid_boundary_config(sample_boundary_config: Path) -> None:
         trust_class="internal",
         request_class="execution_heavy",
     ).decision == "allow"
+    assert economic_policy_rule_for_mode(
+        cfg,
+        mode="operator",
+        trust_class="internal",
+        request_class="execution_heavy",
+    ).slot_class == "reserved"
     assert cfg.config_digest.startswith("sha256:")
 
 
@@ -393,6 +401,7 @@ def test_boundary_config_digest_changes_on_content_change(tmp_path: Path) -> Non
                 },
             },
         },
+        "economic_policy": _sample_economic_policy(),
         "surface_rules": {"healthz": "public"},
     }
     config_b = {
@@ -492,6 +501,7 @@ def test_boundary_config_digest_changes_on_content_change(tmp_path: Path) -> Non
                 },
             },
         },
+        "economic_policy": _sample_economic_policy(),
         "surface_rules": {"healthz": "public"},
     }
     path_a = tmp_path / "boundary-a.json"
@@ -517,3 +527,51 @@ def test_boundary_config_cache_returns_same_instance(
     assert cfg1 is cfg2
 
     reset_boundary_config_cache()
+def _sample_economic_policy() -> dict[str, object]:
+    return {
+        "matrix": {
+            "public": {
+                trust: {
+                    "probe": {"slot_class": "none", "cost_class": "low", "reservation_required": False},
+                    "intent": {"slot_class": "none", "cost_class": "low", "reservation_required": False},
+                    "execution_light": {"slot_class": "shared", "cost_class": "bounded", "reservation_required": False},
+                    "execution_heavy": {"slot_class": "reserved", "cost_class": "capped", "reservation_required": True},
+                }
+                for trust in ("anonymous", "user", "operator", "internal")
+            },
+            "operator": {
+                "anonymous": {
+                    "probe": {"slot_class": "none", "cost_class": "low", "reservation_required": False},
+                    "intent": {"slot_class": "none", "cost_class": "low", "reservation_required": False},
+                    "execution_light": {"slot_class": "shared", "cost_class": "bounded", "reservation_required": False},
+                    "execution_heavy": {"slot_class": "reserved", "cost_class": "capped", "reservation_required": True},
+                },
+                "user": {
+                    "probe": {"slot_class": "none", "cost_class": "low", "reservation_required": False},
+                    "intent": {"slot_class": "none", "cost_class": "low", "reservation_required": False},
+                    "execution_light": {"slot_class": "shared", "cost_class": "bounded", "reservation_required": False},
+                    "execution_heavy": {"slot_class": "reserved", "cost_class": "capped", "reservation_required": True},
+                },
+                "operator": {
+                    "probe": {"slot_class": "none", "cost_class": "low", "reservation_required": False},
+                    "intent": {"slot_class": "shared", "cost_class": "bounded", "reservation_required": False},
+                    "execution_light": {"slot_class": "shared", "cost_class": "bounded", "reservation_required": False},
+                    "execution_heavy": {"slot_class": "reserved", "cost_class": "capped", "reservation_required": True},
+                },
+                "internal": {
+                    "probe": {"slot_class": "none", "cost_class": "low", "reservation_required": False},
+                    "intent": {"slot_class": "shared", "cost_class": "bounded", "reservation_required": False},
+                    "execution_light": {"slot_class": "shared", "cost_class": "bounded", "reservation_required": False},
+                    "execution_heavy": {"slot_class": "reserved", "cost_class": "capped", "reservation_required": True},
+                },
+            },
+            "demo": {
+                "*": {
+                    "probe": {"slot_class": "none", "cost_class": "low", "reservation_required": False},
+                    "intent": {"slot_class": "shared", "cost_class": "bounded", "reservation_required": False},
+                    "execution_light": {"slot_class": "shared", "cost_class": "bounded", "reservation_required": False},
+                    "execution_heavy": {"slot_class": "reserved", "cost_class": "capped", "reservation_required": True},
+                }
+            },
+        }
+    }

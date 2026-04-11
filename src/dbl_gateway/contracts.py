@@ -53,6 +53,10 @@ class DecisionNormative(TypedDict, total=False):
     request_semantic_reason: str | None
     request_constraints_applied: list[str] | None
     budget_policy_reason: str | None
+    slot_class: str | None
+    cost_class: str | None
+    reservation_required: bool | None
+    economic_policy_reason: str | None
     declared_tool_families: list[str] | None
     allowed_tool_families: list[str] | None
     permitted_tool_families: list[str] | None
@@ -280,6 +284,13 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
             raise ValueError(f"{field_name} must be a non-empty string")
         return value.strip()
 
+    def _normalize_optional_bool(value: object, *, field_name: str) -> bool | None:
+        if value is None:
+            return None
+        if not isinstance(value, bool):
+            raise ValueError(f"{field_name} must be a boolean")
+        return value
+
     norm_declared_tool_families = _normalize_string_list(
         decision.get("declared_tool_families"),
         field_name="declared_tool_families",
@@ -355,6 +366,22 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
         "budget_policy_reason": _normalize_optional_text(
             decision.get("budget_policy_reason"),
             field_name="budget_policy_reason",
+        ),
+        "slot_class": _normalize_optional_text(
+            decision.get("slot_class"),
+            field_name="slot_class",
+        ),
+        "cost_class": _normalize_optional_text(
+            decision.get("cost_class"),
+            field_name="cost_class",
+        ),
+        "reservation_required": _normalize_optional_bool(
+            decision.get("reservation_required"),
+            field_name="reservation_required",
+        ),
+        "economic_policy_reason": _normalize_optional_text(
+            decision.get("economic_policy_reason"),
+            field_name="economic_policy_reason",
         ),
         "declared_tool_families": norm_declared_tool_families,
         "allowed_tool_families": norm_allowed_tool_families,

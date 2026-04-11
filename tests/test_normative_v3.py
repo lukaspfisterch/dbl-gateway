@@ -26,6 +26,24 @@ class TestNormativeDecisionV3:
         assert normative["request_constraints_applied"] == ["budget.light_or_none"]
         assert normative["budget_policy_reason"] == "request.budget_clamped"
 
+    def test_economic_policy_fields_in_normative(self):
+        """Economic policy fields appear in normative dict."""
+        decision = DecisionResult(
+            decision="ALLOW",
+            reason_codes=[],
+            slot_class="reserved",
+            cost_class="capped",
+            reservation_required=True,
+            economic_policy_reason="economic.reserved.capped.reservation_required",
+        )
+        normative = build_normative_decision(
+            decision, assembly_digest=None, context_digest=None,
+        )
+        assert normative["slot_class"] == "reserved"
+        assert normative["cost_class"] == "capped"
+        assert normative["reservation_required"] is True
+        assert normative["economic_policy_reason"] == "economic.reserved.capped.reservation_required"
+
     def test_tool_families_in_normative(self):
         """Tool-family governance fields appear in normative dict."""
         decision = DecisionResult(
@@ -91,6 +109,10 @@ class TestNormativeDecisionV3:
             "request_semantic_reason": "request.semantic.bounded_execution",
             "request_constraints_applied": ["budget.light_or_none"],
             "budget_policy_reason": "request.budget_clamped",
+            "slot_class": "shared",
+            "cost_class": "bounded",
+            "reservation_required": False,
+            "economic_policy_reason": "economic.shared.bounded",
             "declared_tool_families": ["web_read", "exec_like"],
             "allowed_tool_families": ["web_read"],
             "permitted_tool_families": ["web_read"],
@@ -99,6 +121,9 @@ class TestNormativeDecisionV3:
             "enforced_budget": None,
         })
         assert norm["permitted_tools"] == ["a_tool", "z_tool"]
+        assert norm["slot_class"] == "shared"
+        assert norm["cost_class"] == "bounded"
+        assert norm["reservation_required"] is False
 
     def test_tool_families_sorted_in_digest(self):
         """Normalization sorts tool-family fields for stable digest."""

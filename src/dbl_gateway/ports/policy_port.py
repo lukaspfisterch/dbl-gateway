@@ -16,6 +16,10 @@ class DecisionResult:
     request_semantic_reason: str | None = None
     request_constraints_applied: list[str] | None = None
     budget_policy_reason: str | None = None
+    slot_class: str | None = None
+    cost_class: str | None = None
+    reservation_required: bool | None = None
+    economic_policy_reason: str | None = None
     declared_tool_families: list[str] | None = None
     allowed_tool_families: list[str] | None = None
     permitted_tool_families: list[str] | None = None

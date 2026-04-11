@@ -204,6 +204,10 @@ Tool names must match `^[a-z][a-z0-9_.]{0,63}$`.
 | `request_semantic_reason` | Stable classifier reason such as `request.semantic.intent_only`, `request.semantic.declared_tools_multiple`, or `request.semantic.budget_heavy`. |
 | `request_constraints_applied` | Deterministic list of structural and boundary constraints applied during request classification and budget shaping. |
 | `budget_policy_reason` | Stable request-policy reason such as `request.execution_heavy_denied` or `request.budget_clamped`. |
+| `slot_class` | Deterministic execution slot requirement: `none`, `shared`, or `reserved`. |
+| `cost_class` | Deterministic economic class: `low`, `bounded`, or `capped`. |
+| `reservation_required` | Whether the request requires a reserved execution class before runtime dispatch. |
+| `economic_policy_reason` | Stable economic-policy explanation such as `economic.shared.bounded` or `economic.reserved.capped.reservation_required`. |
 | `declared_tool_families` | Deterministic family buckets derived from `declared_tools`. |
 | `allowed_tool_families` | Tool families allowed by the active boundary policy. |
 | `permitted_tool_families` | Tool families remaining after boundary family gating and no-mix invariants. |
@@ -228,7 +232,12 @@ Boundary config also carries `request_policy.classification.light_budget` plus `
 - matrix key: `(exposure_mode, trust_class, request_class)`
 - rule payload: `decision` plus optional `max_budget`
 
-The gateway injects this as `payload.inputs.extensions.gateway_request_policy` before policy evaluation and records the resulting request/budget fields in DECISION.
+Boundary config also carries `economic_policy.matrix`:
+- request classes: `probe`, `intent`, `execution_light`, `execution_heavy`
+- matrix key: `(exposure_mode, trust_class, request_class)`
+- rule payload: `slot_class`, `cost_class`, `reservation_required`, and optional `reason_code`
+
+The gateway injects this as `payload.inputs.extensions.gateway_request_policy` and `payload.inputs.extensions.gateway_economic_policy` before policy evaluation and records the resulting request/budget/economic fields in DECISION.
 
 ### EXECUTION Fields
 
@@ -312,6 +321,10 @@ DECISION events include normative fields for replay verification:
     "boundary_default.max_duration_ms"
   ],
   "budget_policy_reason": "request.budget_clamped",
+  "slot_class": "shared",
+  "cost_class": "bounded",
+  "reservation_required": false,
+  "economic_policy_reason": "economic.shared.bounded",
   "permitted_tools": ["web.search", "code.execute"],
   "enforced_budget": {"max_tokens": 4096, "max_duration_ms": 30000, "source": "client"},
   "intent_index": 0,
@@ -324,7 +337,7 @@ DECISION events include normative fields for replay verification:
 }
 ```
 
-All of `request_class`, `budget_class`, `request_semantic_reason`, `request_constraints_applied`, `budget_policy_reason`, `permitted_tools`, `enforced_budget`, `policy_config_digest`, and `intent_index` are normative (included in decision digest).
+All of `request_class`, `budget_class`, `request_semantic_reason`, `request_constraints_applied`, `budget_policy_reason`, `slot_class`, `cost_class`, `reservation_required`, `economic_policy_reason`, `permitted_tools`, `enforced_budget`, `policy_config_digest`, and `intent_index` are normative (included in decision digest).
 
 | Field | Since | Description |
 |-------|-------|-------------|

@@ -291,6 +291,7 @@ def test_gateway_injects_tool_policy_into_policy_inputs(
         gateway_auth = inputs["extensions"]["gateway_auth"]
         policy_meta = inputs["extensions"]["gateway_tool_policy"]
         request_meta = inputs["extensions"]["gateway_request_policy"]
+        economic_meta = inputs["extensions"]["gateway_economic_policy"]
         assert gateway_auth["trust_class"] == "internal"
         assert policy_meta["declared_tool_families"] == ["web_read", "exec_like"]
         assert policy_meta["allowed_tool_families"] == ["web_read", "retrieval", "llm_assist"]
@@ -308,6 +309,14 @@ def test_gateway_injects_tool_policy_into_policy_inputs(
         assert request_meta["policy_budget"] == {"max_tokens": 8192, "max_duration_ms": 60000}
         assert request_meta["permitted_budget"] == {"max_tokens": 8192, "max_duration_ms": 60000}
         assert request_meta["denied_reason"] is None
+        assert economic_meta == {
+            "trust_class": "internal",
+            "request_class": "execution_heavy",
+            "slot_class": "reserved",
+            "cost_class": "capped",
+            "reservation_required": True,
+            "economic_policy_reason": "economic.reserved.capped.reservation_required",
+        }
 
     run_with_client(app, scenario)
 
@@ -339,6 +348,10 @@ def test_decision_payload_tracks_tool_family_governance(
             "boundary_default.max_duration_ms",
         ]
         assert decision["budget_policy_reason"] is None
+        assert decision["slot_class"] == "reserved"
+        assert decision["cost_class"] == "capped"
+        assert decision["reservation_required"] is True
+        assert decision["economic_policy_reason"] == "economic.reserved.capped.reservation_required"
         assert decision["permitted_tools"] == ["web.search"]
         assert decision["tools_denied"] == ["code.execute"]
         assert decision["tools_denied_reason"] == "tool.no_mix.exec_like"
@@ -950,6 +963,14 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert data["budget"]["current_request_policy"]["execution_heavy"]["max_budget"] == {
             "max_tokens": 8192,
             "max_duration_ms": 60000,
+        }
+        assert data["economic"]["slot_classes"] == ["none", "shared", "reserved"]
+        assert data["economic"]["cost_classes"] == ["low", "bounded", "capped"]
+        assert data["economic"]["current_policy"]["execution_heavy"] == {
+            "slot_class": "reserved",
+            "cost_class": "capped",
+            "reservation_required": True,
+            "reason_code": None,
         }
         providers = data["providers"]
         assert isinstance(providers, list)

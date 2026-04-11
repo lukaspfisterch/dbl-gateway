@@ -129,6 +129,54 @@
         "title": "CapabilitiesDeclaredTools",
         "type": "object"
       },
+      "CapabilitiesEconomic": {
+        "properties": {
+          "cost_classes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cost Classes",
+            "type": "array"
+          },
+          "current_policy": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Current Policy",
+            "type": "object"
+          },
+          "policy_by_exposure": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            "title": "Policy By Exposure",
+            "type": "object"
+          },
+          "slot_classes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Slot Classes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "slot_classes",
+          "cost_classes",
+          "current_policy",
+          "policy_by_exposure"
+        ],
+        "title": "CapabilitiesEconomic",
+        "type": "object"
+      },
       "CapabilitiesFeatures": {
         "properties": {
           "json_mode": {
@@ -267,6 +315,9 @@
           "budget": {
             "$ref": "#/components/schemas/CapabilitiesBudget"
           },
+          "economic": {
+            "$ref": "#/components/schemas/CapabilitiesEconomic"
+          },
           "gateway_version": {
             "title": "Gateway Version",
             "type": "string"
@@ -311,6 +362,7 @@
           "intents",
           "tool_surface",
           "budget",
+          "economic",
           "providers",
           "surfaces",
           "surface_catalog"

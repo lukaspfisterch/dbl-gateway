@@ -62,6 +62,10 @@ class DecisionPayload(TypedDict, total=False):
     request_semantic_reason: str
     request_constraints_applied: list[str]
     budget_policy_reason: str
+    slot_class: str
+    cost_class: str
+    reservation_required: bool
+    economic_policy_reason: str
     declared_tool_families: list[str]
     allowed_tool_families: list[str]
     permitted_tool_families: list[str]

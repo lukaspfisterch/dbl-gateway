@@ -24,12 +24,15 @@ __all__ = [
     "BoundaryAdmissionConfig",
     "BoundaryBudgetLimitConfig",
     "BoundaryConfig",
+    "BoundaryEconomicPolicyConfig",
+    "BoundaryEconomicPolicyRule",
     "BoundaryRequestPolicyConfig",
     "BoundaryRequestPolicyRule",
     "BoundaryToolPolicyConfig",
     "ContextConfig",
     "JobRuntimeConfig",
     "allowed_tool_families_for_mode",
+    "economic_policy_rule_for_mode",
     "context_resolution_enabled",
     "exposure_mode_allows",
     "get_boundary_config",
@@ -140,6 +143,25 @@ class BoundaryRequestPolicyConfig:
 
 
 @dataclass(frozen=True)
+class BoundaryEconomicPolicyRule:
+    """Immutable economic shaping rule for one exposure/trust/request-class tuple."""
+
+    slot_class: Literal["none", "shared", "reserved"]
+    cost_class: Literal["low", "bounded", "capped"]
+    reservation_required: bool
+    reason_code: str | None
+
+
+@dataclass(frozen=True)
+class BoundaryEconomicPolicyConfig:
+    """Immutable economic policy derived from boundary config."""
+
+    slot_classes: tuple[str, ...]
+    cost_classes: tuple[str, ...]
+    matrix: Mapping[str, Mapping[str, Mapping[str, BoundaryEconomicPolicyRule]]]
+
+
+@dataclass(frozen=True)
 class BoundaryConfig:
     """Immutable boundary configuration for surface exposure."""
 
@@ -150,6 +172,7 @@ class BoundaryConfig:
     admission: BoundaryAdmissionConfig
     tool_policy: BoundaryToolPolicyConfig
     request_policy: BoundaryRequestPolicyConfig
+    economic_policy: BoundaryEconomicPolicyConfig
     config_digest: str
     _raw: Mapping[str, Any]
 
@@ -226,6 +249,27 @@ def request_policy_rule_for_mode(
     if rule is None:
         raise ValueError(
             f"request_policy.matrix.{selected_mode}.{selected_trust}.{request_class} is missing",
+        )
+    return rule
+
+
+def economic_policy_rule_for_mode(
+    boundary_config: BoundaryConfig,
+    *,
+    request_class: str,
+    mode: Literal["public", "operator", "demo"] | None = None,
+    trust_class: str = "anonymous",
+) -> BoundaryEconomicPolicyRule:
+    selected_mode = mode or boundary_config.exposure_mode
+    mode_matrix = boundary_config.economic_policy.matrix.get(selected_mode, {})
+    selected_trust = trust_class if trust_class in TRUST_CLASSES else "anonymous"
+    trust_rules = mode_matrix.get(selected_trust)
+    if trust_rules is None:
+        trust_rules = mode_matrix.get("*", {})
+    rule = trust_rules.get(request_class)
+    if rule is None:
+        raise ValueError(
+            f"economic_policy.matrix.{selected_mode}.{selected_trust}.{request_class} is missing",
         )
     return rule
 
@@ -451,6 +495,71 @@ def _parse_boundary_config(raw: Mapping[str, Any]) -> BoundaryConfig:
             parsed_mode[str(trust_name)] = parsed_rules
         request_matrix[exposure_name] = parsed_mode
 
+    raw_economic_policy = raw.get("economic_policy")
+    if not isinstance(raw_economic_policy, Mapping):
+        raise ValueError("economic_policy must be an object")
+    slot_classes = ("none", "shared", "reserved")
+    cost_classes = ("low", "bounded", "capped")
+    raw_economic_matrix = raw_economic_policy.get("matrix")
+    if not isinstance(raw_economic_matrix, Mapping):
+        raise ValueError("economic_policy.matrix must be an object")
+    economic_matrix: dict[str, dict[str, dict[str, BoundaryEconomicPolicyRule]]] = {}
+    for exposure_name in _EXPOSURE_RANKS:
+        raw_mode = raw_economic_matrix.get(exposure_name)
+        if not isinstance(raw_mode, Mapping):
+            raise ValueError(f"economic_policy.matrix.{exposure_name} must be an object")
+        parsed_mode: dict[str, dict[str, BoundaryEconomicPolicyRule]] = {}
+        for trust_name, raw_rules in raw_mode.items():
+            if trust_name != "*" and trust_name not in TRUST_CLASSES:
+                raise ValueError(
+                    f"economic_policy.matrix.{exposure_name} keys must be trust classes or '*'"
+                )
+            if not isinstance(raw_rules, Mapping):
+                raise ValueError(
+                    f"economic_policy.matrix.{exposure_name}.{trust_name} must be an object"
+                )
+            parsed_rules: dict[str, BoundaryEconomicPolicyRule] = {}
+            for request_class in request_classes:
+                raw_rule = raw_rules.get(request_class)
+                if not isinstance(raw_rule, Mapping):
+                    raise ValueError(
+                        f"economic_policy.matrix.{exposure_name}.{trust_name}.{request_class} must be an object"
+                    )
+                slot_class = raw_rule.get("slot_class")
+                if slot_class not in slot_classes:
+                    raise ValueError(
+                        f"economic_policy.matrix.{exposure_name}.{trust_name}.{request_class}.slot_class "
+                        "must be none, shared, or reserved"
+                    )
+                cost_class = raw_rule.get("cost_class")
+                if cost_class not in cost_classes:
+                    raise ValueError(
+                        f"economic_policy.matrix.{exposure_name}.{trust_name}.{request_class}.cost_class "
+                        "must be low, bounded, or capped"
+                    )
+                reservation_required = raw_rule.get("reservation_required", False)
+                if not isinstance(reservation_required, bool):
+                    raise ValueError(
+                        f"economic_policy.matrix.{exposure_name}.{trust_name}.{request_class}.reservation_required "
+                        "must be boolean"
+                    )
+                reason_code = raw_rule.get("reason_code")
+                if reason_code is not None and (
+                    not isinstance(reason_code, str) or not reason_code.strip()
+                ):
+                    raise ValueError(
+                        f"economic_policy.matrix.{exposure_name}.{trust_name}.{request_class}.reason_code "
+                        "must be a non-empty string when provided"
+                    )
+                parsed_rules[request_class] = BoundaryEconomicPolicyRule(
+                    slot_class=slot_class,
+                    cost_class=cost_class,
+                    reservation_required=reservation_required,
+                    reason_code=reason_code.strip() if isinstance(reason_code, str) else None,
+                )
+            parsed_mode[str(trust_name)] = parsed_rules
+        economic_matrix[exposure_name] = parsed_mode
+
     config_digest = _compute_config_digest(raw)
 
     return BoundaryConfig(
@@ -476,6 +585,11 @@ def _parse_boundary_config(raw: Mapping[str, Any]) -> BoundaryConfig:
                 max_duration_ms=light_budget_duration_ms,
             ),
             matrix=request_matrix,
+        ),
+        economic_policy=BoundaryEconomicPolicyConfig(
+            slot_classes=slot_classes,
+            cost_classes=cost_classes,
+            matrix=economic_matrix,
         ),
         config_digest=config_digest,
         _raw=raw,
