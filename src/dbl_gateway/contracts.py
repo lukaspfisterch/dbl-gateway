@@ -48,6 +48,9 @@ class DecisionNormative(TypedDict, total=False):
     result: str
     reasons: list[DecisionReason]
     transforms: list[DecisionTransform]
+    declared_tool_families: list[str] | None
+    allowed_tool_families: list[str] | None
+    permitted_tool_families: list[str] | None
     permitted_tools: list[str] | None
     enforced_budget: BudgetConstraint | None
     intent_index: int | None
@@ -257,6 +260,26 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
     norm_transforms.sort(
         key=lambda t: (t["op"], t["target"], json_dumps(canonicalize_value(t.get("params", {})))))
 
+    def _normalize_string_list(value: object, *, field_name: str) -> list[str] | None:
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ValueError(f"{field_name} must be a list")
+        return sorted(str(item).strip() for item in value)
+
+    norm_declared_tool_families = _normalize_string_list(
+        decision.get("declared_tool_families"),
+        field_name="declared_tool_families",
+    )
+    norm_allowed_tool_families = _normalize_string_list(
+        decision.get("allowed_tool_families"),
+        field_name="allowed_tool_families",
+    )
+    norm_permitted_tool_families = _normalize_string_list(
+        decision.get("permitted_tool_families"),
+        field_name="permitted_tool_families",
+    )
+
     # Normalize permitted_tools (sorted for canonical ordering).
     permitted_tools_raw = decision.get("permitted_tools")
     norm_permitted_tools: list[str] | None = None
@@ -296,6 +319,9 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
         "result": result,
         "reasons": norm_reasons,
         "transforms": norm_transforms,
+        "declared_tool_families": norm_declared_tool_families,
+        "allowed_tool_families": norm_allowed_tool_families,
+        "permitted_tool_families": norm_permitted_tool_families,
         "permitted_tools": norm_permitted_tools,
         "enforced_budget": norm_enforced_budget,
     }

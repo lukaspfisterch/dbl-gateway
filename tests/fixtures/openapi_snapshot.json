@@ -321,6 +321,23 @@
       },
       "CapabilitiesToolSurface": {
         "properties": {
+          "allowed_families_by_exposure": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Allowed Families By Exposure",
+            "type": "object"
+          },
+          "allowed_families_current": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Families Current",
+            "type": "array"
+          },
           "declared_tools": {
             "$ref": "#/components/schemas/CapabilitiesDeclaredTools"
           },
@@ -350,6 +367,8 @@
           "declared_tools",
           "tool_scope",
           "semantic_families",
+          "allowed_families_current",
+          "allowed_families_by_exposure",
           "no_mix_rules"
         ],
         "title": "CapabilitiesToolSurface",

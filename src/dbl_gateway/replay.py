@@ -92,6 +92,9 @@ def replay_decision_for_turn(
     # normative digest and must be restored for replay equivalence.
     stored_permitted_tools = decision_payload.get("permitted_tools")
     stored_enforced_budget = decision_payload.get("enforced_budget")
+    stored_declared_tool_families = decision_payload.get("declared_tool_families")
+    stored_allowed_tool_families = decision_payload.get("allowed_tool_families")
+    stored_permitted_tool_families = decision_payload.get("permitted_tool_families")
     stored_policy_config_digest = stored_policy.get("policy_config_digest")
 
     decision_for_digest = DecisionResult(
@@ -100,6 +103,15 @@ def replay_decision_for_turn(
         policy_id=stored_policy.get("policy_id") or policy_result.policy_id,
         policy_version=stored_policy.get("policy_version") or policy_result.policy_version,
         gate_event=policy_result.gate_event,
+        declared_tool_families=(
+            stored_declared_tool_families if isinstance(stored_declared_tool_families, list) else None
+        ),
+        allowed_tool_families=(
+            stored_allowed_tool_families if isinstance(stored_allowed_tool_families, list) else None
+        ),
+        permitted_tool_families=(
+            stored_permitted_tool_families if isinstance(stored_permitted_tool_families, list) else None
+        ),
         permitted_tools=stored_permitted_tools if isinstance(stored_permitted_tools, list) else None,
         enforced_budget=stored_enforced_budget if isinstance(stored_enforced_budget, dict) else None,
         policy_config_digest=stored_policy_config_digest if isinstance(stored_policy_config_digest, str) else None,

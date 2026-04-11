@@ -21,8 +21,10 @@ from hashlib import sha256
 __all__ = [
     "BoundaryAdmissionConfig",
     "BoundaryConfig",
+    "BoundaryToolPolicyConfig",
     "ContextConfig",
     "JobRuntimeConfig",
+    "allowed_tool_families_for_mode",
     "context_resolution_enabled",
     "exposure_mode_allows",
     "get_boundary_config",
@@ -98,6 +100,15 @@ class BoundaryAdmissionConfig:
 
 
 @dataclass(frozen=True)
+class BoundaryToolPolicyConfig:
+    """Immutable tool-family policy derived from boundary config."""
+
+    public: tuple[str, ...]
+    operator: tuple[str, ...]
+    demo: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class BoundaryConfig:
     """Immutable boundary configuration for surface exposure."""
 
@@ -106,6 +117,7 @@ class BoundaryConfig:
     exposure_mode: Literal["public", "operator", "demo"]
     surface_rules: Mapping[str, Literal["public", "operator", "demo"]]
     admission: BoundaryAdmissionConfig
+    tool_policy: BoundaryToolPolicyConfig
     config_digest: str
     _raw: Mapping[str, Any]
 
@@ -149,6 +161,19 @@ def exposure_mode_allows(
 ) -> bool:
     """Return True when the current exposure mode may access the required mode."""
     return _EXPOSURE_RANKS[current_mode] >= _EXPOSURE_RANKS[required_mode]
+
+
+def allowed_tool_families_for_mode(
+    boundary_config: BoundaryConfig,
+    *,
+    mode: Literal["public", "operator", "demo"] | None = None,
+) -> tuple[str, ...]:
+    selected_mode = mode or boundary_config.exposure_mode
+    if selected_mode == "public":
+        return boundary_config.tool_policy.public
+    if selected_mode == "operator":
+        return boundary_config.tool_policy.operator
+    return boundary_config.tool_policy.demo
 
 
 def load_boundary_config(path: Path | None = None) -> BoundaryConfig:
@@ -225,6 +250,21 @@ def _parse_boundary_config(raw: Mapping[str, Any]) -> BoundaryConfig:
     if not isinstance(max_budget_duration_ms, int) or max_budget_duration_ms < 1000:
         raise ValueError("admission.public.max_budget.max_duration_ms must be int >= 1000")
 
+    raw_tool_policy = raw.get("tool_policy")
+    if not isinstance(raw_tool_policy, Mapping):
+        raise ValueError("tool_policy must be an object")
+
+    def _parse_tool_families(name: str) -> tuple[str, ...]:
+        raw_families = raw_tool_policy.get(name)
+        if not isinstance(raw_families, list) or not raw_families:
+            raise ValueError(f"tool_policy.{name} must be a non-empty list[str]")
+        families: list[str] = []
+        for item in raw_families:
+            if not isinstance(item, str) or not item.strip():
+                raise ValueError(f"tool_policy.{name} entries must be non-empty strings")
+            families.append(item.strip())
+        return tuple(families)
+
     config_digest = _compute_config_digest(raw)
 
     return BoundaryConfig(
@@ -238,6 +278,11 @@ def _parse_boundary_config(raw: Mapping[str, Any]) -> BoundaryConfig:
             public_max_declared_tools=max_declared_tools,
             public_max_budget_tokens=max_budget_tokens,
             public_max_budget_duration_ms=max_budget_duration_ms,
+        ),
+        tool_policy=BoundaryToolPolicyConfig(
+            public=_parse_tool_families("public"),
+            operator=_parse_tool_families("operator"),
+            demo=_parse_tool_families("demo"),
         ),
         config_digest=config_digest,
         _raw=raw,

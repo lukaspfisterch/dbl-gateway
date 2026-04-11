@@ -31,6 +31,9 @@ def build_normative_decision(
         "result": decision.decision,
         "reasons": reasons,
         "transforms": norm_transforms,
+        "declared_tool_families": decision.declared_tool_families,
+        "allowed_tool_families": decision.allowed_tool_families,
+        "permitted_tool_families": decision.permitted_tool_families,
         "permitted_tools": decision.permitted_tools,
         "enforced_budget": decision.enforced_budget,
     }

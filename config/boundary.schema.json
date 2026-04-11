@@ -7,7 +7,8 @@
     "boundary_version",
     "exposure_mode",
     "admission",
-    "surface_rules"
+    "surface_rules",
+    "tool_policy"
   ],
   "properties": {
     "schema_version": {
@@ -71,6 +72,32 @@
       "additionalProperties": {
         "type": "string",
         "enum": ["public", "operator", "demo"]
+      }
+    },
+    "tool_policy": {
+      "type": "object",
+      "required": ["public", "operator", "demo"],
+      "properties": {
+        "public": {
+          "$ref": "#/$defs/toolFamilyList"
+        },
+        "operator": {
+          "$ref": "#/$defs/toolFamilyList"
+        },
+        "demo": {
+          "$ref": "#/$defs/toolFamilyList"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "toolFamilyList": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
       }
     }
   },

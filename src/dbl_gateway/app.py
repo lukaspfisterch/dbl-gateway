@@ -8,6 +8,7 @@ import time
 import traceback
 import uuid
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from collections.abc import AsyncGenerator
 from pathlib import Path
@@ -36,6 +37,7 @@ from .adapters.execution_adapter_kl import KlExecutionAdapter
 from .adapters.policy_adapter_dbl_policy import DblPolicyAdapter, ObserverPolicy, _load_policy
 from .context_builder import build_context_with_refs, RefResolutionError
 from .config import (
+    allowed_tool_families_for_mode,
     get_boundary_config,
     get_context_config,
     context_resolution_enabled,
@@ -84,6 +86,27 @@ _GOVERNANCE_ALLOWED_KEYS: frozenset[str] = frozenset({
 
 class GovernanceInputViolation(RuntimeError):
     """I-GOV-INPUT-1: Observational data detected in governance input."""
+
+
+_TOOL_FAMILY_ORDER: tuple[str, ...] = (
+    "web_read",
+    "file_ops",
+    "data_access",
+    "exec_like",
+    "other",
+)
+
+
+@dataclass(frozen=True)
+class ToolPolicyEvaluation:
+    scope: str | None
+    declared_tools: list[str]
+    denied_tools: list[str]
+    denied_reason: str | None
+    permitted_tools: list[str]
+    declared_families: list[str]
+    allowed_families: list[str]
+    permitted_families: list[str]
 
 
 def _assert_governance_input(authoritative: Mapping[str, Any]) -> None:
@@ -860,10 +883,19 @@ async def _process_intent(
         _declared_tools = auth_payload.get("declared_tools")
         _tool_scope = auth_payload.get("tool_scope")
         _client_budget = auth_payload.get("budget")
+        tool_policy_evaluation = _compute_tool_policy_evaluation(
+            _declared_tools if isinstance(_declared_tools, list) else None,
+            _tool_scope if isinstance(_tool_scope, str) else None,
+            boundary_config=app.state.boundary_config,
+        )
+        authoritative_for_policy = _authoritative_with_gateway_tool_policy(
+            authoritative,
+            tool_policy_evaluation,
+        )
 
-        _assert_governance_input(authoritative)
+        _assert_governance_input(authoritative_for_policy)
         try:
-            decision = app.state.policy.decide(authoritative)
+            decision = app.state.policy.decide(authoritative_for_policy)
         except Exception as exc:
             _LOGGER.exception("policy decision failed: %s", exc)
             error_ref = _emit_policy_error_artifact(
@@ -933,6 +965,9 @@ async def _process_intent(
                 policy_id=decision.policy_id,
                 policy_version=decision.policy_version,
                 gate_event=decision.gate_event,
+                declared_tool_families=decision.declared_tool_families,
+                allowed_tool_families=decision.allowed_tool_families,
+                permitted_tool_families=decision.permitted_tool_families,
                 permitted_tools=decision.permitted_tools,
                 tool_scope_enforced=decision.tool_scope_enforced,
                 tools_denied=decision.tools_denied,
@@ -940,6 +975,23 @@ async def _process_intent(
                 enforced_budget=decision.enforced_budget,
                 policy_config_digest=_policy_config_digest,
             )
+
+        decision = DecisionResult(
+            decision=decision.decision,
+            reason_codes=decision.reason_codes,
+            policy_id=decision.policy_id,
+            policy_version=decision.policy_version,
+            gate_event=decision.gate_event,
+            declared_tool_families=list(tool_policy_evaluation.declared_families),
+            allowed_tool_families=list(tool_policy_evaluation.allowed_families),
+            permitted_tool_families=list(tool_policy_evaluation.permitted_families),
+            permitted_tools=decision.permitted_tools,
+            tool_scope_enforced=decision.tool_scope_enforced,
+            tools_denied=decision.tools_denied,
+            tools_denied_reason=decision.tools_denied_reason,
+            enforced_budget=decision.enforced_budget,
+            policy_config_digest=decision.policy_config_digest,
+        )
 
         requested_model = ""
         if isinstance(authoritative.get("payload"), Mapping):
@@ -963,9 +1015,6 @@ async def _process_intent(
 
         # Compute tool gating and budget constraints after policy ALLOW
         if decision.decision == "ALLOW":
-            permitted_tools, tool_scope_enforced, tools_denied, tools_denied_reason = (
-                _compute_permitted_tools(_declared_tools, _tool_scope, decision)
-            )
             runtime_cfg = get_job_runtime_config()
             enforced_budget = _compute_enforced_budget(_client_budget, runtime_cfg.llm_wall_clock_s)
             decision = DecisionResult(
@@ -974,10 +1023,13 @@ async def _process_intent(
                 policy_id=decision.policy_id,
                 policy_version=decision.policy_version,
                 gate_event=decision.gate_event,
-                permitted_tools=permitted_tools,
-                tool_scope_enforced=tool_scope_enforced,
-                tools_denied=tools_denied,
-                tools_denied_reason=tools_denied_reason,
+                declared_tool_families=decision.declared_tool_families,
+                allowed_tool_families=decision.allowed_tool_families,
+                permitted_tool_families=decision.permitted_tool_families,
+                permitted_tools=list(tool_policy_evaluation.permitted_tools),
+                tool_scope_enforced=tool_policy_evaluation.scope,
+                tools_denied=list(tool_policy_evaluation.denied_tools),
+                tools_denied_reason=tool_policy_evaluation.denied_reason,
                 enforced_budget=enforced_budget,
                 policy_config_digest=decision.policy_config_digest,
             )
@@ -1229,6 +1281,12 @@ def _decision_payload(
         "policy_version": normative["policy"]["policy_version"],
         **normative,
     }
+    if decision.tool_scope_enforced is not None:
+        payload["tool_scope_enforced"] = decision.tool_scope_enforced
+    if decision.tools_denied is not None:
+        payload["tools_denied"] = list(decision.tools_denied)
+    if decision.tools_denied_reason is not None:
+        payload["tools_denied_reason"] = decision.tools_denied_reason
     if error_ref:
         payload["error_ref"] = error_ref
     if context_spec is not None:
@@ -1720,6 +1778,8 @@ def _compute_permitted_tools(
     declared_tools: list[str] | None,
     tool_scope: str | None,
     decision: DecisionResult,
+    *,
+    boundary_config=None,
 ) -> tuple[list[str] | None, str | None, list[str] | None, str | None]:
     """Compute tool gating fields for DECISION payload.
 
@@ -1731,11 +1791,56 @@ def _compute_permitted_tools(
         return None, None, None, None
     if declared_tools is None and tool_scope is None:
         return None, None, None, None
-    scope = tool_scope or "strict"
-    tools = declared_tools or []
-    denied_tools, denied_reason = _deny_unsafe_tool_mix(tools)
+    evaluation = _compute_tool_policy_evaluation(
+        declared_tools,
+        tool_scope,
+        boundary_config=boundary_config,
+    )
+    return (
+        evaluation.permitted_tools,
+        evaluation.scope,
+        evaluation.denied_tools,
+        evaluation.denied_reason,
+    )
+
+
+def _compute_tool_policy_evaluation(
+    declared_tools: list[str] | None,
+    tool_scope: str | None,
+    *,
+    boundary_config=None,
+) -> ToolPolicyEvaluation:
+    cfg = boundary_config or get_boundary_config()
+    tools = list(declared_tools or [])
+    scope = None if declared_tools is None and tool_scope is None else (tool_scope or "strict")
+    allowed_families = list(allowed_tool_families_for_mode(cfg))
+    allow_all_families = "*" in allowed_families
+    allowed_family_set = set(allowed_families)
+
+    family_denied = [
+        tool for tool in tools
+        if not allow_all_families and _tool_family(tool) not in allowed_family_set
+    ]
+    tools_after_family_gate = [tool for tool in tools if tool not in family_denied]
+    no_mix_denied, no_mix_reason = _deny_unsafe_tool_mix(tools_after_family_gate)
+
+    denied_tools = [
+        tool for tool in tools
+        if tool in family_denied or tool in no_mix_denied
+    ]
+    denied_reason = "tool.family_not_allowed" if family_denied else no_mix_reason
     permitted_tools = [tool for tool in tools if tool not in denied_tools]
-    return permitted_tools, scope, denied_tools, denied_reason
+
+    return ToolPolicyEvaluation(
+        scope=scope,
+        declared_tools=tools,
+        denied_tools=denied_tools,
+        denied_reason=denied_reason,
+        permitted_tools=permitted_tools,
+        declared_families=_ordered_tool_families(_tool_family(tool) for tool in tools),
+        allowed_families=_ordered_tool_families(allowed_families),
+        permitted_families=_ordered_tool_families(_tool_family(tool) for tool in permitted_tools),
+    )
 
 
 def _tool_family(tool_name: str) -> str:
@@ -1757,9 +1862,54 @@ def _deny_unsafe_tool_mix(tools: list[str]) -> tuple[list[str], str | None]:
     family_by_tool = {tool: _tool_family(tool) for tool in tools}
     families = set(family_by_tool.values())
     if "exec_like" in families and len(families - {"exec_like"}) > 0:
-        denied = sorted(tool for tool, family in family_by_tool.items() if family == "exec_like")
+        denied = [tool for tool in tools if family_by_tool[tool] == "exec_like"]
         return denied, "tool.no_mix.exec_like"
     return [], None
+
+
+def _ordered_tool_families(families: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    wildcard = False
+    for family in families:
+        name = str(family).strip()
+        if not name or name in seen:
+            continue
+        if name == "*":
+            wildcard = True
+            seen.add(name)
+            continue
+        seen.add(name)
+        ordered.append(name)
+    rank = {name: idx for idx, name in enumerate(_TOOL_FAMILY_ORDER)}
+    ordered.sort(key=lambda item: (rank.get(item, len(rank)), item))
+    if wildcard:
+        ordered.append("*")
+    return ordered
+
+
+def _authoritative_with_gateway_tool_policy(
+    authoritative: Mapping[str, Any],
+    evaluation: ToolPolicyEvaluation,
+) -> dict[str, Any]:
+    payload = authoritative.get("payload")
+    if not isinstance(payload, Mapping):
+        return dict(authoritative)
+    inputs_raw = payload.get("inputs")
+    inputs = dict(inputs_raw) if isinstance(inputs_raw, Mapping) else {}
+    extensions_raw = inputs.get("extensions")
+    extensions = dict(extensions_raw) if isinstance(extensions_raw, Mapping) else {}
+    extensions["gateway_tool_policy"] = {
+        "declared_tool_families": list(evaluation.declared_families),
+        "allowed_tool_families": list(evaluation.allowed_families),
+        "permitted_tool_families": list(evaluation.permitted_families),
+    }
+    inputs["extensions"] = extensions
+    payload_copy = dict(payload)
+    payload_copy["inputs"] = inputs
+    authoritative_copy = dict(authoritative)
+    authoritative_copy["payload"] = payload_copy
+    return authoritative_copy
 
 
 def _compute_enforced_budget(

@@ -1,6 +1,9 @@
 """Tests for tool gating computation and enforcement."""
+from pathlib import Path
+
 import pytest
 from dbl_gateway.app import _compute_permitted_tools
+from dbl_gateway.config import load_boundary_config
 from dbl_gateway.ports.policy_port import DecisionResult
 
 
@@ -10,6 +13,10 @@ def _allow(**kwargs) -> DecisionResult:
 
 def _deny(**kwargs) -> DecisionResult:
     return DecisionResult(decision="DENY", reason_codes=["test"], **kwargs)
+
+
+def _boundary(name: str):
+    return load_boundary_config(Path(__file__).resolve().parents[1] / "config" / name)
 
 
 # --- _compute_permitted_tools ---
@@ -23,7 +30,12 @@ class TestComputePermittedTools:
     def test_mixed_exec_like_and_read_tools_apply_no_mix_rule(self):
         """Exec-like tools are denied when mixed with other families."""
         tools = ["web.search", "code.execute"]
-        permitted, scope, denied, reason = _compute_permitted_tools(tools, "strict", _allow())
+        permitted, scope, denied, reason = _compute_permitted_tools(
+            tools,
+            "strict",
+            _allow(),
+            boundary_config=_boundary("boundary.demo.json"),
+        )
         assert permitted == ["web.search"]
         assert scope == "strict"
         assert denied == ["code.execute"]
@@ -60,9 +72,28 @@ class TestComputePermittedTools:
         assert scope == "advisory"
 
     def test_exec_like_only_is_allowed(self):
-        """Pure exec-like declarations remain allowed."""
+        """Pure exec-like declarations remain allowed only in permissive demo boundary."""
         tools = ["code.execute", "shell.execute"]
-        permitted, scope, denied, reason = _compute_permitted_tools(tools, "strict", _allow())
+        permitted, scope, denied, reason = _compute_permitted_tools(
+            tools,
+            "strict",
+            _allow(),
+            boundary_config=_boundary("boundary.demo.json"),
+        )
         assert permitted == ["code.execute", "shell.execute"]
         assert denied == []
         assert reason is None
+
+    def test_operator_boundary_denies_exec_like_family(self):
+        """Operator boundary excludes exec-like families entirely."""
+        tools = ["code.execute"]
+        permitted, scope, denied, reason = _compute_permitted_tools(
+            tools,
+            "strict",
+            _allow(),
+            boundary_config=_boundary("boundary.operator.json"),
+        )
+        assert permitted == []
+        assert scope == "strict"
+        assert denied == ["code.execute"]
+        assert reason == "tool.family_not_allowed"

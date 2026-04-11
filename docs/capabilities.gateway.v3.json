@@ -1,16 +1,15 @@
 {
   "schema_version": "gateway.capabilities.v1",
-  "gateway_version": "0.9.11",
+  "gateway_version": "0.8.1",
   "interface_version": 3,
   "boundary": {
     "boundary_version": "1",
-    "boundary_config_digest": "sha256:a487f4029dfb18a4fa8cb36e1b569fcd09f68fca38f1414996d182295ded6897",
+    "boundary_config_digest": "sha256:caeb2f2c4f3192ad20d3e8cbfd6b7a3900433cbe471cfc3a6a926ee84967884c",
     "exposure_mode": "operator"
   },
   "intents": {
     "supported": [
-      "chat.message",
-      "artifact.handle"
+      "chat.message"
     ],
     "catalog": {
       "chat.message": {
@@ -25,9 +24,9 @@
       },
       "artifact.handle": {
         "risk_class": "high_risk_context",
-        "admitted": true,
+        "admitted": false,
         "requires_context_resolution": true,
-        "model_context_admit_mode": "metadata_only",
+        "model_context_admit_mode": "disabled",
         "available_in_exposure_modes": [
           "operator",
           "demo"
@@ -63,6 +62,29 @@
       "data_access": [
         "db.*",
         "sql.*"
+      ],
+      "other": [
+        "uncategorized"
+      ]
+    },
+    "allowed_families_current": [
+      "web_read",
+      "file_ops",
+      "data_access",
+      "other"
+    ],
+    "allowed_families_by_exposure": {
+      "public": [
+        "web_read"
+      ],
+      "operator": [
+        "web_read",
+        "file_ops",
+        "data_access",
+        "other"
+      ],
+      "demo": [
+        "*"
       ]
     },
     "no_mix_rules": [
@@ -193,5 +215,6 @@
       "plane": "execution",
       "description": "External execution submission surface when enabled."
     }
-  ]
+  ],
+  "generated_at": "2026-04-11T16:59:24.772502+00:00"
 }

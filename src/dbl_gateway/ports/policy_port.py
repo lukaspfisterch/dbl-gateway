@@ -11,6 +11,9 @@ class DecisionResult:
     policy_id: str | None = None
     policy_version: str | None = None
     gate_event: object | None = None
+    declared_tool_families: list[str] | None = None
+    allowed_tool_families: list[str] | None = None
+    permitted_tool_families: list[str] | None = None
     permitted_tools: list[str] | None = None
     tool_scope_enforced: str | None = None
     tools_denied: list[str] | None = None

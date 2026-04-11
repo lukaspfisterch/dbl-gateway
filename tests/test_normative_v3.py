@@ -6,6 +6,22 @@ from dbl_gateway.contracts import _normalize_decision
 
 
 class TestNormativeDecisionV3:
+    def test_tool_families_in_normative(self):
+        """Tool-family governance fields appear in normative dict."""
+        decision = DecisionResult(
+            decision="ALLOW",
+            reason_codes=[],
+            declared_tool_families=["web_read", "exec_like"],
+            allowed_tool_families=["web_read"],
+            permitted_tool_families=["web_read"],
+        )
+        normative = build_normative_decision(
+            decision, assembly_digest=None, context_digest=None,
+        )
+        assert normative["declared_tool_families"] == ["web_read", "exec_like"]
+        assert normative["allowed_tool_families"] == ["web_read"]
+        assert normative["permitted_tool_families"] == ["web_read"]
+
     def test_permitted_tools_in_normative(self):
         """permitted_tools appears in normative dict."""
         decision = DecisionResult(
@@ -48,10 +64,31 @@ class TestNormativeDecisionV3:
             "transforms": [],
             "result": "ALLOW",
             "reasons": [],
+            "declared_tool_families": ["web_read", "exec_like"],
+            "allowed_tool_families": ["web_read"],
+            "permitted_tool_families": ["web_read"],
             "permitted_tools": ["z_tool", "a_tool"],
             "enforced_budget": None,
         })
         assert norm["permitted_tools"] == ["a_tool", "z_tool"]
+
+    def test_tool_families_sorted_in_digest(self):
+        """Normalization sorts tool-family fields for stable digest."""
+        norm = _normalize_decision({
+            "policy": {"policy_id": "p1", "policy_version": "v1"},
+            "assembly_digest": None,
+            "context_digest": None,
+            "transforms": [],
+            "result": "ALLOW",
+            "reasons": [],
+            "declared_tool_families": ["web_read", "exec_like"],
+            "allowed_tool_families": ["web_read", "data_access"],
+            "permitted_tool_families": ["web_read", "data_access"],
+            "permitted_tools": None,
+            "enforced_budget": None,
+        })
+        assert norm["declared_tool_families"] == ["exec_like", "web_read"]
+        assert norm["allowed_tool_families"] == ["data_access", "web_read"]
 
     def test_digest_changes_with_tools(self):
         """Different permitted_tools produce different digests."""
@@ -62,10 +99,29 @@ class TestNormativeDecisionV3:
             "transforms": [],
             "result": "ALLOW",
             "reasons": [],
+            "declared_tool_families": ["web_read"],
+            "allowed_tool_families": ["web_read"],
+            "permitted_tool_families": ["web_read"],
             "enforced_budget": None,
         }
         norm_a = _normalize_decision({**base, "permitted_tools": ["tool_a"]})
         norm_b = _normalize_decision({**base, "permitted_tools": ["tool_b"]})
+        assert norm_a != norm_b
+
+    def test_digest_changes_with_tool_families(self):
+        """Different permitted_tool_families produce different digests."""
+        base = {
+            "policy": {"policy_id": "p1", "policy_version": "v1"},
+            "assembly_digest": None,
+            "context_digest": None,
+            "transforms": [],
+            "result": "ALLOW",
+            "reasons": [],
+            "permitted_tools": None,
+            "enforced_budget": None,
+        }
+        norm_a = _normalize_decision({**base, "permitted_tool_families": ["web_read"]})
+        norm_b = _normalize_decision({**base, "permitted_tool_families": ["data_access"]})
         assert norm_a != norm_b
 
     def test_digest_changes_with_budget(self):
@@ -77,6 +133,9 @@ class TestNormativeDecisionV3:
             "transforms": [],
             "result": "ALLOW",
             "reasons": [],
+            "declared_tool_families": ["web_read"],
+            "allowed_tool_families": ["web_read"],
+            "permitted_tool_families": ["web_read"],
             "permitted_tools": None,
         }
         norm_a = _normalize_decision({**base, "enforced_budget": {"max_tokens": 100}})

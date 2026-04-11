@@ -62,6 +62,13 @@ def test_public_capabilities_hide_non_public_surfaces(monkeypatch: pytest.Monkey
         assert ids == {"healthz", "capabilities", "ingress_intent"}
         assert data["intents"]["supported"] == ["chat.message"]
         assert "artifact.handle" not in data["intents"]["catalog"]
+        assert data["tool_surface"]["allowed_families_current"] == ["web_read"]
+        assert data["tool_surface"]["allowed_families_by_exposure"]["operator"] == [
+            "web_read",
+            "file_ops",
+            "data_access",
+            "other",
+        ]
 
     import asyncio
 
@@ -105,6 +112,7 @@ def test_demo_mode_exposes_ui(monkeypatch: pytest.MonkeyPatch) -> None:
         assert "ui_demo_start" in ids
         assert "artifact.handle" in caps_data["intents"]["supported"]
         assert caps_data["intents"]["catalog"]["artifact.handle"]["risk_class"] == "high_risk_context"
+        assert caps_data["tool_surface"]["allowed_families_current"] == ["*"]
 
     import asyncio
 

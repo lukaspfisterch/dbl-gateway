@@ -10,7 +10,7 @@ Secrets never appear in event payloads.
 | `DBL_GATEWAY_DB` | yes | `./data/trail.sqlite` | SQLite path for the event trail |
 | `DBL_GATEWAY_POLICY_MODULE` | yes | -- | Python module path for policy (e.g. `dbl_policy.allow_all`) |
 | `DBL_GATEWAY_POLICY_OBJECT` | no | `POLICY` | Attribute name of the policy object in the module |
-| `DBL_GATEWAY_BOUNDARY_CONFIG` | no | `config/boundary.json` | Path to the boundary config artifact controlling `exposure_mode`, surface rules, and public admission limits |
+| `DBL_GATEWAY_BOUNDARY_CONFIG` | no | `config/boundary.json` | Path to the boundary config artifact controlling `exposure_mode`, surface rules, public admission limits, and tool-family policy |
 | `GATEWAY_EXEC_MODE` | no | `embedded` | `embedded` (in-process provider calls) or `external` (sidecar) |
 | `GATEWAY_ENABLE_CONTEXT_RESOLUTION` | no | OFF | `true`/`1`/`yes` to enable declared_refs resolution and Workbench handle fetch. When OFF, refs are stored but not resolved; `artifact.handle` intents are rejected. |
 
@@ -30,6 +30,13 @@ Each boundary artifact also contains `admission.public`:
 - `max_declared_tools`
 - `max_budget.max_tokens`
 - `max_budget.max_duration_ms`
+
+Each boundary artifact also contains `tool_policy`:
+- `public`
+- `operator`
+- `demo`
+
+These lists define the allowed tool families for each exposure mode and are published through `/capabilities`.
 
 These limits are enforced deterministically from request content plus boundary config. They do not depend on queue depth, load, timing, or other runtime observations.
 

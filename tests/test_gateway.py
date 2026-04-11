@@ -242,6 +242,69 @@ def test_operator_mode_allows_refs_tools_and_budget(tmp_path: Path, monkeypatch:
     run_with_client(app, scenario)
 
 
+def test_gateway_injects_tool_policy_into_policy_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", _boundary_path("boundary.operator.json"))
+    app = create_app(start_workers=True)
+
+    class CapturePolicy:
+        def __init__(self) -> None:
+            self.last_input: dict[str, object] | None = None
+
+        def decide(self, authoritative_input):
+            self.last_input = dict(authoritative_input)
+            return governance.DecisionResult(
+                decision="ALLOW",
+                reason_codes=["capture.allow"],
+                policy_id="capture",
+                policy_version="1",
+            )
+
+    capture = CapturePolicy()
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        app.state.policy = capture
+        payload = _intent_envelope("hello")
+        payload["payload"]["declared_tools"] = ["web.search", "code.execute"]
+        resp = await client.post("/ingress/intent", json=payload)
+        assert resp.status_code == 202
+        await _wait_for_decision(client, correlation_id="c-1")
+        assert capture.last_input is not None
+        inputs = capture.last_input["payload"]["inputs"]
+        policy_meta = inputs["extensions"]["gateway_tool_policy"]
+        assert policy_meta["declared_tool_families"] == ["web_read", "exec_like"]
+        assert policy_meta["allowed_tool_families"] == ["web_read", "file_ops", "data_access", "other"]
+        assert policy_meta["permitted_tool_families"] == ["web_read"]
+
+    run_with_client(app, scenario)
+
+
+def test_decision_payload_tracks_tool_family_governance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", _boundary_path("boundary.operator.json"))
+    app = create_app(start_workers=True)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        payload = _intent_envelope("hello")
+        payload["payload"]["declared_tools"] = ["web.search", "code.execute"]
+        resp = await client.post("/ingress/intent", json=payload)
+        assert resp.status_code == 202
+        snap = await _wait_for_decision(client, correlation_id="c-1")
+        decision = [event for event in snap["events"] if event["kind"] == "DECISION"][-1]["payload"]
+        assert decision["declared_tool_families"] == ["web_read", "exec_like"]
+        assert decision["allowed_tool_families"] == ["web_read", "file_ops", "data_access", "other"]
+        assert decision["permitted_tool_families"] == ["web_read"]
+        assert decision["permitted_tools"] == ["web.search"]
+        assert decision["tools_denied"] == ["code.execute"]
+        assert decision["tools_denied_reason"] == "tool.family_not_allowed"
+
+    run_with_client(app, scenario)
+
+
 def test_decision_primacy_no_execution_without_allow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
 
@@ -813,6 +876,14 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert data["intents"]["catalog"]["artifact.handle"]["admitted"] is True
         assert data["intents"]["catalog"]["artifact.handle"]["model_context_admit_mode"] == "metadata_only"
         assert "semantic_families" in data["tool_surface"]
+        assert data["tool_surface"]["allowed_families_current"] == [
+            "web_read",
+            "file_ops",
+            "data_access",
+            "other",
+        ]
+        assert data["tool_surface"]["allowed_families_by_exposure"]["public"] == ["web_read"]
+        assert data["tool_surface"]["allowed_families_by_exposure"]["demo"] == ["*"]
         assert data["tool_surface"]["no_mix_rules"][0]["rule_id"] == "tool.no_mix.exec_like"
         providers = data["providers"]
         assert isinstance(providers, list)

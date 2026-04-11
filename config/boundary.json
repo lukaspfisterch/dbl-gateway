@@ -14,6 +14,11 @@
       }
     }
   },
+  "tool_policy": {
+    "public": ["web_read"],
+    "operator": ["web_read", "file_ops", "data_access", "other"],
+    "demo": ["*"]
+  },
   "surface_rules": {
     "healthz": "public",
     "capabilities": "public",

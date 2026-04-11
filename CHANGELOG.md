@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.17 — Boundary Tool Families
+
+**Tool-family governance now lives in the versioned boundary config and enters the decision line explicitly.**
+- Add `tool_policy` to boundary config artifacts so `public`, `operator`, and `demo` each declare their allowed tool families as part of the hashed boundary contract.
+- Compute deterministic `declared_tool_families`, `allowed_tool_families`, and `permitted_tool_families`, inject them into policy-visible `payload.inputs.extensions.gateway_tool_policy`, and record them in normative DECISION payloads.
+- Apply family allowlists before no-mix shaping, surface stable denial reason `tool.family_not_allowed`, and keep `tool.no_mix.exec_like` as the structural invariant on the remaining tool set.
+- Publish current and per-exposure tool-family allowlists through `GET /capabilities`, and add focused regression coverage for config parsing, policy input enrichment, decision payloads, and digest stability.
+
 ## v0.9.16 — Tool Semantics And Concise Startup Audit
 
 **Tool gating now has a first semantic no-mix rule, and startup config audit is reduced to relevant runtime signals.**

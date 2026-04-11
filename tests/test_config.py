@@ -4,6 +4,7 @@ import pytest
 from pathlib import Path
 from dbl_gateway.config import (
     BoundaryConfig,
+    allowed_tool_families_for_mode,
     load_context_config,
     load_boundary_config,
     get_context_config,
@@ -168,6 +169,11 @@ def sample_boundary_config(tmp_path: Path) -> Path:
                 },
             },
         },
+        "tool_policy": {
+            "public": ["web_read"],
+            "operator": ["web_read", "file_ops"],
+            "demo": ["*"],
+        },
         "surface_rules": {
             "healthz": "public",
             "capabilities": "public",
@@ -189,6 +195,8 @@ def test_load_valid_boundary_config(sample_boundary_config: Path) -> None:
     assert cfg.surface_rules["surfaces"] == "operator"
     assert cfg.admission.public_allow_artifact_handle is False
     assert cfg.admission.public_max_declared_tools == 0
+    assert allowed_tool_families_for_mode(cfg) == ("web_read", "file_ops")
+    assert allowed_tool_families_for_mode(cfg, mode="public") == ("web_read",)
     assert cfg.config_digest.startswith("sha256:")
 
 
@@ -205,6 +213,11 @@ def test_boundary_config_digest_changes_on_content_change(tmp_path: Path) -> Non
                 "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000},
             },
         },
+        "tool_policy": {
+            "public": ["web_read"],
+            "operator": ["web_read", "file_ops"],
+            "demo": ["*"],
+        },
         "surface_rules": {"healthz": "public"},
     }
     config_b = {
@@ -218,6 +231,11 @@ def test_boundary_config_digest_changes_on_content_change(tmp_path: Path) -> Non
                 "max_declared_tools": 0,
                 "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000},
             },
+        },
+        "tool_policy": {
+            "public": ["web_read"],
+            "operator": ["web_read", "file_ops"],
+            "demo": ["*"],
         },
         "surface_rules": {"healthz": "public"},
     }

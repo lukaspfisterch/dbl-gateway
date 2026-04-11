@@ -14,6 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 from pydantic import BaseModel
 
 from .config import (
+    allowed_tool_families_for_mode,
     BoundaryConfig,
     context_resolution_enabled,
     exposure_mode_allows,
@@ -114,6 +115,8 @@ class CapabilitiesToolSurface(BaseModel):
     declared_tools: CapabilitiesDeclaredTools
     tool_scope: CapabilitiesToolScope
     semantic_families: dict[str, list[str]]
+    allowed_families_current: list[str]
+    allowed_families_by_exposure: dict[str, list[str]]
     no_mix_rules: list[dict[str, Any]]
 
 
@@ -406,6 +409,12 @@ def get_capabilities(boundary_config: BoundaryConfig | None = None) -> dict[str,
                 "web_read": ["web.*"],
                 "file_ops": ["file.*", "fs.*"],
                 "data_access": ["db.*", "sql.*"],
+                "other": ["uncategorized"],
+            },
+            "allowed_families_current": list(allowed_tool_families_for_mode(cfg)),
+            "allowed_families_by_exposure": {
+                mode: list(allowed_tool_families_for_mode(cfg, mode=mode))
+                for mode in ("public", "operator", "demo")
             },
             "no_mix_rules": [
                 {
