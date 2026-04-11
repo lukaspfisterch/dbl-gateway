@@ -1,11 +1,20 @@
 # dbl-gateway
 
-Deterministic governance for non-deterministic systems.
+Records what was allowed before anything runs.
 
-Inspect and replay LLM decisions through a deterministic execution boundary.
+`dbl-gateway` puts a deterministic decision layer in front of non-deterministic execution.
+Every request is recorded as:
 
-Every request produces a decision chain:
-what was requested, what was decided, what was executed.
+```text
+INTENT → DECISION → PROOF → EXECUTION
+```
+
+`DECISION` happens first.
+Execution stays non-normative.
+The full chain is replayable.
+
+For the architecture entry point, see
+[deterministic-boundary-layer](https://github.com/lukaspfisterch/deterministic-boundary-layer).
 
 [![pytest](https://github.com/lukaspfisterch/dbl-gateway/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lukaspfisterch/dbl-gateway/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/dbl-gateway.svg)](https://pypi.org/project/dbl-gateway/)
@@ -55,19 +64,13 @@ The default runtime boundary profile is `operator`:
 - `/ingress/intent`, `/capabilities`, `/snapshot`, `/tail`, `/status`, `/surfaces`, and `/intent-template` stay available
 - `/ui/*` is not exposed
 
-The full built-in observer is demo-only unless you explicitly select the demo boundary config.
-In `public`, the boundary still blocks high-risk shapes like `artifact.handle`, `declared_refs`, and over-broad tool declarations before any `INTENT` is appended.
-High-risk context intents are only advertised in discovery when the active boundary/runtime can actually admit them.
-Even outside `public`, handle-derived content is `metadata_only` by default and requires explicit `model_context` opt-in before it can enter prompt context.
-The same boundary artifact now also declares tool families plus an exposure-by-trust matrix, and a request-policy matrix for request classes and budget ceilings. Tool and budget governance are therefore versioned, discoverable, and replay-stable instead of being hidden in execution.
-Request classification now stays explicit in the decision line: `request_class`, `request_semantic_reason`, `request_constraints_applied`, and budget `source` explain whether a request was denied, allowed as-is, or clamped by the boundary.
-The boundary now also declares economic shaping per request class. `slot_class`, `cost_class`, `reservation_required`, and `economic_policy_reason` enter DECISION normatively, but actual slot availability still remains an execution concern instead of feeding back into governance.
-Identity now follows the same pattern: the gateway resolves a minimal verified identity line into `actor_id`, `tenant_id`, `roles`, `issuer`, `verified`, and `trust_class`, injects that into policy-visible inputs, and records the result in DECISION. The runtime stays generic: local dev headers work today, and later OIDC issuers such as Azure AD can plug into the same trust seam without changing tool, request, or economic policy structure.
-OIDC is now treated as an adapter seam above that boundary logic: the adapter verifies JWTs against cached JWKS plus issuer/audience allowlists, maps claims into gateway roles, and emits `identity_source` plus `claims_digest` for audit without introducing gateway-owned user state.
-The allowed identity mode, claim mapping, and tenant mapping are now part of the versioned boundary artifact as `identity_policy`, so trust and tenant derivation are no longer just env/runtime concerns.
-Operator-facing discovery now exposes only the active identity structure that matters for boundary interpretation: `claim_mapping` field names, a compact `tenant_mapping` summary, and a compact `role_mapping_summary`. `public` omits that view entirely to avoid turning capability discovery into identity-topology recon.
-In `public`, capabilities only advertise request classes that are actually allowed for the current caller instead of leaking denied heavy classes through discovery.
-Startup logging now emits a concise config summary instead of listing every possible provider env var.
+The full built-in observer is demo-only unless you explicitly select the demo boundary config. In `public`, the boundary blocks high-risk shapes like `artifact.handle`, `declared_refs`, and over-broad tool declarations before any `INTENT` is appended.
+
+Tool, request, budget, and economic shaping now live in the versioned boundary artifact instead of being hidden in execution paths. That keeps request classes, tool-family permissions, budget ceilings, and economic constraints discoverable, explicit in `DECISION`, and replay-stable.
+
+Identity follows the same pattern. The gateway derives a minimal verified identity line, injects it into policy-visible inputs, and records it in `DECISION`. Local dev headers work today, and later OIDC issuers can plug into the same trust seam without changing the boundary policy structure.
+
+See [env_contract.md](docs/env_contract.md), [wire_contract.md](docs/wire_contract.md), and [CAPABILITIES.md](docs/CAPABILITIES.md) for the boundary contract in detail.
 
 ## Install
 
