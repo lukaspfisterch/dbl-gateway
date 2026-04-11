@@ -68,11 +68,19 @@
             },
             "title": "Request Policy By Exposure",
             "type": "object"
+          },
+          "visible_request_classes_current": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Visible Request Classes Current",
+            "type": "array"
           }
         },
         "required": [
           "fields",
           "request_classes",
+          "visible_request_classes_current",
           "light_budget_classification",
           "current_request_policy",
           "request_policy_by_exposure"

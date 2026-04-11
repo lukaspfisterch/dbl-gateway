@@ -13,6 +13,8 @@ class DecisionResult:
     gate_event: object | None = None
     request_class: str | None = None
     budget_class: str | None = None
+    request_semantic_reason: str | None = None
+    request_constraints_applied: list[str] | None = None
     budget_policy_reason: str | None = None
     declared_tool_families: list[str] | None = None
     allowed_tool_families: list[str] | None = None

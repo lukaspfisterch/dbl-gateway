@@ -139,6 +139,12 @@
       "execution_light",
       "execution_heavy"
     ],
+    "visible_request_classes_current": [
+      "probe",
+      "intent",
+      "execution_light",
+      "execution_heavy"
+    ],
     "light_budget_classification": {
       "max_tokens": 2048,
       "max_duration_ms": 15000
@@ -546,5 +552,5 @@
       "description": "External execution submission surface when enabled."
     }
   ],
-  "generated_at": "2026-04-11T17:58:30.192008+00:00"
+  "generated_at": "2026-04-11T18:35:14.733226+00:00"
 }

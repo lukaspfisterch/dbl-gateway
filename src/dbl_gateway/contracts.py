@@ -50,6 +50,8 @@ class DecisionNormative(TypedDict, total=False):
     transforms: list[DecisionTransform]
     request_class: str | None
     budget_class: str | None
+    request_semantic_reason: str | None
+    request_constraints_applied: list[str] | None
     budget_policy_reason: str | None
     declared_tool_families: list[str] | None
     allowed_tool_families: list[str] | None
@@ -341,6 +343,14 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
         "budget_class": _normalize_optional_text(
             decision.get("budget_class"),
             field_name="budget_class",
+        ),
+        "request_semantic_reason": _normalize_optional_text(
+            decision.get("request_semantic_reason"),
+            field_name="request_semantic_reason",
+        ),
+        "request_constraints_applied": _normalize_string_list(
+            decision.get("request_constraints_applied"),
+            field_name="request_constraints_applied",
         ),
         "budget_policy_reason": _normalize_optional_text(
             decision.get("budget_policy_reason"),

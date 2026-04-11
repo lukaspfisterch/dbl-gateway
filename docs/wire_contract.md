@@ -201,6 +201,8 @@ Tool names must match `^[a-z][a-z0-9_.]{0,63}$`.
 |-------|-------------|
 | `request_class` | Deterministic request taxonomy derived from the authoritative request shape. |
 | `budget_class` | Budget classification derived from the declared budget vs the boundary light-budget threshold. |
+| `request_semantic_reason` | Stable classifier reason such as `request.semantic.intent_only`, `request.semantic.declared_tools_multiple`, or `request.semantic.budget_heavy`. |
+| `request_constraints_applied` | Deterministic list of structural and boundary constraints applied during request classification and budget shaping. |
 | `budget_policy_reason` | Stable request-policy reason such as `request.execution_heavy_denied` or `request.budget_clamped`. |
 | `declared_tool_families` | Deterministic family buckets derived from `declared_tools`. |
 | `allowed_tool_families` | Tool families allowed by the active boundary policy. |
@@ -266,11 +268,14 @@ Values must be integers (floats are rejected).
 "enforced_budget": {
   "max_tokens": 4096,
   "max_duration_ms": 30000,
-  "source": "intent_exact"
+  "source": "client"
 }
 ```
 
-`source` is one of: `intent_exact` (client value used as-is), `intent_clamped` (client value clamped to runtime limit), `policy_default` (no client value, runtime default used).
+`source` is one of:
+- `client` — the declared budget stayed within the active boundary cap.
+- `boundary_default` — no client budget was supplied, so the boundary rule provided the budget.
+- `boundary_cap` — the client declared a larger budget and the boundary capped it.
 
 `effective_timeout = min(runtime_wall_clock_ms, client_max_duration_ms)`.
 
@@ -300,9 +305,15 @@ DECISION events include normative fields for replay verification:
   "transforms": [...],
   "request_class": "execution_light",
   "budget_class": "light",
+  "request_semantic_reason": "request.semantic.bounded_execution",
+  "request_constraints_applied": [
+    "budget.light_or_none",
+    "boundary_default.max_tokens",
+    "boundary_default.max_duration_ms"
+  ],
   "budget_policy_reason": "request.budget_clamped",
   "permitted_tools": ["web.search", "code.execute"],
-  "enforced_budget": {"max_tokens": 4096, "max_duration_ms": 30000, "source": "intent_exact"},
+  "enforced_budget": {"max_tokens": 4096, "max_duration_ms": 30000, "source": "client"},
   "intent_index": 0,
   "boundary": {
     "context_config_digest": "sha256:...",
@@ -313,7 +324,7 @@ DECISION events include normative fields for replay verification:
 }
 ```
 
-All of `request_class`, `budget_class`, `budget_policy_reason`, `permitted_tools`, `enforced_budget`, `policy_config_digest`, and `intent_index` are normative (included in decision digest).
+All of `request_class`, `budget_class`, `request_semantic_reason`, `request_constraints_applied`, `budget_policy_reason`, `permitted_tools`, `enforced_budget`, `policy_config_digest`, and `intent_index` are normative (included in decision digest).
 
 | Field | Since | Description |
 |-------|-------|-------------|

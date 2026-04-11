@@ -98,12 +98,15 @@ returned observer status/results.
 - `budget.max_tokens`: integer 1-1000000, passed to provider call.
 - `budget.max_duration_ms`: integer 1000-300000, enforces execution wall clock.
 - `budget.request_classes` publishes the deterministic request taxonomy.
+- `budget.visible_request_classes_current` publishes only the request classes that the current `(exposure_mode, trust_class)` pair can actually use right now.
 - `budget.light_budget_classification` publishes the threshold used to separate `execution_light` from `execution_heavy`.
 - `budget.current_request_policy` publishes the active `(exposure_mode, trust_class)` request-policy map.
+- In `public`, `budget.current_request_policy` is filtered to the currently allowed classes so heavy deny-only rows are not advertised as ghost capability.
 - `budget.request_policy_by_exposure` publishes the full `exposure -> trust_class -> request_class -> rule` matrix.
-- Budget-heavy requests are no longer dropped as raw admission failures; they are classified and recorded in DECISION with `request_class`, `budget_class`, and `budget_policy_reason`.
+- Budget-heavy requests are no longer dropped as raw admission failures; they are classified and recorded in DECISION with `request_class`, `budget_class`, `request_semantic_reason`, `request_constraints_applied`, and `budget_policy_reason`.
 - `effective_timeout = min(runtime_ms, client_ms)`.
-- DECISION records `request_class`, `budget_class`, `budget_policy_reason`, and `enforced_budget` with `source` indicating runtime clamping.
+- DECISION records `request_class`, `budget_class`, `request_semantic_reason`, `request_constraints_applied`, `budget_policy_reason`, and `enforced_budget`.
+- `enforced_budget.source` is one of `client`, `boundary_default`, or `boundary_cap`.
 - EXECUTION records `usage.duration_ms`.
 
 ## Context Resolution Gate

@@ -13,6 +13,8 @@ class TestNormativeDecisionV3:
             reason_codes=[],
             request_class="execution_light",
             budget_class="light",
+            request_semantic_reason="request.semantic.bounded_execution",
+            request_constraints_applied=["budget.light_or_none"],
             budget_policy_reason="request.budget_clamped",
         )
         normative = build_normative_decision(
@@ -20,6 +22,8 @@ class TestNormativeDecisionV3:
         )
         assert normative["request_class"] == "execution_light"
         assert normative["budget_class"] == "light"
+        assert normative["request_semantic_reason"] == "request.semantic.bounded_execution"
+        assert normative["request_constraints_applied"] == ["budget.light_or_none"]
         assert normative["budget_policy_reason"] == "request.budget_clamped"
 
     def test_tool_families_in_normative(self):
@@ -57,7 +61,7 @@ class TestNormativeDecisionV3:
         decision = DecisionResult(
             decision="ALLOW",
             reason_codes=[],
-            enforced_budget={"max_tokens": 4096, "max_duration_ms": 30000, "source": "intent_exact"},
+            enforced_budget={"max_tokens": 4096, "max_duration_ms": 30000, "source": "client"},
         )
         normative = build_normative_decision(
             decision, assembly_digest=None, context_digest=None,
@@ -84,6 +88,8 @@ class TestNormativeDecisionV3:
             "reasons": [],
             "request_class": "execution_light",
             "budget_class": "light",
+            "request_semantic_reason": "request.semantic.bounded_execution",
+            "request_constraints_applied": ["budget.light_or_none"],
             "budget_policy_reason": "request.budget_clamped",
             "declared_tool_families": ["web_read", "exec_like"],
             "allowed_tool_families": ["web_read"],
@@ -105,6 +111,8 @@ class TestNormativeDecisionV3:
             "reasons": [],
             "request_class": None,
             "budget_class": None,
+            "request_semantic_reason": None,
+            "request_constraints_applied": None,
             "budget_policy_reason": None,
             "declared_tool_families": ["web_read", "exec_like"],
             "allowed_tool_families": ["web_read", "data_access"],
@@ -128,6 +136,8 @@ class TestNormativeDecisionV3:
             "reasons": [],
             "request_class": None,
             "budget_class": None,
+            "request_semantic_reason": None,
+            "request_constraints_applied": None,
             "budget_policy_reason": None,
             "declared_tool_families": ["web_read"],
             "allowed_tool_families": ["web_read"],
@@ -150,6 +160,8 @@ class TestNormativeDecisionV3:
             "reasons": [],
             "request_class": None,
             "budget_class": None,
+            "request_semantic_reason": None,
+            "request_constraints_applied": None,
             "budget_policy_reason": None,
             "permitted_tools": None,
             "denied_tool_families": None,
@@ -170,6 +182,8 @@ class TestNormativeDecisionV3:
             "reasons": [],
             "request_class": None,
             "budget_class": None,
+            "request_semantic_reason": None,
+            "request_constraints_applied": None,
             "budget_policy_reason": None,
             "declared_tool_families": ["web_read"],
             "allowed_tool_families": ["web_read"],

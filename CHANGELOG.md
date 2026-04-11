@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.20 — Explicit Request Semantics
+
+**Request classification now explains itself normatively instead of leaving heavy-vs-light as an implicit classifier result.**
+- Extend request-policy evaluation with `request_semantic_reason` and `request_constraints_applied`, derived only from authoritative request shape plus the active boundary config.
+- Record explicit budget origin in `enforced_budget.source` as `client`, `boundary_default`, or `boundary_cap`, and keep runtime timeout clamping as a separate applied constraint instead of overloading the budget source.
+- Filter `public` capabilities so `budget.current_request_policy` only advertises request classes currently allowed for the caller, avoiding ghost-heavy discovery leaks.
+- Add focused regression coverage for semantic request classification, normative request fields, budget-source handling, and the updated capability payload.
+
 ## v0.9.19 — Request Classes And Budget Policy
 
 **Request classification and budget governance now live in the versioned boundary contract and enter DECISION explicitly.**

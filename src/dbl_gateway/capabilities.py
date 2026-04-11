@@ -131,6 +131,7 @@ class CapabilitiesBudgetField(BaseModel):
 class CapabilitiesBudget(BaseModel):
     fields: dict[str, CapabilitiesBudgetField]
     request_classes: list[str]
+    visible_request_classes_current: list[str]
     light_budget_classification: dict[str, int]
     current_request_policy: dict[str, dict[str, Any]]
     request_policy_by_exposure: dict[str, dict[str, dict[str, dict[str, Any]]]]
@@ -417,6 +418,15 @@ def get_capabilities(
             }
         return policy_map
 
+    current_request_policy = serialize_request_policy(cfg.exposure_mode, trust_class)
+    if cfg.exposure_mode == "public":
+        current_request_policy = {
+            request_class: rule
+            for request_class, rule in current_request_policy.items()
+            if rule.get("decision") == "allow"
+        }
+    visible_request_classes_current = list(current_request_policy.keys())
+
     return {
         "schema_version": CAPABILITIES_SCHEMA_VERSION,
         "gateway_version": _gateway_version(),
@@ -471,11 +481,12 @@ def get_capabilities(
                 for name, limits in BUDGET_LIMITS.items()
             },
             "request_classes": list(cfg.request_policy.request_classes),
+            "visible_request_classes_current": visible_request_classes_current,
             "light_budget_classification": {
                 "max_tokens": cfg.request_policy.light_budget.max_tokens,
                 "max_duration_ms": cfg.request_policy.light_budget.max_duration_ms,
             },
-            "current_request_policy": serialize_request_policy(cfg.exposure_mode, trust_class),
+            "current_request_policy": current_request_policy,
             "request_policy_by_exposure": {
                 mode: {
                     trust: serialize_request_policy(mode, trust)

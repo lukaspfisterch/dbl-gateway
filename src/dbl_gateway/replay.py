@@ -94,6 +94,8 @@ def replay_decision_for_turn(
     stored_enforced_budget = decision_payload.get("enforced_budget")
     stored_request_class = decision_payload.get("request_class")
     stored_budget_class = decision_payload.get("budget_class")
+    stored_request_semantic_reason = decision_payload.get("request_semantic_reason")
+    stored_request_constraints_applied = decision_payload.get("request_constraints_applied")
     stored_budget_policy_reason = decision_payload.get("budget_policy_reason")
     stored_declared_tool_families = decision_payload.get("declared_tool_families")
     stored_allowed_tool_families = decision_payload.get("allowed_tool_families")
@@ -109,6 +111,12 @@ def replay_decision_for_turn(
         gate_event=policy_result.gate_event,
         request_class=stored_request_class if isinstance(stored_request_class, str) else None,
         budget_class=stored_budget_class if isinstance(stored_budget_class, str) else None,
+        request_semantic_reason=(
+            stored_request_semantic_reason if isinstance(stored_request_semantic_reason, str) else None
+        ),
+        request_constraints_applied=(
+            stored_request_constraints_applied if isinstance(stored_request_constraints_applied, list) else None
+        ),
         budget_policy_reason=(
             stored_budget_policy_reason if isinstance(stored_budget_policy_reason, str) else None
         ),

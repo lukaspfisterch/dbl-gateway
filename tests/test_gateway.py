@@ -206,6 +206,8 @@ def test_public_mode_denies_heavy_budget_in_decision_trace(
         assert decision["reason_codes"] == ["request.execution_heavy_denied"]
         assert decision["request_class"] == "execution_heavy"
         assert decision["budget_class"] == "heavy"
+        assert decision["request_semantic_reason"] == "request.semantic.budget_heavy"
+        assert decision["request_constraints_applied"] == ["budget.heavy"]
         assert decision["budget_policy_reason"] == "request.execution_heavy_denied"
 
     run_with_client(app, scenario)
@@ -296,6 +298,13 @@ def test_gateway_injects_tool_policy_into_policy_inputs(
         assert policy_meta["denied_tool_families"] == ["exec_like"]
         assert request_meta["request_class"] == "execution_heavy"
         assert request_meta["budget_class"] == "none"
+        assert request_meta["request_semantic_reason"] == "request.semantic.declared_tools_multiple"
+        assert request_meta["request_constraints_applied"] == [
+            "declared_tools.multiple",
+            "boundary_default.max_tokens",
+            "boundary_default.max_duration_ms",
+        ]
+        assert request_meta["budget_source"] == "boundary_default"
         assert request_meta["policy_budget"] == {"max_tokens": 8192, "max_duration_ms": 60000}
         assert request_meta["permitted_budget"] == {"max_tokens": 8192, "max_duration_ms": 60000}
         assert request_meta["denied_reason"] is None
@@ -323,6 +332,12 @@ def test_decision_payload_tracks_tool_family_governance(
         assert decision["denied_tool_families"] == ["exec_like"]
         assert decision["request_class"] == "execution_heavy"
         assert decision["budget_class"] == "none"
+        assert decision["request_semantic_reason"] == "request.semantic.declared_tools_multiple"
+        assert decision["request_constraints_applied"] == [
+            "declared_tools.multiple",
+            "boundary_default.max_tokens",
+            "boundary_default.max_duration_ms",
+        ]
         assert decision["budget_policy_reason"] is None
         assert decision["permitted_tools"] == ["web.search"]
         assert decision["tools_denied"] == ["code.execute"]
@@ -330,7 +345,7 @@ def test_decision_payload_tracks_tool_family_governance(
         assert decision["enforced_budget"] == {
             "max_tokens": 8192,
             "max_duration_ms": 60000,
-            "source": "intent_exact",
+            "source": "boundary_default",
         }
 
     run_with_client(app, scenario)
@@ -920,6 +935,12 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert data["tool_surface"]["allowed_families_by_exposure"]["demo"]["*"] == ["*"]
         assert data["tool_surface"]["no_mix_rules"][0]["rule_id"] == "tool.no_mix.exec_like"
         assert data["budget"]["request_classes"] == [
+            "probe",
+            "intent",
+            "execution_light",
+            "execution_heavy",
+        ]
+        assert data["budget"]["visible_request_classes_current"] == [
             "probe",
             "intent",
             "execution_light",

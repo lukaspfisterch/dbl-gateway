@@ -60,6 +60,8 @@ In `public`, the boundary still blocks high-risk shapes like `artifact.handle`, 
 High-risk context intents are only advertised in discovery when the active boundary/runtime can actually admit them.
 Even outside `public`, handle-derived content is `metadata_only` by default and requires explicit `model_context` opt-in before it can enter prompt context.
 The same boundary artifact now also declares tool families plus an exposure-by-trust matrix, and a request-policy matrix for request classes and budget ceilings. Tool and budget governance are therefore versioned, discoverable, and replay-stable instead of being hidden in execution.
+Request classification now stays explicit in the decision line: `request_class`, `request_semantic_reason`, `request_constraints_applied`, and budget `source` explain whether a request was denied, allowed as-is, or clamped by the boundary.
+In `public`, capabilities only advertise request classes that are actually allowed for the current caller instead of leaking denied heavy classes through discovery.
 Startup logging now emits a concise config summary instead of listing every possible provider env var.
 
 ## Install

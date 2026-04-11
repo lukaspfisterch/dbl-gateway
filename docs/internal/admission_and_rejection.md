@@ -23,3 +23,10 @@ Budget-heavy or otherwise over-classified requests are now handled by the bounda
 - `request.intent_requires_identity`
 - `request.execution_requires_identity`
 - `request.budget_clamped`
+
+The request-policy seam also records:
+- `request_semantic_reason`
+- `request_constraints_applied`
+- `enforced_budget.source` as `client`, `boundary_default`, or `boundary_cap`
+
+This keeps deny vs clamp distinct in the normative record instead of inferring them later from execution behavior.

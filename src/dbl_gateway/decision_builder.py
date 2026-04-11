@@ -33,6 +33,8 @@ def build_normative_decision(
         "transforms": norm_transforms,
         "request_class": decision.request_class,
         "budget_class": decision.budget_class,
+        "request_semantic_reason": decision.request_semantic_reason,
+        "request_constraints_applied": decision.request_constraints_applied,
         "budget_policy_reason": decision.budget_policy_reason,
         "declared_tool_families": decision.declared_tool_families,
         "allowed_tool_families": decision.allowed_tool_families,

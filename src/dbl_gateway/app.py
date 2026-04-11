@@ -118,6 +118,9 @@ class RequestPolicyEvaluation:
     trust_class: str
     request_class: str
     budget_class: str
+    request_semantic_reason: str
+    request_constraints_applied: list[str]
+    budget_source: str | None
     declared_budget: dict[str, int] | None
     policy_budget: dict[str, int] | None
     permitted_budget: dict[str, int] | None
@@ -999,6 +1002,11 @@ async def _process_intent(
                 policy_id=decision.policy_id,
                 policy_version=decision.policy_version,
                 gate_event=decision.gate_event,
+                request_class=decision.request_class,
+                budget_class=decision.budget_class,
+                request_semantic_reason=decision.request_semantic_reason,
+                request_constraints_applied=decision.request_constraints_applied,
+                budget_policy_reason=decision.budget_policy_reason,
                 declared_tool_families=decision.declared_tool_families,
                 allowed_tool_families=decision.allowed_tool_families,
                 permitted_tool_families=decision.permitted_tool_families,
@@ -1019,6 +1027,8 @@ async def _process_intent(
             gate_event=decision.gate_event,
             request_class=decision.request_class,
             budget_class=decision.budget_class,
+            request_semantic_reason=decision.request_semantic_reason,
+            request_constraints_applied=decision.request_constraints_applied,
             budget_policy_reason=decision.budget_policy_reason,
             declared_tool_families=list(tool_policy_evaluation.declared_families),
             allowed_tool_families=list(tool_policy_evaluation.allowed_families),
@@ -1062,6 +1072,8 @@ async def _process_intent(
                 gate_event=decision.gate_event,
                 request_class=request_policy_evaluation.request_class,
                 budget_class=request_policy_evaluation.budget_class,
+                request_semantic_reason=request_policy_evaluation.request_semantic_reason,
+                request_constraints_applied=list(request_policy_evaluation.request_constraints_applied),
                 budget_policy_reason=request_policy_evaluation.denied_reason,
                 declared_tool_families=decision.declared_tool_families,
                 allowed_tool_families=decision.allowed_tool_families,
@@ -1076,10 +1088,15 @@ async def _process_intent(
             )
         elif decision.decision == "ALLOW":
             runtime_cfg = get_job_runtime_config()
-            enforced_budget = _compute_enforced_budget(
+            enforced_budget, runtime_constraints = _compute_enforced_budget(
                 request_policy_evaluation.permitted_budget,
                 runtime_cfg.llm_wall_clock_s,
+                budget_source=request_policy_evaluation.budget_source,
             )
+            request_constraints_applied = [
+                *request_policy_evaluation.request_constraints_applied,
+                *runtime_constraints,
+            ]
             decision = DecisionResult(
                 decision=decision.decision,
                 reason_codes=decision.reason_codes,
@@ -1088,6 +1105,8 @@ async def _process_intent(
                 gate_event=decision.gate_event,
                 request_class=request_policy_evaluation.request_class,
                 budget_class=request_policy_evaluation.budget_class,
+                request_semantic_reason=request_policy_evaluation.request_semantic_reason,
+                request_constraints_applied=request_constraints_applied,
                 budget_policy_reason=request_policy_evaluation.denied_reason,
                 declared_tool_families=decision.declared_tool_families,
                 allowed_tool_families=decision.allowed_tool_families,
@@ -1109,6 +1128,8 @@ async def _process_intent(
                 gate_event=decision.gate_event,
                 request_class=request_policy_evaluation.request_class,
                 budget_class=request_policy_evaluation.budget_class,
+                request_semantic_reason=request_policy_evaluation.request_semantic_reason,
+                request_constraints_applied=list(request_policy_evaluation.request_constraints_applied),
                 budget_policy_reason=request_policy_evaluation.denied_reason,
                 declared_tool_families=decision.declared_tool_families,
                 allowed_tool_families=decision.allowed_tool_families,
@@ -2104,23 +2125,45 @@ def _classify_request(
     authoritative: Mapping[str, Any],
     *,
     boundary_config=None,
-) -> str:
+) -> tuple[str, str, list[str]]:
     payload = authoritative.get("payload")
     if not isinstance(payload, Mapping):
-        return "intent"
+        return "intent", "request.semantic.intent_only", []
+    cfg = boundary_config or get_boundary_config()
     intent_type = str(authoritative.get("intent_type") or payload.get("intent_type") or "")
     if intent_type == "artifact.handle":
-        return "probe"
+        return "probe", "request.semantic.artifact_handle", ["intent_type.artifact_handle"]
     declared_refs = payload.get("declared_refs")
     declared_tools = payload.get("declared_tools")
     budget = _request_budget(payload)
     has_refs = isinstance(declared_refs, list) and len(declared_refs) > 0
-    tool_count = len(declared_tools) if isinstance(declared_tools, list) else 0
+    tools = declared_tools if isinstance(declared_tools, list) else []
+    tool_count = len(tools)
+    tool_families = [family for family in (_tool_family(tool, cfg) for tool in tools) if family is not None]
     if not has_refs and tool_count == 0 and budget is None:
-        return "intent"
-    if has_refs or tool_count > 1 or _classify_budget(budget, boundary_config=boundary_config) == "heavy":
-        return "execution_heavy"
-    return "execution_light"
+        return "intent", "request.semantic.intent_only", []
+    if (
+        not has_refs
+        and budget is None
+        and tool_count > 0
+        and tool_count <= 1
+        and set(tool_families) <= {"web_read"}
+    ):
+        return "probe", "request.semantic.read_only_tool_probe", ["tool_family.web_read"]
+
+    constraints: list[str] = []
+    if has_refs:
+        constraints.append("declared_refs.present")
+    if tool_count > 1:
+        constraints.append("declared_tools.multiple")
+    elif any(family in {"exec_like", "llm_assist"} for family in tool_families):
+        constraints.append("declared_tools.high_risk_family")
+    budget_class = _classify_budget(budget, boundary_config=cfg)
+    if budget_class == "heavy":
+        constraints.append("budget.heavy")
+    if constraints:
+        return "execution_heavy", f"request.semantic.{constraints[0].replace('.', '_')}", constraints
+    return "execution_light", "request.semantic.bounded_execution", ["budget.light_or_none"]
 
 
 def _policy_budget_dict(max_tokens: int, max_duration_ms: int) -> dict[str, int]:
@@ -2134,23 +2177,33 @@ def _apply_request_policy_budget(
     declared_budget: dict[str, int] | None,
     *,
     policy_budget: dict[str, int] | None,
-) -> tuple[dict[str, int] | None, bool]:
+) -> tuple[dict[str, int] | None, bool, str | None, list[str]]:
     if policy_budget is None and declared_budget is None:
-        return None, False
+        return None, False, None, []
     if policy_budget is None:
-        return dict(declared_budget or {}), False
+        return dict(declared_budget or {}), False, "client", []
     permitted_budget = dict(policy_budget)
     was_clamped = False
+    constraints: list[str] = []
+    budget_source = "boundary_default" if declared_budget is None else "client"
     if declared_budget:
         declared_tokens = declared_budget.get("max_tokens")
         if isinstance(declared_tokens, int) and declared_tokens > 0:
             permitted_budget["max_tokens"] = min(policy_budget["max_tokens"], declared_tokens)
-            was_clamped = was_clamped or permitted_budget["max_tokens"] < declared_tokens
+            if permitted_budget["max_tokens"] < declared_tokens:
+                was_clamped = True
+                budget_source = "boundary_cap"
+                constraints.append("boundary_cap.max_tokens")
         declared_duration = declared_budget.get("max_duration_ms")
         if isinstance(declared_duration, int) and declared_duration > 0:
             permitted_budget["max_duration_ms"] = min(policy_budget["max_duration_ms"], declared_duration)
-            was_clamped = was_clamped or permitted_budget["max_duration_ms"] < declared_duration
-    return permitted_budget, was_clamped
+            if permitted_budget["max_duration_ms"] < declared_duration:
+                was_clamped = True
+                budget_source = "boundary_cap"
+                constraints.append("boundary_cap.max_duration_ms")
+    else:
+        constraints.extend(["boundary_default.max_tokens", "boundary_default.max_duration_ms"])
+    return permitted_budget, was_clamped, budget_source, constraints
 
 
 def _compute_request_policy_evaluation(
@@ -2163,7 +2216,10 @@ def _compute_request_policy_evaluation(
     payload = authoritative.get("payload")
     payload_map = payload if isinstance(payload, Mapping) else {}
     declared_budget = _request_budget(payload_map)
-    request_class = _classify_request(authoritative, boundary_config=cfg)
+    request_class, request_semantic_reason, semantic_constraints = _classify_request(
+        authoritative,
+        boundary_config=cfg,
+    )
     budget_class = _classify_budget(declared_budget, boundary_config=cfg)
     rule = request_policy_rule_for_mode(
         cfg,
@@ -2180,20 +2236,27 @@ def _compute_request_policy_evaluation(
             trust_class=trust_class,
             request_class=request_class,
             budget_class=budget_class,
+            request_semantic_reason=request_semantic_reason,
+            request_constraints_applied=list(semantic_constraints),
+            budget_source="boundary_cap" if policy_budget is not None else None,
             declared_budget=declared_budget,
             policy_budget=policy_budget,
             permitted_budget=None,
             denied_reason=rule.reason_code or "request.not_allowed",
             was_clamped=False,
         )
-    permitted_budget, was_clamped = _apply_request_policy_budget(
+    permitted_budget, was_clamped, budget_source, budget_constraints = _apply_request_policy_budget(
         declared_budget,
         policy_budget=policy_budget,
     )
+    applied_constraints = [*semantic_constraints, *budget_constraints]
     return RequestPolicyEvaluation(
         trust_class=trust_class,
         request_class=request_class,
         budget_class=budget_class,
+        request_semantic_reason=request_semantic_reason,
+        request_constraints_applied=applied_constraints,
+        budget_source=budget_source,
         declared_budget=declared_budget,
         policy_budget=policy_budget,
         permitted_budget=permitted_budget,
@@ -2217,6 +2280,9 @@ def _authoritative_with_gateway_request_policy(
         "trust_class": evaluation.trust_class,
         "request_class": evaluation.request_class,
         "budget_class": evaluation.budget_class,
+        "request_semantic_reason": evaluation.request_semantic_reason,
+        "request_constraints_applied": list(evaluation.request_constraints_applied),
+        "budget_source": evaluation.budget_source,
         "declared_budget": dict(evaluation.declared_budget) if evaluation.declared_budget else None,
         "policy_budget": dict(evaluation.policy_budget) if evaluation.policy_budget else None,
         "permitted_budget": dict(evaluation.permitted_budget) if evaluation.permitted_budget else None,
@@ -2234,15 +2300,18 @@ def _authoritative_with_gateway_request_policy(
 def _compute_enforced_budget(
     budget: dict[str, int] | None,
     llm_wall_clock_s: int,
-) -> dict[str, Any] | None:
+    *,
+    budget_source: str | None = None,
+) -> tuple[dict[str, Any] | None, list[str]]:
     """Compute enforced budget for DECISION payload.
 
     effective_timeout = min(llm_wall_clock_s * 1000, budget.max_duration_ms).
     max_tokens passes through to provider call only.
     """
     if not budget:
-        return None
+        return None, []
     enforced: dict[str, Any] = {}
+    applied_constraints: list[str] = []
     max_tokens = budget.get("max_tokens")
     if isinstance(max_tokens, int) and max_tokens > 0:
         enforced["max_tokens"] = max_tokens
@@ -2250,11 +2319,14 @@ def _compute_enforced_budget(
     client_ms = budget.get("max_duration_ms")
     if isinstance(client_ms, int) and client_ms > 0:
         enforced["max_duration_ms"] = min(runtime_ms, client_ms)
-        enforced["source"] = "intent_clamped" if client_ms > runtime_ms else "intent_exact"
+        if client_ms > runtime_ms:
+            applied_constraints.append("runtime_cap.max_duration_ms")
     else:
         enforced["max_duration_ms"] = runtime_ms
-        enforced["source"] = "policy_default"
-    return enforced if enforced else None
+        applied_constraints.append("runtime_default.max_duration_ms")
+    if budget_source:
+        enforced["source"] = budget_source
+    return (enforced if enforced else None), applied_constraints
 
 
 def _new_demo_state() -> dict[str, Any]:
