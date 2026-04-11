@@ -25,7 +25,7 @@ Run it in 1 minute with Docker, or install the package and connect your own prov
 No API keys required:
 
 ```bash
-docker compose --profile demo up
+docker compose --profile demo up demo
 ```
 
 Open [http://localhost:8010/ui](http://localhost:8010/ui) and click **Start Demo**.
