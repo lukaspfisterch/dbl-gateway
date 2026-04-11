@@ -61,6 +61,8 @@ class DecisionPayload(TypedDict, total=False):
     trust_class: str
     identity_issuer: str
     identity_verified: bool
+    identity_source: str
+    claims_digest: str
     request_class: str
     budget_class: str
     request_semantic_reason: str

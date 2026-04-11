@@ -297,6 +297,8 @@ def test_gateway_injects_tool_policy_into_policy_inputs(
         assert gateway_auth["client_id"] == "dev-client"
         assert gateway_auth["issuer"] == "dev"
         assert gateway_auth["verified"] is True
+        assert gateway_auth["identity_source"] == "dev"
+        assert gateway_auth["claims_digest"].startswith("sha256:")
         assert gateway_auth["roles"] == [
             "gateway.intent.write",
             "gateway.decision.write",
@@ -355,6 +357,8 @@ def test_decision_payload_tracks_tool_family_governance(
         assert decision["trust_class"] == "internal"
         assert decision["identity_issuer"] == "dev"
         assert decision["identity_verified"] is True
+        assert decision["identity_source"] == "dev"
+        assert decision["claims_digest"].startswith("sha256:")
         assert decision["request_semantic_reason"] == "request.semantic.declared_tools_multiple"
         assert decision["request_constraints_applied"] == [
             "declared_tools.multiple",
@@ -970,6 +974,8 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
             "internal",
         ]
         assert data["auth"]["identity_sources"] == ["dev_headers"]
+        assert data["auth"]["issuers_allowed"] == []
+        assert data["auth"]["audiences_allowed"] == []
         assert data["budget"]["request_classes"] == [
             "probe",
             "intent",

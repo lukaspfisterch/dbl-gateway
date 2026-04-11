@@ -208,6 +208,8 @@ Tool names must match `^[a-z][a-z0-9_.]{0,63}$`.
 | `trust_class` | Deterministic trust class derived from the verified identity input. |
 | `identity_issuer` | Identity source / issuer recorded for replay and audit. |
 | `identity_verified` | Whether the identity input was verified before trust derivation. |
+| `identity_source` | Identity adapter source such as `dev`, `oidc`, or `synthetic`. |
+| `claims_digest` | Stable SHA-256 over the mapped identity claims for audit/replay without copying raw claims into DECISION. |
 | `slot_class` | Deterministic execution slot requirement: `none`, `shared`, or `reserved`. |
 | `cost_class` | Deterministic economic class: `low`, `bounded`, or `capped`. |
 | `reservation_required` | Whether the request requires a reserved execution class before runtime dispatch. |
@@ -250,11 +252,13 @@ The gateway also injects `payload.inputs.extensions.gateway_auth`:
 - `roles`
 - `issuer`
 - `verified`
+- `identity_source`
+- `claims_digest`
 - `trust_class`
 
 This identity line is derived deterministically from the active auth lane:
 - `dev` mode: local headers such as `x-dev-actor`, `x-dev-roles`, `x-dev-tenant`, `x-dev-client`
-- `oidc` mode: generic bearer JWT claims after issuer/signature/expiry validation
+- `oidc` mode: generic bearer JWT claims after signature/time validation plus issuer/audience allowlists
 
 ### EXECUTION Fields
 

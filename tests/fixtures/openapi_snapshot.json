@@ -3,6 +3,13 @@
     "schemas": {
       "CapabilitiesAuth": {
         "properties": {
+          "audiences_allowed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Audiences Allowed",
+            "type": "array"
+          },
           "current_trust_class": {
             "title": "Current Trust Class",
             "type": "string"
@@ -12,6 +19,13 @@
               "type": "string"
             },
             "title": "Identity Sources",
+            "type": "array"
+          },
+          "issuers_allowed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Issuers Allowed",
             "type": "array"
           },
           "mode": {
@@ -30,7 +44,9 @@
           "mode",
           "current_trust_class",
           "trust_classes",
-          "identity_sources"
+          "identity_sources",
+          "issuers_allowed",
+          "audiences_allowed"
         ],
         "title": "CapabilitiesAuth",
         "type": "object"

@@ -65,6 +65,7 @@ from .auth import (
     ForbiddenError,
     authenticate_request,
     identity_fields_for_actor,
+    warm_identity_adapter,
     require_roles,
     require_tenant,
     load_auth_config,
@@ -146,6 +147,8 @@ class IdentityEvaluation:
     trust_class: str
     identity_issuer: str | None
     identity_verified: bool
+    identity_source: str | None
+    claims_digest: str | None
 
 
 def _assert_governance_input(authoritative: Mapping[str, Any]) -> None:
@@ -372,6 +375,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
     async def lifespan(app: FastAPI):
         _configure_logging()
         _audit_env()
+        auth_cfg = load_auth_config()
         policy = _load_policy_with_fallback()
         if policy is None:
             policy = ObserverPolicy()  # type: ignore
@@ -384,7 +388,13 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         app.state.worker_tasks: list[asyncio.Task] = []
         app.state.demo_agent = _new_demo_state()
         app.state.boundary_config = boundary_cfg
+        app.state.auth_config = auth_cfg
         app.state.start_time = time.monotonic()
+        if auth_cfg.mode == "oidc":
+            try:
+                await warm_identity_adapter(auth_cfg)
+            except AuthError as exc:
+                _LOGGER.warning("Auth warmup skipped: %s", exc)
         if start_workers and work_queue is not None:
             worker = asyncio.create_task(_work_queue_loop(app, work_queue))
             app.state.worker_tasks.append(worker)
@@ -856,6 +866,8 @@ async def _process_intent(
                             trust_class=identity_evaluation.trust_class,
                             identity_issuer=identity_evaluation.identity_issuer,
                             identity_verified=identity_evaluation.identity_verified,
+                            identity_source=identity_evaluation.identity_source,
+                            claims_digest=identity_evaluation.claims_digest,
                         ),
                         trace_id,
                         assembly_digest=None,
@@ -913,6 +925,8 @@ async def _process_intent(
                             trust_class=identity_evaluation.trust_class,
                             identity_issuer=identity_evaluation.identity_issuer,
                             identity_verified=identity_evaluation.identity_verified,
+                            identity_source=identity_evaluation.identity_source,
+                            claims_digest=identity_evaluation.claims_digest,
                         ),
                         trace_id,
                         assembly_digest=None,
@@ -1018,6 +1032,8 @@ async def _process_intent(
                         trust_class=identity_evaluation.trust_class,
                         identity_issuer=identity_evaluation.identity_issuer,
                         identity_verified=identity_evaluation.identity_verified,
+                        identity_source=identity_evaluation.identity_source,
+                        claims_digest=identity_evaluation.claims_digest,
                     ),
                     trace_id,
                     assembly_digest=assembly_digest,
@@ -1058,6 +1074,8 @@ async def _process_intent(
                 trust_class=decision.trust_class,
                 identity_issuer=decision.identity_issuer,
                 identity_verified=decision.identity_verified,
+                identity_source=decision.identity_source,
+                claims_digest=decision.claims_digest,
                 request_class=decision.request_class,
                 budget_class=decision.budget_class,
                 request_semantic_reason=decision.request_semantic_reason,
@@ -1089,6 +1107,8 @@ async def _process_intent(
             trust_class=identity_evaluation.trust_class,
             identity_issuer=identity_evaluation.identity_issuer,
             identity_verified=identity_evaluation.identity_verified,
+            identity_source=identity_evaluation.identity_source,
+            claims_digest=identity_evaluation.claims_digest,
             request_class=decision.request_class,
             budget_class=decision.budget_class,
             request_semantic_reason=decision.request_semantic_reason,
@@ -1142,6 +1162,8 @@ async def _process_intent(
                 trust_class=identity_evaluation.trust_class,
                 identity_issuer=identity_evaluation.identity_issuer,
                 identity_verified=identity_evaluation.identity_verified,
+                identity_source=identity_evaluation.identity_source,
+                claims_digest=identity_evaluation.claims_digest,
                 request_class=request_policy_evaluation.request_class,
                 budget_class=request_policy_evaluation.budget_class,
                 request_semantic_reason=request_policy_evaluation.request_semantic_reason,
@@ -1183,6 +1205,8 @@ async def _process_intent(
                 trust_class=identity_evaluation.trust_class,
                 identity_issuer=identity_evaluation.identity_issuer,
                 identity_verified=identity_evaluation.identity_verified,
+                identity_source=identity_evaluation.identity_source,
+                claims_digest=identity_evaluation.claims_digest,
                 request_class=request_policy_evaluation.request_class,
                 budget_class=request_policy_evaluation.budget_class,
                 request_semantic_reason=request_policy_evaluation.request_semantic_reason,
@@ -1214,6 +1238,8 @@ async def _process_intent(
                 trust_class=identity_evaluation.trust_class,
                 identity_issuer=identity_evaluation.identity_issuer,
                 identity_verified=identity_evaluation.identity_verified,
+                identity_source=identity_evaluation.identity_source,
+                claims_digest=identity_evaluation.claims_digest,
                 request_class=request_policy_evaluation.request_class,
                 budget_class=request_policy_evaluation.budget_class,
                 request_semantic_reason=request_policy_evaluation.request_semantic_reason,
@@ -1821,7 +1847,12 @@ def _load_policy_with_fallback() -> object | None:
         raise RuntimeError("policy load failed") from exc
 
 async def _require_actor(request: Request) -> Actor:
-    cfg = load_auth_config()
+    app = None
+    try:
+        app = request.app
+    except KeyError:
+        app = None
+    cfg = getattr(getattr(app, "state", None), "auth_config", None) or load_auth_config()
     try:
         actor = await authenticate_request(request.headers, cfg)
         require_tenant(actor, cfg)
@@ -2168,6 +2199,8 @@ def _identity_evaluation(authoritative: Mapping[str, Any]) -> IdentityEvaluation
             trust_class="anonymous",
             identity_issuer=None,
             identity_verified=False,
+            identity_source=None,
+            claims_digest=None,
         )
     inputs = payload.get("inputs")
     if not isinstance(inputs, Mapping):
@@ -2176,6 +2209,8 @@ def _identity_evaluation(authoritative: Mapping[str, Any]) -> IdentityEvaluation
             trust_class="anonymous",
             identity_issuer=None,
             identity_verified=False,
+            identity_source=None,
+            claims_digest=None,
         )
     extensions = inputs.get("extensions")
     if not isinstance(extensions, Mapping):
@@ -2184,6 +2219,8 @@ def _identity_evaluation(authoritative: Mapping[str, Any]) -> IdentityEvaluation
             trust_class="anonymous",
             identity_issuer=None,
             identity_verified=False,
+            identity_source=None,
+            claims_digest=None,
         )
     gateway_auth = extensions.get("gateway_auth")
     if not isinstance(gateway_auth, Mapping):
@@ -2192,6 +2229,8 @@ def _identity_evaluation(authoritative: Mapping[str, Any]) -> IdentityEvaluation
             trust_class="anonymous",
             identity_issuer=None,
             identity_verified=False,
+            identity_source=None,
+            claims_digest=None,
         )
     trust_class = gateway_auth.get("trust_class")
     return IdentityEvaluation(
@@ -2211,6 +2250,18 @@ def _identity_evaluation(authoritative: Mapping[str, Any]) -> IdentityEvaluation
             else None
         ),
         identity_verified=bool(gateway_auth.get("verified") is True),
+        identity_source=(
+            gateway_auth.get("identity_source").strip()
+            if isinstance(gateway_auth.get("identity_source"), str)
+            and gateway_auth.get("identity_source").strip()
+            else None
+        ),
+        claims_digest=(
+            gateway_auth.get("claims_digest").strip()
+            if isinstance(gateway_auth.get("claims_digest"), str)
+            and gateway_auth.get("claims_digest").strip()
+            else None
+        ),
     )
 
 

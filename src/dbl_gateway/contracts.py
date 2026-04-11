@@ -52,6 +52,8 @@ class DecisionNormative(TypedDict, total=False):
     trust_class: str | None
     identity_issuer: str | None
     identity_verified: bool | None
+    identity_source: str | None
+    claims_digest: str | None
     request_class: str | None
     budget_class: str | None
     request_semantic_reason: str | None
@@ -366,6 +368,14 @@ def _normalize_decision(decision: Mapping[str, Any]) -> DecisionNormative:
         "identity_verified": _normalize_optional_bool(
             decision.get("identity_verified"),
             field_name="identity_verified",
+        ),
+        "identity_source": _normalize_optional_text(
+            decision.get("identity_source"),
+            field_name="identity_source",
+        ),
+        "claims_digest": _normalize_optional_text(
+            decision.get("claims_digest"),
+            field_name="claims_digest",
         ),
         "request_class": _normalize_optional_text(
             decision.get("request_class"),

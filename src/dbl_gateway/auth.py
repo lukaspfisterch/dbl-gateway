@@ -1,21 +1,24 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 
 
 @dataclass(frozen=True)
 class AuthConfig:
     mode: str
-    issuer: str
-    audience: str
+    issuers_allowed: tuple[str, ...]
+    audiences_allowed: tuple[str, ...]
     jwks_url: str
     allowed_tenants: tuple[str, ...]
     allow_all_tenants: bool
     tenant_claim: str
+    actor_id_claims: tuple[str, ...]
+    issuer_claim: str
     role_claims: tuple[str, ...]
     role_map: dict[str, list[str]] | None
     dev_actor: str
@@ -30,6 +33,8 @@ class Actor:
     roles: tuple[str, ...]
     issuer: str
     verified: bool
+    identity_source: str
+    claims_digest: str | None
     raw_claims: dict[str, Any]
 
 
@@ -42,6 +47,14 @@ class AuthError(Exception):
 
 class ForbiddenError(Exception):
     pass
+
+
+class IdentityAdapter(Protocol):
+    async def verify_and_map(self, headers: Mapping[str, str]) -> Actor:
+        ...
+
+    async def warm(self) -> None:
+        ...
 
 
 _JWKS_BY_URL: dict[str, dict[str, Any]] = {}
@@ -66,6 +79,8 @@ def identity_fields_for_actor(
             "roles": [],
             "issuer": fallback_issuer if verified else "anonymous",
             "verified": verified,
+            "identity_source": "synthetic",
+            "claims_digest": None,
             "trust_class": resolved_trust_class,
         }
     return {
@@ -75,18 +90,28 @@ def identity_fields_for_actor(
         "roles": list(actor.roles),
         "issuer": actor.issuer,
         "verified": actor.verified,
+        "identity_source": actor.identity_source,
+        "claims_digest": actor.claims_digest,
         "trust_class": resolved_trust_class,
     }
 
 
 def load_auth_config() -> AuthConfig:
     mode = os.getenv("DBL_GATEWAY_AUTH_MODE", "dev").strip().lower()
-    issuer = os.getenv("DBL_GATEWAY_OIDC_ISSUER", "").strip()
-    audience = os.getenv("DBL_GATEWAY_OIDC_AUDIENCE", "").strip()
+    issuers_raw = (
+        os.getenv("DBL_GATEWAY_OIDC_ISSUERS", "").strip()
+        or os.getenv("DBL_GATEWAY_OIDC_ISSUER", "").strip()
+    )
+    audiences_raw = (
+        os.getenv("DBL_GATEWAY_OIDC_AUDIENCES", "").strip()
+        or os.getenv("DBL_GATEWAY_OIDC_AUDIENCE", "").strip()
+    )
     jwks_url = os.getenv("DBL_GATEWAY_OIDC_JWKS_URL", "").strip()
     allowed_tenants_raw = os.getenv("DBL_GATEWAY_ALLOWED_TENANTS", "*").strip()
     tenant_claim = os.getenv("DBL_GATEWAY_TENANT_CLAIM", "tid").strip() or "tid"
-    role_claims_raw = os.getenv("DBL_GATEWAY_ROLE_CLAIMS", "roles").strip()
+    actor_id_claims_raw = os.getenv("DBL_GATEWAY_ACTOR_ID_CLAIMS", "oid,sub").strip()
+    issuer_claim = os.getenv("DBL_GATEWAY_ISSUER_CLAIM", "iss").strip() or "iss"
+    role_claims_raw = os.getenv("DBL_GATEWAY_ROLE_CLAIMS", "roles,groups").strip()
     role_map_raw = os.getenv("DBL_GATEWAY_ROLE_MAP", "").strip()
 
     dev_actor = os.getenv("DBL_GATEWAY_DEV_ACTOR", "dev-user").strip()
@@ -98,17 +123,22 @@ def load_auth_config() -> AuthConfig:
 
     allow_all_tenants = allowed_tenants_raw == "*" or allowed_tenants_raw == ""
     allowed_tenants = tuple([t.strip() for t in allowed_tenants_raw.split(",") if t.strip()])
+    issuers_allowed = tuple([i.strip() for i in issuers_raw.split(",") if i.strip()])
+    audiences_allowed = tuple([a.strip() for a in audiences_raw.split(",") if a.strip()])
+    actor_id_claims = tuple([c.strip() for c in actor_id_claims_raw.split(",") if c.strip()])
     role_claims = tuple([c.strip() for c in role_claims_raw.split(",") if c.strip()])
     role_map = _parse_role_map(role_map_raw)
 
     return AuthConfig(
         mode=mode,
-        issuer=issuer,
-        audience=audience,
+        issuers_allowed=issuers_allowed,
+        audiences_allowed=audiences_allowed,
         jwks_url=jwks_url,
         allowed_tenants=allowed_tenants,
         allow_all_tenants=allow_all_tenants,
         tenant_claim=tenant_claim,
+        actor_id_claims=actor_id_claims,
+        issuer_claim=issuer_claim,
         role_claims=role_claims,
         role_map=role_map,
         dev_actor=dev_actor,
@@ -133,12 +163,46 @@ def require_tenant(actor: Actor, cfg: AuthConfig | None = None) -> None:
 
 async def authenticate_request(headers: Mapping[str, str], cfg: AuthConfig | None = None) -> Actor:
     cfg = cfg or load_auth_config()
+    adapter = identity_adapter_for_config(cfg)
+    return await adapter.verify_and_map(headers)
+
+
+async def warm_identity_adapter(cfg: AuthConfig | None = None) -> None:
+    cfg = cfg or load_auth_config()
+    adapter = identity_adapter_for_config(cfg)
+    await adapter.warm()
+
+
+def identity_adapter_for_config(cfg: AuthConfig) -> IdentityAdapter:
     if cfg.mode == "dev":
-        return _authenticate_dev(headers, cfg)
+        return DevIdentityAdapter(cfg)
     if cfg.mode == "oidc":
-        claims = await _authenticate_oidc(headers, cfg)
-        return _authorize_oidc_claims(claims, cfg)
+        return OidcIdentityAdapter(cfg)
     raise AuthError(f"unsupported auth mode: {cfg.mode}")
+
+
+@dataclass(frozen=True)
+class DevIdentityAdapter:
+    cfg: AuthConfig
+
+    async def verify_and_map(self, headers: Mapping[str, str]) -> Actor:
+        return _authenticate_dev(headers, self.cfg)
+
+    async def warm(self) -> None:
+        return None
+
+
+@dataclass(frozen=True)
+class OidcIdentityAdapter:
+    cfg: AuthConfig
+
+    async def verify_and_map(self, headers: Mapping[str, str]) -> Actor:
+        claims = await _authenticate_oidc(headers, self.cfg)
+        return _authorize_oidc_claims(claims, self.cfg)
+
+    async def warm(self) -> None:
+        if self.cfg.jwks_url:
+            await _get_jwks(self.cfg.jwks_url)
 
 
 def _authenticate_dev(headers: Mapping[str, str], cfg: AuthConfig) -> Actor:
@@ -155,13 +219,15 @@ def _authenticate_dev(headers: Mapping[str, str], cfg: AuthConfig) -> Actor:
         roles=roles,
         issuer="dev",
         verified=True,
+        identity_source="dev",
+        claims_digest=_claims_digest({"dev": True}),
         raw_claims={"dev": True},
     )
 
 
 async def _authenticate_oidc(headers: Mapping[str, str], cfg: AuthConfig) -> dict[str, Any]:
-    if not cfg.issuer or not cfg.audience or not cfg.jwks_url:
-        raise AuthError("OIDC config incomplete: issuer, audience, jwks_url required")
+    if not cfg.issuers_allowed or not cfg.audiences_allowed or not cfg.jwks_url:
+        raise AuthError("OIDC config incomplete: issuers, audiences, jwks_url required")
 
     auth = headers.get("authorization", "")
     if not auth.lower().startswith("bearer "):
@@ -188,11 +254,9 @@ async def _authenticate_oidc(headers: Mapping[str, str], cfg: AuthConfig) -> dic
             token,
             key,
             algorithms=["RS256"],
-            issuer=cfg.issuer,
-            audience=cfg.audience,
             options={
-                "verify_aud": True,
-                "verify_iss": True,
+                "verify_aud": False,
+                "verify_iss": False,
                 "verify_exp": True,
                 "verify_nbf": True,
                 "verify_iat": True,
@@ -204,12 +268,14 @@ async def _authenticate_oidc(headers: Mapping[str, str], cfg: AuthConfig) -> dic
     except JWTError as exc:
         raise AuthError(f"invalid token: {exc}") from exc
 
+    _validate_oidc_claims(dict(claims), cfg)
     return dict(claims)
 
 
 async def _get_jwks(jwks_url: str, *, force: bool = False) -> dict[str, Any]:
     global _JWKS_BY_URL, _JWKS_TS_BY_URL
     now = time.time()
+    cached = _JWKS_BY_URL.get(jwks_url)
     if not force and jwks_url in _JWKS_BY_URL:
         ts = _JWKS_TS_BY_URL.get(jwks_url, 0.0)
         if (now - ts) < _JWKS_CACHE_TTL_S:
@@ -221,9 +287,14 @@ async def _get_jwks(jwks_url: str, *, force: bool = False) -> dict[str, Any]:
         raise AuthError("OIDC auth requires httpx") from exc
 
     async with httpx.AsyncClient(timeout=5.0) as client:
-        resp = await client.get(jwks_url)
-        resp.raise_for_status()
-        jwks = resp.json()
+        try:
+            resp = await client.get(jwks_url)
+            resp.raise_for_status()
+            jwks = resp.json()
+        except Exception as exc:
+            if cached is not None:
+                return cached
+            raise AuthError(f"jwks fetch failed: {exc}") from exc
 
     if not isinstance(jwks, dict) or "keys" not in jwks:
         raise AuthError("invalid JWKS payload")
@@ -258,9 +329,9 @@ def _select_jwk(header: Mapping[str, Any], jwks: Mapping[str, Any]) -> Mapping[s
 
 
 def _authorize_oidc_claims(claims: Mapping[str, Any], cfg: AuthConfig) -> Actor:
-    actor_id = _pick_first_str(claims, ["oid", "sub"], default="")
+    actor_id = _pick_first_str(claims, list(cfg.actor_id_claims), default="")
     if not actor_id:
-        raise AuthError("token missing actor id claim (oid/sub)")
+        raise AuthError("token missing actor id claim")
     tenant_id = _pick_first_str(claims, [cfg.tenant_claim], default="unknown")
     client_id = _pick_first_str(claims, ["azp", "appid"], default="unknown")
     roles = _extract_roles(claims, cfg.role_claims)
@@ -270,10 +341,35 @@ def _authorize_oidc_claims(claims: Mapping[str, Any], cfg: AuthConfig) -> Actor:
         tenant_id=tenant_id,
         client_id=client_id,
         roles=roles,
-        issuer=_pick_first_str(claims, ["iss"], default="oidc"),
+        issuer=_pick_first_str(claims, [cfg.issuer_claim], default="oidc"),
         verified=True,
+        identity_source="oidc",
+        claims_digest=_claims_digest(claims),
         raw_claims=dict(claims),
     )
+
+
+def _validate_oidc_claims(claims: Mapping[str, Any], cfg: AuthConfig) -> None:
+    issuer = _pick_first_str(claims, [cfg.issuer_claim], default="")
+    if issuer not in cfg.issuers_allowed:
+        raise AuthError("identity.issuer_not_allowed")
+    aud_claim = claims.get("aud")
+    audiences: set[str] = set()
+    if isinstance(aud_claim, str) and aud_claim.strip():
+        audiences.add(aud_claim.strip())
+    elif isinstance(aud_claim, list):
+        for item in aud_claim:
+            if isinstance(item, str) and item.strip():
+                audiences.add(item.strip())
+    if not audiences:
+        raise AuthError("identity.audience_missing")
+    if not any(audience in audiences for audience in cfg.audiences_allowed):
+        raise AuthError("identity.audience_mismatch")
+
+
+def _claims_digest(claims: Mapping[str, Any]) -> str:
+    canonical = json.dumps(claims, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return f"sha256:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
 
 
 def _extract_roles(claims: Mapping[str, Any], claim_names: Sequence[str]) -> tuple[str, ...]:

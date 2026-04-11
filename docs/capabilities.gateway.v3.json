@@ -13,7 +13,9 @@
     ],
     "identity_sources": [
       "dev_headers"
-    ]
+    ],
+    "issuers_allowed": [],
+    "audiences_allowed": []
   },
   "boundary": {
     "boundary_version": "1",
@@ -845,5 +847,5 @@
       "description": "External execution submission surface when enabled."
     }
   ],
-  "generated_at": "2026-04-11T19:07:43.521300+00:00"
+  "generated_at": "2026-04-11T19:28:40.578796+00:00"
 }

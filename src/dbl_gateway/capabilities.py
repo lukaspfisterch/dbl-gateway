@@ -95,6 +95,8 @@ class CapabilitiesAuth(BaseModel):
     current_trust_class: str
     trust_classes: list[str]
     identity_sources: list[str]
+    issuers_allowed: list[str]
+    audiences_allowed: list[str]
 
 
 class SurfaceDescriptor(BaseModel):
@@ -479,10 +481,12 @@ def get_capabilities(
             "identity_sources": (
                 ["dev_headers"]
                 if auth_cfg.mode == "dev"
-                else ["bearer_jwt"]
+                else ["oidc_jwt"]
                 if auth_cfg.mode == "oidc"
                 else []
             ),
+            "issuers_allowed": list(auth_cfg.issuers_allowed),
+            "audiences_allowed": list(auth_cfg.audiences_allowed),
         },
         "boundary": {
             "boundary_version": cfg.boundary_version,

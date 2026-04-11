@@ -50,6 +50,8 @@ These invariants enforce the formal axioms from the DBL paper. They are the foun
 
 **I-AUTH-2**: When an identity is unverified, the effective trust class MUST be `anonymous`.
 
+**I-AUTH-3**: OIDC identity verification depends only on the presented token, configured issuer/audience allowlists, and cached JWKS material. The gateway MUST NOT depend on online introspection or session lookups to derive `gateway_auth`.
+
 ## Chain-of-Record (v0.9.0)
 
 **I-CHAIN-1**: Every DECISION event contains `intent_index` linking to its originating INTENT event index.

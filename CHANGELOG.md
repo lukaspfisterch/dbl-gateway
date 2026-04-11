@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.23 — OIDC Identity Adapter
+
+**OIDC now sits as an explicit identity adapter seam above the existing boundary matrix instead of being an ad hoc auth branch.**
+- Refactor auth into adapter-style `dev` and `oidc` identity resolvers, add startup warmup for OIDC JWKS, and keep stale JWKS material as a deterministic fallback when refresh fails.
+- Expand admitted identity metadata with `identity_source` and `claims_digest`, inject both into `payload.inputs.extensions.gateway_auth`, and record them normatively in DECISION for replay and audit.
+- Harden OIDC mapping with allowlisted issuers/audiences plus configurable actor-id, issuer, and role claim extraction, while keeping trust derivation and boundary policy unchanged.
+- Publish the active OIDC allowlists through `/capabilities` and add focused regression coverage for OIDC claim mapping, trust derivation, and JWKS stale-cache behavior.
+
 ## v0.9.22 — Identity-Derived Trust Line
 
 **Identity now enters the gateway as a deterministic boundary input instead of staying implicit inside auth helpers.**

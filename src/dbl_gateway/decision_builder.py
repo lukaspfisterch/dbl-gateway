@@ -35,6 +35,8 @@ def build_normative_decision(
         "trust_class": decision.trust_class,
         "identity_issuer": decision.identity_issuer,
         "identity_verified": decision.identity_verified,
+        "identity_source": decision.identity_source,
+        "claims_digest": decision.claims_digest,
         "request_class": decision.request_class,
         "budget_class": decision.budget_class,
         "request_semantic_reason": decision.request_semantic_reason,

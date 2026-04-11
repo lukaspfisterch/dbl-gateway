@@ -35,6 +35,7 @@ unless it affects wire behavior.
 - Boundary artifacts now also declare `request_policy`, which classifies requests (`probe`, `intent`, `execution_light`, `execution_heavy`) and publishes budget ceilings per `(exposure_mode, trust_class, request_class)`.
 - Boundary artifacts now also declare `economic_policy`, which maps each `(exposure_mode, trust_class, request_class)` tuple to `slot_class`, `cost_class`, and `reservation_required`.
 - `GET /capabilities` now also publishes `auth.mode`, `auth.current_trust_class`, `auth.trust_classes`, and `auth.identity_sources`.
+- In `oidc` mode it also publishes `auth.issuers_allowed` and `auth.audiences_allowed`.
 
 ## Observer UI Endpoints
 
@@ -122,14 +123,16 @@ returned observer status/results.
 ## Auth And Identity
 - Identity stays a boundary input, not a gateway-owned user store.
 - The gateway resolves a minimal identity line into `actor_id`, `tenant_id`, `client_id`, `roles`, `issuer`, `verified`, and `trust_class`.
+- The OIDC adapter verifies signature/time plus issuer/audience allowlists before claims are mapped.
 - `auth.mode` publishes the active auth lane (`dev` or `oidc` today).
 - `auth.identity_sources` publishes the request source expected for that lane:
   - `dev_headers` for local/demo header-derived identity
-  - `bearer_jwt` for generic OIDC bearer-token identity
+  - `oidc_jwt` for generic OIDC bearer-token identity
+- `auth.issuers_allowed` and `auth.audiences_allowed` publish the active OIDC allowlists.
 - `auth.current_trust_class` publishes the trust class currently derived for the caller.
 - Trust classes remain stable: `anonymous`, `user`, `operator`, `internal`.
 - The gateway injects this identity as `payload.inputs.extensions.gateway_auth` before policy evaluation.
-- DECISION records `actor_id`, `trust_class`, `identity_issuer`, and `identity_verified`.
+- DECISION records `actor_id`, `trust_class`, `identity_issuer`, `identity_verified`, `identity_source`, and `claims_digest`.
 
 ## Context Resolution Gate
 - Controlled by `GATEWAY_ENABLE_CONTEXT_RESOLUTION` env var (default OFF).

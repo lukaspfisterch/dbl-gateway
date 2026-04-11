@@ -15,6 +15,8 @@ class TestNormativeDecisionV3:
             trust_class="internal",
             identity_issuer="dev",
             identity_verified=True,
+            identity_source="dev",
+            claims_digest="sha256:claims",
             request_class="execution_light",
             budget_class="light",
             request_semantic_reason="request.semantic.bounded_execution",
@@ -28,6 +30,8 @@ class TestNormativeDecisionV3:
         assert normative["trust_class"] == "internal"
         assert normative["identity_issuer"] == "dev"
         assert normative["identity_verified"] is True
+        assert normative["identity_source"] == "dev"
+        assert normative["claims_digest"] == "sha256:claims"
         assert normative["request_class"] == "execution_light"
         assert normative["budget_class"] == "light"
         assert normative["request_semantic_reason"] == "request.semantic.bounded_execution"
@@ -116,6 +120,8 @@ class TestNormativeDecisionV3:
             "trust_class": "internal",
             "identity_issuer": "dev",
             "identity_verified": True,
+            "identity_source": "dev",
+            "claims_digest": "sha256:claims",
             "request_class": "execution_light",
             "budget_class": "light",
             "request_semantic_reason": "request.semantic.bounded_execution",
@@ -137,6 +143,8 @@ class TestNormativeDecisionV3:
         assert norm["trust_class"] == "internal"
         assert norm["identity_issuer"] == "dev"
         assert norm["identity_verified"] is True
+        assert norm["identity_source"] == "dev"
+        assert norm["claims_digest"] == "sha256:claims"
         assert norm["slot_class"] == "shared"
         assert norm["cost_class"] == "bounded"
         assert norm["reservation_required"] is False

@@ -22,14 +22,19 @@ Secrets never appear in event payloads.
 | `DBL_GATEWAY_DEV_ACTOR` | no | `dev-user` | Default actor id in `dev` mode |
 | `DBL_GATEWAY_DEV_ROLES` | no | `gateway.intent.write,gateway.decision.write,gateway.snapshot.read` | Default dev roles |
 | `DBL_GATEWAY_OIDC_ISSUER` | `oidc` only | -- | Expected JWT issuer |
+| `DBL_GATEWAY_OIDC_ISSUERS` | `oidc` only | -- | Comma-separated issuer allowlist. Preferred over singular issuer env. |
 | `DBL_GATEWAY_OIDC_AUDIENCE` | `oidc` only | -- | Expected JWT audience |
+| `DBL_GATEWAY_OIDC_AUDIENCES` | `oidc` only | -- | Comma-separated audience allowlist. Preferred over singular audience env. |
 | `DBL_GATEWAY_OIDC_JWKS_URL` | `oidc` only | -- | JWKS endpoint used for signature validation |
 | `DBL_GATEWAY_ALLOWED_TENANTS` | no | `*` | Allowed tenant ids or `*` |
 | `DBL_GATEWAY_TENANT_CLAIM` | no | `tid` | Claim name used for tenant extraction |
-| `DBL_GATEWAY_ROLE_CLAIMS` | no | `roles` | Comma-separated claim names searched for role extraction |
+| `DBL_GATEWAY_ACTOR_ID_CLAIMS` | no | `oid,sub` | Comma-separated claim names searched for actor id extraction |
+| `DBL_GATEWAY_ISSUER_CLAIM` | no | `iss` | Claim name used for issuer extraction |
+| `DBL_GATEWAY_ROLE_CLAIMS` | no | `roles,groups` | Comma-separated claim names searched for role extraction |
 | `DBL_GATEWAY_ROLE_MAP` | no | -- | Optional JSON mapping from incoming roles to gateway roles |
 
 Identity stays stateless inside the gateway. The request is verified, mapped into `gateway_auth`, and reduced to a deterministic `trust_class`. No session store or gateway-owned user database is required.
+OIDC verification uses cached JWKS only. The gateway does not call online token introspection endpoints or maintain server-side sessions.
 
 ## Boundary Profiles
 

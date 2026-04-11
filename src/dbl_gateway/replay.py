@@ -96,6 +96,8 @@ def replay_decision_for_turn(
     stored_trust_class = decision_payload.get("trust_class")
     stored_identity_issuer = decision_payload.get("identity_issuer")
     stored_identity_verified = decision_payload.get("identity_verified")
+    stored_identity_source = decision_payload.get("identity_source")
+    stored_claims_digest = decision_payload.get("claims_digest")
     stored_request_class = decision_payload.get("request_class")
     stored_budget_class = decision_payload.get("budget_class")
     stored_request_semantic_reason = decision_payload.get("request_semantic_reason")
@@ -121,6 +123,8 @@ def replay_decision_for_turn(
         trust_class=stored_trust_class if isinstance(stored_trust_class, str) else None,
         identity_issuer=stored_identity_issuer if isinstance(stored_identity_issuer, str) else None,
         identity_verified=stored_identity_verified if isinstance(stored_identity_verified, bool) else None,
+        identity_source=stored_identity_source if isinstance(stored_identity_source, str) else None,
+        claims_digest=stored_claims_digest if isinstance(stored_claims_digest, str) else None,
         request_class=stored_request_class if isinstance(stored_request_class, str) else None,
         budget_class=stored_budget_class if isinstance(stored_budget_class, str) else None,
         request_semantic_reason=(

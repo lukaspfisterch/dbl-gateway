@@ -15,6 +15,8 @@ class DecisionResult:
     trust_class: str | None = None
     identity_issuer: str | None = None
     identity_verified: bool | None = None
+    identity_source: str | None = None
+    claims_digest: str | None = None
     request_class: str | None = None
     budget_class: str | None = None
     request_semantic_reason: str | None = None
