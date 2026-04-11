@@ -19,13 +19,19 @@ from hashlib import sha256
 
 
 __all__ = [
+    "BoundaryAdmissionConfig",
+    "BoundaryConfig",
     "ContextConfig",
     "JobRuntimeConfig",
     "context_resolution_enabled",
+    "exposure_mode_allows",
+    "get_boundary_config",
     "load_context_config",
+    "load_boundary_config",
     "get_context_config",
     "load_job_runtime_config",
     "get_job_runtime_config",
+    "reset_boundary_config_cache",
 ]
 
 
@@ -34,6 +40,13 @@ def context_resolution_enabled() -> bool:
     return os.environ.get("GATEWAY_ENABLE_CONTEXT_RESOLUTION", "").lower() in ("true", "1", "yes")
 
 DEFAULT_CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "context.json"
+DEFAULT_BOUNDARY_CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "boundary.json"
+
+_EXPOSURE_RANKS: dict[str, int] = {
+    "public": 0,
+    "operator": 1,
+    "demo": 2,
+}
 
 
 @dataclass(frozen=True)
@@ -72,6 +85,30 @@ class ContextConfig:
     _raw: Mapping[str, Any]
 
 
+@dataclass(frozen=True)
+class BoundaryAdmissionConfig:
+    """Immutable admission policy derived from boundary config."""
+
+    public_allow_artifact_handle: bool
+    public_allow_declared_refs: bool
+    public_max_declared_tools: int
+    public_max_budget_tokens: int
+    public_max_budget_duration_ms: int
+
+
+@dataclass(frozen=True)
+class BoundaryConfig:
+    """Immutable boundary configuration for surface exposure."""
+
+    schema_version: str
+    boundary_version: str
+    exposure_mode: Literal["public", "operator", "demo"]
+    surface_rules: Mapping[str, Literal["public", "operator", "demo"]]
+    admission: BoundaryAdmissionConfig
+    config_digest: str
+    _raw: Mapping[str, Any]
+
+
 def load_context_config(path: Path | None = None) -> ContextConfig:
     """
     Load context configuration from JSON file.
@@ -103,6 +140,107 @@ def _resolve_config_path() -> Path:
     if env_path:
         return Path(env_path)
     return DEFAULT_CONFIG_PATH
+
+
+def exposure_mode_allows(
+    current_mode: Literal["public", "operator", "demo"],
+    required_mode: Literal["public", "operator", "demo"],
+) -> bool:
+    """Return True when the current exposure mode may access the required mode."""
+    return _EXPOSURE_RANKS[current_mode] >= _EXPOSURE_RANKS[required_mode]
+
+
+def load_boundary_config(path: Path | None = None) -> BoundaryConfig:
+    """Load boundary exposure configuration from JSON file."""
+    config_path = path or _resolve_boundary_config_path()
+
+    if not config_path.exists():
+        raise FileNotFoundError(f"Boundary config not found: {config_path}")
+
+    with open(config_path, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+
+    return _parse_boundary_config(raw)
+
+
+def _resolve_boundary_config_path() -> Path:
+    env_path = os.environ.get("DBL_GATEWAY_BOUNDARY_CONFIG")
+    if env_path:
+        return Path(env_path)
+    return DEFAULT_BOUNDARY_CONFIG_PATH
+
+
+def _parse_boundary_config(raw: Mapping[str, Any]) -> BoundaryConfig:
+    schema_version = raw.get("schema_version")
+    if schema_version != "1":
+        raise ValueError(f"Unsupported boundary schema_version: {schema_version}")
+
+    boundary_version = raw.get("boundary_version")
+    if not isinstance(boundary_version, str) or not boundary_version.strip():
+        raise ValueError("boundary_version must be a non-empty string")
+
+    exposure = raw.get("exposure_mode")
+    if exposure not in _EXPOSURE_RANKS:
+        raise ValueError("exposure_mode must be one of: public, operator, demo")
+
+    raw_rules = raw.get("surface_rules")
+    if not isinstance(raw_rules, Mapping):
+        raise ValueError("surface_rules must be an object")
+
+    surface_rules: dict[str, Literal["public", "operator", "demo"]] = {}
+    for surface_id, required_mode in raw_rules.items():
+        if not isinstance(surface_id, str) or not surface_id.strip():
+            raise ValueError("surface_rules keys must be non-empty strings")
+        if required_mode not in _EXPOSURE_RANKS:
+            raise ValueError(
+                f"surface_rules[{surface_id!r}] must be one of: public, operator, demo",
+            )
+        surface_rules[surface_id.strip()] = required_mode
+
+    raw_admission = raw.get("admission")
+    if not isinstance(raw_admission, Mapping):
+        raise ValueError("admission must be an object")
+    public_rules = raw_admission.get("public")
+    if not isinstance(public_rules, Mapping):
+        raise ValueError("admission.public must be an object")
+
+    allow_artifact_handle = public_rules.get("allow_artifact_handle", False)
+    if not isinstance(allow_artifact_handle, bool):
+        raise ValueError("admission.public.allow_artifact_handle must be boolean")
+    allow_declared_refs = public_rules.get("allow_declared_refs", False)
+    if not isinstance(allow_declared_refs, bool):
+        raise ValueError("admission.public.allow_declared_refs must be boolean")
+    max_declared_tools = public_rules.get("max_declared_tools", 0)
+    if not isinstance(max_declared_tools, int) or max_declared_tools < 0:
+        raise ValueError("admission.public.max_declared_tools must be int >= 0")
+
+    max_budget = public_rules.get("max_budget", {})
+    if not isinstance(max_budget, Mapping):
+        raise ValueError("admission.public.max_budget must be an object")
+    max_budget_tokens = max_budget.get("max_tokens", 4096)
+    if not isinstance(max_budget_tokens, int) or max_budget_tokens < 1:
+        raise ValueError("admission.public.max_budget.max_tokens must be int >= 1")
+    max_budget_duration_ms = max_budget.get("max_duration_ms", 30000)
+    if not isinstance(max_budget_duration_ms, int) or max_budget_duration_ms < 1000:
+        raise ValueError("admission.public.max_budget.max_duration_ms must be int >= 1000")
+
+    config_digest = _compute_config_digest(raw)
+
+    return BoundaryConfig(
+        schema_version=str(schema_version),
+        boundary_version=boundary_version.strip(),
+        exposure_mode=exposure,
+        surface_rules=surface_rules,
+        admission=BoundaryAdmissionConfig(
+            public_allow_artifact_handle=allow_artifact_handle,
+            public_allow_declared_refs=allow_declared_refs,
+            public_max_declared_tools=max_declared_tools,
+            public_max_budget_tokens=max_budget_tokens,
+            public_max_budget_duration_ms=max_budget_duration_ms,
+        ),
+        config_digest=config_digest,
+        _raw=raw,
+    )
 
 
 def _parse_config(raw: Mapping[str, Any]) -> ContextConfig:
@@ -277,6 +415,17 @@ def get_context_config() -> ContextConfig:
 def reset_config_cache() -> None:
     """Reset config cache. Only for testing."""
     get_context_config.cache_clear()
+
+
+@lru_cache(maxsize=1)
+def get_boundary_config() -> BoundaryConfig:
+    """Get cached boundary configuration."""
+    return load_boundary_config()
+
+
+def reset_boundary_config_cache() -> None:
+    """Reset boundary config cache. Only for testing."""
+    get_boundary_config.cache_clear()
 
 
 @dataclass(frozen=True)

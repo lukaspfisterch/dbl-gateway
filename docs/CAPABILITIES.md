@@ -4,7 +4,7 @@ Client-visible capabilities. Internal architecture is not described
 unless it affects wire behavior.
 
 ## Stable vs Variable
-- Stable: interface_version=3, ContextSpec schema ctxspec.2, ContextConfig schema v1, endpoint paths, tool_scope semantics, budget field schema, event chain (INTENT -> DECISION -> PROOF -> EXECUTION).
+- Stable: interface_version=3, ContextSpec schema ctxspec.2, ContextConfig schema v1, BoundaryConfig schema v1, endpoint paths, tool_scope semantics, budget field schema, event chain (INTENT -> DECISION -> PROOF -> EXECUTION).
 - Variable: provider list, model list, defaults, limits, policy version, and some failure codes may change with config/env.
 
 ## API Endpoints
@@ -19,7 +19,21 @@ unless it affects wire behavior.
 - `GET /status` — projected runner state `{phase, runner_status, t_index, note}`.
 - `POST /execution/event` — submit external execution result (only if exec_mode=external).
 
+## Boundary Exposure
+- `GET /capabilities` includes the active boundary profile:
+  - `boundary_version`
+  - `boundary_config_digest`
+  - `exposure_mode`
+- `surface_catalog` and `GET /surfaces` are filtered by the active exposure mode.
+- Built-in profiles:
+  - `public` — minimal ingress-oriented surface
+  - `operator` — runtime and discovery surfaces without `/ui/*`
+  - `demo` — full observer/demo surface
+- Public ingress is additionally bounded by the active boundary artifact's deterministic admission limits for `artifact.handle`, `declared_refs`, `declared_tools`, and budget maxima.
+
 ## Observer UI Endpoints
+
+These routes are available only in the `demo` boundary profile.
 - `GET /ui/` — built-in single-file observer UI.
 - `GET /ui/tail` — auth-free SSE stream for browser `EventSource`.
 - `GET /ui/capabilities` — auth-free observer proxy for capabilities.
@@ -51,6 +65,7 @@ returned observer status/results.
 - `declared_refs` must be a list of `{ref_type, ref_id, version?}`.
 - Max refs: 50. Empty refs policy: DENY (default).
 - Scope bound enforced by thread_id.
+- In `public` exposure mode, non-empty `declared_refs` are denied unless the boundary artifact explicitly allows them.
 - Content admission:
   - INTENT events -> governance (no content by default unless artifact.handle with allowed fetch).
   - EXECUTION refs -> execution_only if `allow_execution_refs_for_prompt=true`.
@@ -59,12 +74,14 @@ returned observer status/results.
 ## Tool Gating
 - `declared_tools`: list of tool name strings (max 20), validated against `^[a-z][a-z0-9_.]{0,63}$`.
 - `tool_scope`: `"strict"` (block undeclared) or `"advisory"` (log and allow). Default `"strict"` when `declared_tools` present.
+- In `public` exposure mode, declared tool count is additionally capped by the boundary artifact before admission.
 - DECISION records `permitted_tools`, `tool_scope_enforced`.
 - EXECUTION records `tool_calls` (allowed) and `tool_blocked` (blocked with reason).
 
 ## Budget Constraint
 - `budget.max_tokens`: integer 1-1000000, passed to provider call.
 - `budget.max_duration_ms`: integer 1000-300000, enforces execution wall clock.
+- In `public` exposure mode, budget fields are also denied when they exceed the boundary artifact's configured maxima.
 - `effective_timeout = min(runtime_ms, client_ms)`.
 - DECISION records `enforced_budget` with `source` indicating clamping.
 - EXECUTION records `usage.duration_ms`.

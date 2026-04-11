@@ -2,6 +2,11 @@
   "schema_version": "gateway.capabilities.v1",
   "gateway_version": "0.8.1",
   "interface_version": 3,
+  "boundary": {
+    "boundary_version": "1",
+    "boundary_config_digest": "sha256:7d89e73e9560311cb8e2e588bbfa2f3489bbcc6845228abdba7c41253ebe7cf3",
+    "exposure_mode": "operator"
+  },
   "intents": {
     "supported": [
       "chat.message",
@@ -141,107 +146,7 @@
       "auth": "required",
       "plane": "execution",
       "description": "External execution submission surface when enabled."
-    },
-    {
-      "id": "ui_root",
-      "path": "/ui/",
-      "methods": [
-        "GET"
-      ],
-      "auth": "none",
-      "plane": "observer_ui",
-      "description": "Built-in observer UI."
-    },
-    {
-      "id": "ui_tail",
-      "path": "/ui/tail",
-      "methods": [
-        "GET"
-      ],
-      "auth": "none",
-      "plane": "observer_ui",
-      "description": "Auth-free SSE feed for the built-in observer."
-    },
-    {
-      "id": "ui_capabilities",
-      "path": "/ui/capabilities",
-      "methods": [
-        "GET"
-      ],
-      "auth": "none",
-      "plane": "observer_ui",
-      "description": "Observer proxy for capabilities."
-    },
-    {
-      "id": "ui_snapshot",
-      "path": "/ui/snapshot",
-      "methods": [
-        "GET"
-      ],
-      "auth": "none",
-      "plane": "observer_ui",
-      "description": "Observer proxy for latest snapshot state."
-    },
-    {
-      "id": "ui_policy_structure",
-      "path": "/ui/policy-structure",
-      "methods": [
-        "GET"
-      ],
-      "auth": "none",
-      "plane": "observer_ui",
-      "description": "Observer proxy for the current policy inspector payload."
-    },
-    {
-      "id": "ui_intent",
-      "path": "/ui/intent",
-      "methods": [
-        "POST"
-      ],
-      "auth": "none",
-      "plane": "observer_ui",
-      "description": "Observer-side manual intent submission."
-    },
-    {
-      "id": "ui_verify_chain",
-      "path": "/ui/verify-chain",
-      "methods": [
-        "GET"
-      ],
-      "auth": "none",
-      "plane": "observer_ui",
-      "description": "Observer-triggered full-chain verification."
-    },
-    {
-      "id": "ui_replay",
-      "path": "/ui/replay",
-      "methods": [
-        "GET"
-      ],
-      "auth": "none",
-      "plane": "observer_ui",
-      "description": "Observer-triggered decision replay for a turn."
-    },
-    {
-      "id": "ui_demo_status",
-      "path": "/ui/demo/status",
-      "methods": [
-        "GET"
-      ],
-      "auth": "none",
-      "plane": "observer_ui",
-      "description": "Status surface for the integrated demo controller."
-    },
-    {
-      "id": "ui_demo_start",
-      "path": "/ui/demo/start",
-      "methods": [
-        "POST"
-      ],
-      "auth": "none",
-      "plane": "observer_ui",
-      "description": "Start surface for the integrated demo controller."
     }
   ],
-  "generated_at": "2026-03-13T19:57:18.717865+00:00"
+  "generated_at": "2026-04-11T15:30:28.093324+00:00"
 }

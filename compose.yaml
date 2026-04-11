@@ -15,6 +15,7 @@ services:
       - "8010:8010"
     environment:
       GATEWAY_DEMO_MODE: "1"
+      DBL_GATEWAY_BOUNDARY_CONFIG: "/app/config/boundary.demo.json"
       STUB_MODE: "scenario"
     volumes:
       - ./data:/app/data

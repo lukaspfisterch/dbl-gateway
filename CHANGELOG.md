@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.9.13 — Deterministic Public Admission
+
+**Public exposure can now deny expensive or high-risk intent shapes before any `INTENT` is written.**
+- Extend boundary config artifacts with an explicit `admission.public` block so public admission limits live in the versioned boundary contract instead of ad hoc runtime logic.
+- Add deterministic public-mode rejections for `artifact.handle`, non-empty `declared_refs`, excessive `declared_tools`, and over-limit budgets.
+- Keep these checks input- and config-derived only; no queue/load/runtime-state feedback is introduced into admission.
+- Add focused regression coverage proving public rejections append no `INTENT` while operator mode still admits the same shapes.
+
+## v0.9.12 — Boundary Exposure Modes
+
+**Surface exposure is now controlled by a versioned boundary configuration instead of being implicitly demo-open.**
+- Add boundary config artifacts in `config/` with explicit `exposure_mode` and `surface_rules`.
+- Introduce central surface gating so exposure decisions are enforced in one place instead of route-by-route drift.
+- Default runtime exposure now becomes `operator`: runtime and discovery surfaces stay available, but `/ui/*` remains demo-only.
+- Filter `GET /capabilities` and `GET /surfaces` by the active boundary exposure mode so hidden surfaces are not advertised.
+- Demo mode now selects the demo boundary config explicitly, keeping the existing zero-config demo flow intact.
+- Add focused tests for public/operator/demo route exposure and capability-surface leak prevention.
+
 ## v0.9.11 — Replay Validation Notes
 
 **Replay validation is now documented as an optional reference-runtime artifact.**

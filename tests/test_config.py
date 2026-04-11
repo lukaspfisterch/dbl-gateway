@@ -3,10 +3,14 @@ import json
 import pytest
 from pathlib import Path
 from dbl_gateway.config import (
+    BoundaryConfig,
     load_context_config,
+    load_boundary_config,
     get_context_config,
+    get_boundary_config,
     reset_config_cache,
     ContextConfig,
+    reset_boundary_config_cache,
     _compute_config_digest,
 )
 
@@ -144,3 +148,98 @@ def test_cache_returns_same_instance(sample_config: Path, monkeypatch) -> None:
     assert cfg1 is cfg2
     
     reset_config_cache()
+
+
+@pytest.fixture
+def sample_boundary_config(tmp_path: Path) -> Path:
+    config = {
+        "schema_version": "1",
+        "boundary_version": "1",
+        "exposure_mode": "operator",
+        "admission": {
+            "public": {
+                "allow_artifact_handle": False,
+                "allow_declared_refs": False,
+                "max_declared_tools": 0,
+                "max_budget": {
+                    "max_tokens": 4096,
+                    "max_duration_ms": 30000,
+                },
+            },
+        },
+        "surface_rules": {
+            "healthz": "public",
+            "capabilities": "public",
+            "surfaces": "operator",
+            "ui_root": "demo",
+        },
+    }
+    path = tmp_path / "boundary.json"
+    path.write_text(json.dumps(config), encoding="utf-8")
+    return path
+
+
+def test_load_valid_boundary_config(sample_boundary_config: Path) -> None:
+    cfg = load_boundary_config(sample_boundary_config)
+
+    assert isinstance(cfg, BoundaryConfig)
+    assert cfg.boundary_version == "1"
+    assert cfg.exposure_mode == "operator"
+    assert cfg.surface_rules["surfaces"] == "operator"
+    assert cfg.admission.public_allow_artifact_handle is False
+    assert cfg.admission.public_max_declared_tools == 0
+    assert cfg.config_digest.startswith("sha256:")
+
+
+def test_boundary_config_digest_changes_on_content_change(tmp_path: Path) -> None:
+    config_a = {
+        "schema_version": "1",
+        "boundary_version": "1",
+        "exposure_mode": "public",
+        "admission": {
+            "public": {
+                "allow_artifact_handle": False,
+                "allow_declared_refs": False,
+                "max_declared_tools": 0,
+                "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000},
+            },
+        },
+        "surface_rules": {"healthz": "public"},
+    }
+    config_b = {
+        "schema_version": "1",
+        "boundary_version": "1",
+        "exposure_mode": "demo",
+        "admission": {
+            "public": {
+                "allow_artifact_handle": False,
+                "allow_declared_refs": False,
+                "max_declared_tools": 0,
+                "max_budget": {"max_tokens": 4096, "max_duration_ms": 30000},
+            },
+        },
+        "surface_rules": {"healthz": "public"},
+    }
+    path_a = tmp_path / "boundary-a.json"
+    path_b = tmp_path / "boundary-b.json"
+    path_a.write_text(json.dumps(config_a), encoding="utf-8")
+    path_b.write_text(json.dumps(config_b), encoding="utf-8")
+
+    cfg_a = load_boundary_config(path_a)
+    cfg_b = load_boundary_config(path_b)
+
+    assert cfg_a.config_digest != cfg_b.config_digest
+
+
+def test_boundary_config_cache_returns_same_instance(
+    sample_boundary_config: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reset_boundary_config_cache()
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", str(sample_boundary_config))
+
+    cfg1 = get_boundary_config()
+    cfg2 = get_boundary_config()
+
+    assert cfg1 is cfg2
+
+    reset_boundary_config_cache()

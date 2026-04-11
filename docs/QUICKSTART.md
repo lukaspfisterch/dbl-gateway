@@ -27,6 +27,9 @@ export DBL_GATEWAY_POLICY_OBJECT=policy
 
 See [env_contract.md](env_contract.md) for all variables.
 
+Boundary exposure is controlled by `config/boundary*.json`.
+The default runtime profile is `operator`, which keeps `/ui/*` disabled.
+
 ## Start
 
 ```
@@ -40,7 +43,13 @@ curl http://127.0.0.1:8010/healthz
 curl http://127.0.0.1:8010/capabilities
 ```
 
-Open the built-in observer UI at `http://127.0.0.1:8010/ui` to watch events in real-time.
+In the default `operator` profile, use the runtime and discovery surfaces first:
+- `GET /capabilities`
+- `GET /surfaces`
+- `GET /intent-template`
+- `POST /ingress/intent`
+
+Open the built-in observer UI at `http://127.0.0.1:8010/ui` only when the active boundary profile is `demo`.
 The Verify panel now supports active browser-triggered verification:
 - `Verify Chain` recomputes the full `v_digest` chain server-side.
 - The inspector replays a selected `DECISION` turn server-side and reports digest match/mismatch.
@@ -116,8 +125,14 @@ If verification fails, the panel shows the stored and recomputed digests for com
 
 ## Run the integrated demo
 
-If at least one provider is active in `GET /capabilities`, the simplest demo is
-now one click:
+For the full browser observer and one-click demo flow, run with the demo boundary profile.
+The Docker demo profile already does this for you:
+
+```bash
+docker compose --profile demo up
+```
+
+If at least one provider is active in `GET /capabilities`, the simplest demo is then one click:
 
 1. Open `http://127.0.0.1:8010/ui`
 2. Press `Start Demo` in the `Demo Agent` panel

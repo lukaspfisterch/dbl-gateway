@@ -1,6 +1,6 @@
 # Observer
 
-The gateway serves a built-in event observer at `/ui`.
+The gateway serves a built-in event observer at `/ui` when the active boundary profile is `demo`.
 
 It is a single-file browser surface that consumes the event stream via `/ui/tail`
 and keeps all verification logic server-side.
@@ -42,7 +42,7 @@ policies such as `dbl_policy.allow_all`.
 
 ## Verification
 
-The observer uses auth-free proxy routes:
+In demo mode, the observer uses auth-free proxy routes:
 
 - `GET /ui/snapshot`
 - `GET /ui/policy-structure`

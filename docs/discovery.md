@@ -3,6 +3,9 @@
 dbl-gateway exposes machine-readable discovery surfaces so a client can bootstrap
 itself against the execution boundary.
 
+Discovery is filtered by the active boundary exposure mode.
+The gateway does not advertise surfaces that are unavailable in the current mode.
+
 ## Surfaces
 
 ### `GET /capabilities`
@@ -15,10 +18,11 @@ High-level runtime description:
 - budget surface
 - compact surface booleans
 - rich `surface_catalog`
+- active boundary profile (`boundary_version`, config digest, `exposure_mode`)
 
 ### `GET /surfaces`
 
-Explicit catalog of callable surfaces.
+Explicit catalog of callable surfaces that are available in the current exposure mode.
 
 Each entry includes:
 
@@ -47,7 +51,7 @@ profiles without string-parsing the route parameters.
 
 ## Bootstrapping Flow
 
-A blind client can start with:
+A blind client in `operator` or `demo` mode can start with:
 
 1. `GET /surfaces`
 2. `GET /capabilities`
@@ -56,3 +60,8 @@ A blind client can start with:
 
 That is enough to discover the boundary, learn the envelope, and produce a
 valid first interaction.
+
+In `public` mode, discovery is intentionally minimized. Clients should use:
+
+1. `GET /capabilities`
+2. `POST /ingress/intent`

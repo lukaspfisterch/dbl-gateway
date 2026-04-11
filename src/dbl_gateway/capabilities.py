@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.metadata
 from datetime import datetime, timezone
 import os
 import time
-from typing import Any
+from typing import Any, Mapping
 import httpx
 import logging
 
@@ -12,6 +13,7 @@ _LOGGER = logging.getLogger(__name__)
 
 from pydantic import BaseModel
 
+from .config import BoundaryConfig, exposure_mode_allows, get_boundary_config
 from .providers import get_provider_capabilities
 from .providers.contract import ProviderCapabilities
 from .wire_contract import (
@@ -72,6 +74,12 @@ class CapabilitiesSurfaces(BaseModel):
     ingress_intent: bool
 
 
+class CapabilitiesBoundary(BaseModel):
+    boundary_version: str
+    boundary_config_digest: str
+    exposure_mode: str
+
+
 class SurfaceDescriptor(BaseModel):
     id: str
     path: str
@@ -114,6 +122,7 @@ class CapabilitiesResponse(BaseModel):
     schema_version: str
     gateway_version: str
     interface_version: int
+    boundary: CapabilitiesBoundary
     intents: CapabilitiesIntents
     tool_surface: CapabilitiesToolSurface
     budget: CapabilitiesBudget
@@ -121,27 +130,217 @@ class CapabilitiesResponse(BaseModel):
     surfaces: CapabilitiesSurfaces
     surface_catalog: list[SurfaceDescriptor]
 
+_SURFACE_REGISTRY: tuple[dict[str, object], ...] = (
+    {
+        "id": "healthz",
+        "path": "/healthz",
+        "methods": ["GET"],
+        "auth": "required",
+        "plane": "runtime",
+        "description": "Health check for the gateway process.",
+        "min_exposure": "public",
+    },
+    {
+        "id": "capabilities",
+        "path": "/capabilities",
+        "methods": ["GET"],
+        "auth": "required",
+        "plane": "discovery",
+        "description": "Self-description of the runtime contract, providers, and surfaces.",
+        "min_exposure": "public",
+    },
+    {
+        "id": "surfaces",
+        "path": "/surfaces",
+        "methods": ["GET"],
+        "auth": "required",
+        "plane": "discovery",
+        "description": "Explicit catalog of callable gateway and observer surfaces.",
+        "min_exposure": "operator",
+    },
+    {
+        "id": "intent_template",
+        "path": "/intent-template",
+        "methods": ["GET"],
+        "auth": "required",
+        "plane": "discovery",
+        "description": "Self-teaching intent template and example envelopes.",
+        "min_exposure": "operator",
+    },
+    {
+        "id": "ingress_intent",
+        "path": "/ingress/intent",
+        "methods": ["POST"],
+        "auth": "required",
+        "plane": "intent",
+        "description": "Intent ingress surface for declared envelopes.",
+        "min_exposure": "public",
+    },
+    {
+        "id": "snapshot",
+        "path": "/snapshot",
+        "methods": ["GET"],
+        "auth": "required",
+        "plane": "observation",
+        "description": "Snapshot of persisted events and rolling v_digest.",
+        "min_exposure": "operator",
+    },
+    {
+        "id": "tail",
+        "path": "/tail",
+        "methods": ["GET"],
+        "auth": "required",
+        "plane": "observation",
+        "description": "Authenticated SSE stream of event envelopes.",
+        "min_exposure": "operator",
+    },
+    {
+        "id": "thread_timeline",
+        "path": "/threads/{thread_id}/timeline",
+        "methods": ["GET"],
+        "auth": "required",
+        "plane": "observation",
+        "description": "Turn-grouped thread timeline for replay and inspection.",
+        "min_exposure": "operator",
+    },
+    {
+        "id": "status",
+        "path": "/status",
+        "methods": ["GET"],
+        "auth": "required",
+        "plane": "observation",
+        "description": "Projected runner state derived from events.",
+        "min_exposure": "operator",
+    },
+    {
+        "id": "execution_event",
+        "path": "/execution/event",
+        "methods": ["POST"],
+        "auth": "required",
+        "plane": "execution",
+        "description": "External execution submission surface when enabled.",
+        "min_exposure": "operator",
+    },
+    {
+        "id": "ui_root",
+        "path": "/ui/",
+        "methods": ["GET"],
+        "auth": "none",
+        "plane": "observer_ui",
+        "description": "Built-in observer UI.",
+        "min_exposure": "demo",
+    },
+    {
+        "id": "ui_tail",
+        "path": "/ui/tail",
+        "methods": ["GET"],
+        "auth": "none",
+        "plane": "observer_ui",
+        "description": "Auth-free SSE feed for the built-in observer.",
+        "min_exposure": "demo",
+    },
+    {
+        "id": "ui_capabilities",
+        "path": "/ui/capabilities",
+        "methods": ["GET"],
+        "auth": "none",
+        "plane": "observer_ui",
+        "description": "Observer proxy for capabilities.",
+        "min_exposure": "demo",
+    },
+    {
+        "id": "ui_snapshot",
+        "path": "/ui/snapshot",
+        "methods": ["GET"],
+        "auth": "none",
+        "plane": "observer_ui",
+        "description": "Observer proxy for latest snapshot state.",
+        "min_exposure": "demo",
+    },
+    {
+        "id": "ui_policy_structure",
+        "path": "/ui/policy-structure",
+        "methods": ["GET"],
+        "auth": "none",
+        "plane": "observer_ui",
+        "description": "Observer proxy for the current policy inspector payload.",
+        "min_exposure": "demo",
+    },
+    {
+        "id": "ui_intent",
+        "path": "/ui/intent",
+        "methods": ["POST"],
+        "auth": "none",
+        "plane": "observer_ui",
+        "description": "Observer-side manual intent submission.",
+        "min_exposure": "demo",
+    },
+    {
+        "id": "ui_verify_chain",
+        "path": "/ui/verify-chain",
+        "methods": ["GET"],
+        "auth": "none",
+        "plane": "observer_ui",
+        "description": "Observer-triggered full-chain verification.",
+        "min_exposure": "demo",
+    },
+    {
+        "id": "ui_replay",
+        "path": "/ui/replay",
+        "methods": ["GET"],
+        "auth": "none",
+        "plane": "observer_ui",
+        "description": "Observer-triggered decision replay for a turn.",
+        "min_exposure": "demo",
+    },
+    {
+        "id": "ui_demo_status",
+        "path": "/ui/demo/status",
+        "methods": ["GET"],
+        "auth": "none",
+        "plane": "observer_ui",
+        "description": "Status surface for the integrated demo controller.",
+        "min_exposure": "demo",
+    },
+    {
+        "id": "ui_demo_start",
+        "path": "/ui/demo/start",
+        "methods": ["POST"],
+        "auth": "none",
+        "plane": "observer_ui",
+        "description": "Start surface for the integrated demo controller.",
+        "min_exposure": "demo",
+    },
+)
 
-def get_capabilities_cached() -> dict[str, object]:
+_SURFACES_BY_ID: dict[str, dict[str, object]] = {
+    str(item["id"]): dict(item) for item in _SURFACE_REGISTRY
+}
+
+
+def get_capabilities_cached(boundary_config: BoundaryConfig | None = None) -> dict[str, object]:
     """
     Cached version of get_capabilities with TTL.
     This should be called via run_in_threadpool if used in async context
     to avoid blocking the event loop on cache misses.
     """
+    cfg = boundary_config or get_boundary_config()
+    cache_key = _capabilities_cache_key(cfg)
     now = time.time()
-    cached = _CAPS_CACHE.get("value")
-    expires = _CAPS_CACHE.get("expires_at", 0)
+    cached = _CAPS_CACHE.get(cache_key)
+    expires = _CAPS_CACHE.get(f"{cache_key}:expires_at", 0)
 
     if cached is not None and now < expires:
         return cached
 
-    caps = get_capabilities()
-    _CAPS_CACHE["value"] = caps
-    _CAPS_CACHE["expires_at"] = now + _CAPS_TTL_SECONDS
+    caps = get_capabilities(cfg)
+    _CAPS_CACHE[cache_key] = caps
+    _CAPS_CACHE[f"{cache_key}:expires_at"] = now + _CAPS_TTL_SECONDS
     return caps
 
 
-def get_capabilities() -> dict[str, object]:
+def get_capabilities(boundary_config: BoundaryConfig | None = None) -> dict[str, object]:
+    cfg = boundary_config or get_boundary_config()
     checked_at = datetime.now(timezone.utc).isoformat()
     providers: list[dict[str, Any]] = []
 
@@ -174,6 +373,11 @@ def get_capabilities() -> dict[str, object]:
         "schema_version": CAPABILITIES_SCHEMA_VERSION,
         "gateway_version": _gateway_version(),
         "interface_version": INTERFACE_VERSION,
+        "boundary": {
+            "boundary_version": cfg.boundary_version,
+            "boundary_config_digest": cfg.config_digest,
+            "exposure_mode": cfg.exposure_mode,
+        },
         "intents": {
             "supported": list(CAPABILITIES_INTENT_TYPES),
         },
@@ -199,178 +403,94 @@ def get_capabilities() -> dict[str, object]:
         },
         "providers": providers,
         "surfaces": {
-            "tail": True,
-            "snapshot": True,
+            "tail": surface_enabled("tail", cfg),
+            "snapshot": surface_enabled("snapshot", cfg),
             "events": False,
-            "ingress_intent": True,
+            "ingress_intent": surface_enabled("ingress_intent", cfg),
         },
-        "surface_catalog": get_surface_catalog(),
+        "surface_catalog": get_surface_catalog(cfg),
     }
 
 
-def get_surface_catalog() -> list[dict[str, object]]:
-    return [
-        {
-            "id": "healthz",
-            "path": "/healthz",
-            "methods": ["GET"],
-            "auth": "required",
-            "plane": "runtime",
-            "description": "Health check for the gateway process.",
-        },
-        {
-            "id": "capabilities",
-            "path": "/capabilities",
-            "methods": ["GET"],
-            "auth": "required",
-            "plane": "discovery",
-            "description": "Self-description of the runtime contract, providers, and surfaces.",
-        },
-        {
-            "id": "surfaces",
-            "path": "/surfaces",
-            "methods": ["GET"],
-            "auth": "required",
-            "plane": "discovery",
-            "description": "Explicit catalog of callable gateway and observer surfaces.",
-        },
-        {
-            "id": "intent_template",
-            "path": "/intent-template",
-            "methods": ["GET"],
-            "auth": "required",
-            "plane": "discovery",
-            "description": "Self-teaching intent template and example envelopes.",
-        },
-        {
-            "id": "ingress_intent",
-            "path": "/ingress/intent",
-            "methods": ["POST"],
-            "auth": "required",
-            "plane": "intent",
-            "description": "Intent ingress surface for declared envelopes.",
-        },
-        {
-            "id": "snapshot",
-            "path": "/snapshot",
-            "methods": ["GET"],
-            "auth": "required",
-            "plane": "observation",
-            "description": "Snapshot of persisted events and rolling v_digest.",
-        },
-        {
-            "id": "tail",
-            "path": "/tail",
-            "methods": ["GET"],
-            "auth": "required",
-            "plane": "observation",
-            "description": "Authenticated SSE stream of event envelopes.",
-        },
-        {
-            "id": "thread_timeline",
-            "path": "/threads/{thread_id}/timeline",
-            "methods": ["GET"],
-            "auth": "required",
-            "plane": "observation",
-            "description": "Turn-grouped thread timeline for replay and inspection.",
-        },
-        {
-            "id": "status",
-            "path": "/status",
-            "methods": ["GET"],
-            "auth": "required",
-            "plane": "observation",
-            "description": "Projected runner state derived from events.",
-        },
-        {
-            "id": "execution_event",
-            "path": "/execution/event",
-            "methods": ["POST"],
-            "auth": "required",
-            "plane": "execution",
-            "description": "External execution submission surface when enabled.",
-        },
-        {
-            "id": "ui_root",
-            "path": "/ui/",
-            "methods": ["GET"],
-            "auth": "none",
-            "plane": "observer_ui",
-            "description": "Built-in observer UI.",
-        },
-        {
-            "id": "ui_tail",
-            "path": "/ui/tail",
-            "methods": ["GET"],
-            "auth": "none",
-            "plane": "observer_ui",
-            "description": "Auth-free SSE feed for the built-in observer.",
-        },
-        {
-            "id": "ui_capabilities",
-            "path": "/ui/capabilities",
-            "methods": ["GET"],
-            "auth": "none",
-            "plane": "observer_ui",
-            "description": "Observer proxy for capabilities.",
-        },
-        {
-            "id": "ui_snapshot",
-            "path": "/ui/snapshot",
-            "methods": ["GET"],
-            "auth": "none",
-            "plane": "observer_ui",
-            "description": "Observer proxy for latest snapshot state.",
-        },
-        {
-            "id": "ui_policy_structure",
-            "path": "/ui/policy-structure",
-            "methods": ["GET"],
-            "auth": "none",
-            "plane": "observer_ui",
-            "description": "Observer proxy for the current policy inspector payload.",
-        },
-        {
-            "id": "ui_intent",
-            "path": "/ui/intent",
-            "methods": ["POST"],
-            "auth": "none",
-            "plane": "observer_ui",
-            "description": "Observer-side manual intent submission.",
-        },
-        {
-            "id": "ui_verify_chain",
-            "path": "/ui/verify-chain",
-            "methods": ["GET"],
-            "auth": "none",
-            "plane": "observer_ui",
-            "description": "Observer-triggered full-chain verification.",
-        },
-        {
-            "id": "ui_replay",
-            "path": "/ui/replay",
-            "methods": ["GET"],
-            "auth": "none",
-            "plane": "observer_ui",
-            "description": "Observer-triggered decision replay for a turn.",
-        },
-        {
-            "id": "ui_demo_status",
-            "path": "/ui/demo/status",
-            "methods": ["GET"],
-            "auth": "none",
-            "plane": "observer_ui",
-            "description": "Status surface for the integrated demo controller.",
-        },
-        {
-            "id": "ui_demo_start",
-            "path": "/ui/demo/start",
-            "methods": ["POST"],
-            "auth": "none",
-            "plane": "observer_ui",
-            "description": "Start surface for the integrated demo controller.",
-        },
-    ]
+def get_surface_catalog(boundary_config: BoundaryConfig | None = None) -> list[dict[str, object]]:
+    cfg = boundary_config or get_boundary_config()
+    visible: list[dict[str, object]] = []
+    for item in _SURFACE_REGISTRY:
+        surface_id = str(item["id"])
+        if not surface_enabled(surface_id, cfg):
+            continue
+        visible.append({
+            "id": surface_id,
+            "path": str(item["path"]),
+            "methods": list(item["methods"]),
+            "auth": str(item["auth"]),
+            "plane": str(item["plane"]),
+            "description": str(item["description"]),
+        })
+    return visible
+
+
+def surface_enabled(surface_id: str, boundary_config: BoundaryConfig | None = None) -> bool:
+    cfg = boundary_config or get_boundary_config()
+    item = _SURFACES_BY_ID.get(surface_id)
+    if item is None:
+        return False
+    required_mode = cfg.surface_rules.get(surface_id)
+    if required_mode is None:
+        required_mode = str(item.get("min_exposure", "demo"))
+    return exposure_mode_allows(cfg.exposure_mode, required_mode)
+
+
+def resolve_surface_id(path: str) -> str | None:
+    if path == "/":
+        return "ui_root"
+    if path in {"/ui", "/ui/"}:
+        return "ui_root"
+    if path.startswith("/threads/") and path.endswith("/timeline"):
+        return "thread_timeline"
+    for item in _SURFACE_REGISTRY:
+        if path == item["path"]:
+            return str(item["id"])
+    return None
+
+
+def surface_access_payload(
+    path: str,
+    *,
+    boundary_config: BoundaryConfig | None = None,
+) -> Mapping[str, object] | None:
+    surface_id = resolve_surface_id(path)
+    if surface_id is None:
+        return None
+    cfg = boundary_config or get_boundary_config()
+    if surface_enabled(surface_id, cfg):
+        return None
+    required_mode = cfg.surface_rules.get(surface_id)
+    if required_mode is None:
+        required_mode = str(_SURFACES_BY_ID[surface_id].get("min_exposure", "demo"))
+    return {
+        "surface_id": surface_id,
+        "exposure_mode": cfg.exposure_mode,
+        "required_exposure_mode": required_mode,
+        "status_code": 404 if str(surface_id).startswith("ui_") else 403,
+        "detail": "surface unavailable in current exposure mode",
+    }
+
+
+def _capabilities_cache_key(cfg: BoundaryConfig) -> str:
+    runtime_fingerprint = {
+        "boundary": cfg.config_digest,
+        "demo_mode": _is_demo_mode(),
+        "stub_mode": os.getenv("STUB_MODE", "").strip(),
+        "openai_key": bool(_get_openai_key()),
+        "openai_chat_models": tuple(_openai_models_all()),
+        "anthropic_key": bool(_get_anthropic_key()),
+        "anthropic_models": tuple(_anthropic_models_all()),
+        "ollama_base": os.getenv("OLLAMA_BASE_URL", "").strip(),
+        "ollama_host": os.getenv("OLLAMA_HOST", "").strip(),
+        "ollama_models": tuple(_parse_csv("OLLAMA_MODEL_IDS")),
+    }
+    return hashlib.sha256(repr(runtime_fingerprint).encode("utf-8")).hexdigest()
 
 
 def resolve_model(requested_model_id: str | None) -> tuple[str | None, str | None]:

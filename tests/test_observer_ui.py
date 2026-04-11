@@ -23,6 +23,8 @@ def _env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("DBL_GATEWAY_INLINE_DECISION", "1")
     monkeypatch.setenv("GATEWAY_ENABLE_CONTEXT_RESOLUTION", "1")
     monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    boundary_demo = Path(__file__).resolve().parents[1] / "config" / "boundary.demo.json"
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", str(boundary_demo))
 
 
 def _make_app() -> Any:
@@ -421,7 +423,7 @@ class TestUiDemoProxy:
         app = _make_app()
         monkeypatch.setattr(
             "dbl_gateway.app.get_capabilities_cached",
-            lambda: {
+            lambda *_args, **_kwargs: {
                 "providers": [
                     {
                         "id": "openai",
@@ -446,7 +448,7 @@ class TestUiDemoProxy:
         app = _make_app()
         monkeypatch.setattr(
             "dbl_gateway.app.get_capabilities_cached",
-            lambda: {
+            lambda *_args, **_kwargs: {
                 "providers": [
                     {
                         "id": "openai",

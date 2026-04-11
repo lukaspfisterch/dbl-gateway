@@ -1,6 +1,29 @@
 {
   "components": {
     "schemas": {
+      "CapabilitiesBoundary": {
+        "properties": {
+          "boundary_config_digest": {
+            "title": "Boundary Config Digest",
+            "type": "string"
+          },
+          "boundary_version": {
+            "title": "Boundary Version",
+            "type": "string"
+          },
+          "exposure_mode": {
+            "title": "Exposure Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "boundary_version",
+          "boundary_config_digest",
+          "exposure_mode"
+        ],
+        "title": "CapabilitiesBoundary",
+        "type": "object"
+      },
       "CapabilitiesBudget": {
         "properties": {
           "fields": {
@@ -181,6 +204,9 @@
       },
       "CapabilitiesResponse": {
         "properties": {
+          "boundary": {
+            "$ref": "#/components/schemas/CapabilitiesBoundary"
+          },
           "budget": {
             "$ref": "#/components/schemas/CapabilitiesBudget"
           },
@@ -224,6 +250,7 @@
           "schema_version",
           "gateway_version",
           "interface_version",
+          "boundary",
           "intents",
           "tool_surface",
           "budget",

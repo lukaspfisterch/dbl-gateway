@@ -28,6 +28,10 @@ T = TypeVar("T")
 ClientCallable = Callable[[httpx.AsyncClient], Awaitable[T]]
 
 
+def _boundary_path(name: str) -> str:
+    return str(Path(__file__).resolve().parents[1] / "config" / name)
+
+
 async def _with_client(app, fn: ClientCallable[T]) -> T:
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://testserver") as client:
@@ -137,6 +141,103 @@ def test_admission_rejects_secrets(tmp_path: Path, monkeypatch: pytest.MonkeyPat
         assert resp.json()["reason_code"] == "admission.secrets_present"
         snap = (await client.get("/snapshot")).json()
         assert snap["length"] == 0
+
+    run_with_client(app, scenario)
+
+
+def test_public_mode_rejects_declared_refs_before_intent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", _boundary_path("boundary.public.json"))
+    app = create_app(start_workers=True)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        payload = _intent_envelope("hello")
+        payload["payload"]["declared_refs"] = [{"ref_type": "event", "ref_id": "corr-1"}]
+        resp = await client.post("/ingress/intent", json=payload)
+        assert resp.status_code == 400
+        assert resp.json()["reason_code"] == "admission.context_refs_denied"
+        snap = app.state.store.snapshot(limit=10, offset=0)
+        assert snap["length"] == 0
+
+    run_with_client(app, scenario)
+
+
+def test_public_mode_rejects_declared_tools_before_intent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", _boundary_path("boundary.public.json"))
+    app = create_app(start_workers=True)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        payload = _intent_envelope("hello")
+        payload["payload"]["declared_tools"] = ["web.search"]
+        resp = await client.post("/ingress/intent", json=payload)
+        assert resp.status_code == 400
+        assert resp.json()["reason_code"] == "admission.declared_tools_denied"
+        snap = app.state.store.snapshot(limit=10, offset=0)
+        assert snap["length"] == 0
+
+    run_with_client(app, scenario)
+
+
+def test_public_mode_rejects_budget_over_limit_before_intent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", _boundary_path("boundary.public.json"))
+    app = create_app(start_workers=True)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        payload = _intent_envelope("hello")
+        payload["payload"]["budget"] = {"max_tokens": 5000}
+        resp = await client.post("/ingress/intent", json=payload)
+        assert resp.status_code == 400
+        assert resp.json()["reason_code"] == "admission.budget_exceeds_public_limit"
+        snap = app.state.store.snapshot(limit=10, offset=0)
+        assert snap["length"] == 0
+
+    run_with_client(app, scenario)
+
+
+def test_public_mode_rejects_artifact_handle_before_intent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", _boundary_path("boundary.public.json"))
+    monkeypatch.setenv("GATEWAY_ENABLE_CONTEXT_RESOLUTION", "true")
+    app = create_app(start_workers=True)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        payload = _intent_envelope(
+            "ignored",
+            intent_type="artifact.handle",
+            payload_override={"handle": "wb:artifact:123"},
+        )
+        resp = await client.post("/ingress/intent", json=payload)
+        assert resp.status_code == 400
+        assert resp.json()["reason_code"] == "admission.intent_type_denied"
+        snap = app.state.store.snapshot(limit=10, offset=0)
+        assert snap["length"] == 0
+
+    run_with_client(app, scenario)
+
+
+def test_operator_mode_allows_refs_tools_and_budget(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", _boundary_path("boundary.operator.json"))
+    app = create_app(start_workers=True)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        payload = _intent_envelope("hello")
+        payload["payload"]["declared_refs"] = [{"ref_type": "event", "ref_id": "corr-1"}]
+        payload["payload"]["declared_tools"] = ["web.search"]
+        payload["payload"]["budget"] = {"max_tokens": 5000}
+        resp = await client.post("/ingress/intent", json=payload)
+        assert resp.status_code == 202
+        body = resp.json()
+        assert body["accepted"] is True
+        snap = (await client.get("/snapshot")).json()
+        assert snap["length"] >= 1
+        assert snap["events"][0]["kind"] == "INTENT"
 
     run_with_client(app, scenario)
 
@@ -695,15 +796,16 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert resp.status_code == 200
         data = resp.json()
         assert data["interface_version"] == INTERFACE_VERSION
+        assert data["boundary"]["exposure_mode"] == "operator"
         assert data["surfaces"]["tail"] is True
         assert data["surfaces"]["snapshot"] is True
         assert data["surfaces"]["events"] is False
         assert data["surfaces"]["ingress_intent"] is True
         catalog = data["surface_catalog"]
         assert isinstance(catalog, list)
+        assert any(item["id"] == "capabilities" and item["path"] == "/capabilities" for item in catalog)
+        assert not any(item["id"].startswith("ui_") for item in catalog)
         assert any(item["id"] == "surfaces" and item["path"] == "/surfaces" for item in catalog)
-        assert any(item["id"] == "ui_policy_structure" and item["path"] == "/ui/policy-structure" for item in catalog)
-        assert any(item["id"] == "ui_intent" and item["path"] == "/ui/intent" for item in catalog)
         providers = data["providers"]
         assert isinstance(providers, list)
         assert providers and providers[0]["id"] == "openai"
@@ -720,6 +822,8 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 def test_surfaces_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    operator_cfg = Path(__file__).resolve().parents[1] / "config" / "boundary.operator.json"
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", str(operator_cfg))
     app = create_app(start_workers=True)
 
     async def scenario(client: httpx.AsyncClient) -> None:
@@ -730,15 +834,16 @@ def test_surfaces_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         surfaces = data["surfaces"]
         assert isinstance(surfaces, list)
         assert any(item["id"] == "capabilities" and item["path"] == "/capabilities" for item in surfaces)
-        assert any(item["id"] == "ui_policy_structure" and item["path"] == "/ui/policy-structure" for item in surfaces)
-        assert any(item["id"] == "ui_demo_start" and item["path"] == "/ui/demo/start" for item in surfaces)
-        assert any(item["id"] == "ui_tail" and item["auth"] == "none" for item in surfaces)
+        assert any(item["id"] == "surfaces" and item["path"] == "/surfaces" for item in surfaces)
+        assert not any(item["id"].startswith("ui_") for item in surfaces)
 
     run_with_client(app, scenario)
 
 
 def test_intent_template_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    operator_cfg = Path(__file__).resolve().parents[1] / "config" / "boundary.operator.json"
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", str(operator_cfg))
     app = create_app(start_workers=True)
 
     async def scenario(client: httpx.AsyncClient) -> None:

@@ -1,0 +1,39 @@
+{
+  "$schema": "./boundary.schema.json",
+  "schema_version": "1",
+  "boundary_version": "1",
+  "exposure_mode": "demo",
+  "admission": {
+    "public": {
+      "allow_artifact_handle": false,
+      "allow_declared_refs": false,
+      "max_declared_tools": 0,
+      "max_budget": {
+        "max_tokens": 4096,
+        "max_duration_ms": 30000
+      }
+    }
+  },
+  "surface_rules": {
+    "healthz": "public",
+    "capabilities": "public",
+    "ingress_intent": "public",
+    "surfaces": "operator",
+    "intent_template": "operator",
+    "snapshot": "operator",
+    "thread_timeline": "operator",
+    "tail": "operator",
+    "status": "operator",
+    "execution_event": "operator",
+    "ui_root": "demo",
+    "ui_tail": "demo",
+    "ui_capabilities": "demo",
+    "ui_snapshot": "demo",
+    "ui_policy_structure": "demo",
+    "ui_intent": "demo",
+    "ui_verify_chain": "demo",
+    "ui_replay": "demo",
+    "ui_demo_status": "demo",
+    "ui_demo_start": "demo"
+  }
+}

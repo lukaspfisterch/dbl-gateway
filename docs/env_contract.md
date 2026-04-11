@@ -1,7 +1,7 @@
 # Environment Contract
 
-All gateway configuration is through environment variables.
-No config files, no YAML. Secrets never appear in event payloads.
+Gateway startup uses environment variables plus versioned JSON boundary/context artifacts.
+Secrets never appear in event payloads.
 
 ## Runtime
 
@@ -10,8 +10,28 @@ No config files, no YAML. Secrets never appear in event payloads.
 | `DBL_GATEWAY_DB` | yes | `./data/trail.sqlite` | SQLite path for the event trail |
 | `DBL_GATEWAY_POLICY_MODULE` | yes | -- | Python module path for policy (e.g. `dbl_policy.allow_all`) |
 | `DBL_GATEWAY_POLICY_OBJECT` | no | `POLICY` | Attribute name of the policy object in the module |
+| `DBL_GATEWAY_BOUNDARY_CONFIG` | no | `config/boundary.json` | Path to the boundary config artifact controlling `exposure_mode`, surface rules, and public admission limits |
 | `GATEWAY_EXEC_MODE` | no | `embedded` | `embedded` (in-process provider calls) or `external` (sidecar) |
 | `GATEWAY_ENABLE_CONTEXT_RESOLUTION` | no | OFF | `true`/`1`/`yes` to enable declared_refs resolution and Workbench handle fetch. When OFF, refs are stored but not resolved; `artifact.handle` intents are rejected. |
+
+## Boundary Profiles
+
+Built-in boundary profiles live in `config/`:
+- `boundary.json` — default `operator` profile
+- `boundary.public.json` — minimized public surface
+- `boundary.operator.json` — explicit operator surface profile
+- `boundary.demo.json` — full demo/observer surface
+
+`GATEWAY_DEMO_MODE=1` selects the demo boundary profile when no explicit boundary config path is set.
+
+Each boundary artifact also contains `admission.public`:
+- `allow_artifact_handle`
+- `allow_declared_refs`
+- `max_declared_tools`
+- `max_budget.max_tokens`
+- `max_budget.max_duration_ms`
+
+These limits are enforced deterministically from request content plus boundary config. They do not depend on queue depth, load, timing, or other runtime observations.
 
 ## Provider Credentials
 

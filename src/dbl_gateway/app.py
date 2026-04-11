@@ -29,11 +29,18 @@ from .capabilities import (
     resolve_model,
     resolve_provider,
     get_capabilities,
+    surface_access_payload,
 )
 from .adapters.execution_adapter_kl import KlExecutionAdapter
 from .adapters.policy_adapter_dbl_policy import DblPolicyAdapter, ObserverPolicy, _load_policy
 from .context_builder import build_context_with_refs, RefResolutionError
-from .config import get_context_config, context_resolution_enabled, get_job_runtime_config
+from .config import (
+    get_boundary_config,
+    get_context_config,
+    context_resolution_enabled,
+    get_job_runtime_config,
+    reset_boundary_config_cache,
+)
 from .contracts import canonical_json_bytes
 from .decision_builder import build_normative_decision
 from .demo_agent import DEMO_SCENARIO_DESCRIPTION, DEMO_SCENARIO_NAME, DEMO_SCENARIO_VERSION, active_provider_model, build_envelope, default_steps, scenario_metadata
@@ -294,10 +301,13 @@ def _configure_logging() -> None:
 
 
 def create_app(*, start_workers: bool = True) -> FastAPI:
+    _maybe_activate_demo_mode()
+    reset_boundary_config_cache()
+    boundary_cfg = get_boundary_config()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         _configure_logging()
-        _maybe_activate_demo_mode()
         _audit_env()
         policy = _load_policy_with_fallback()
         if policy is None:
@@ -310,6 +320,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         app.state.work_queue = work_queue
         app.state.worker_tasks: list[asyncio.Task] = []
         app.state.demo_agent = _new_demo_state()
+        app.state.boundary_config = boundary_cfg
         app.state.start_time = time.monotonic()
         if start_workers and work_queue is not None:
             worker = asyncio.create_task(_work_queue_loop(app, work_queue))
@@ -352,7 +363,20 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         request_id = request.headers.get("x-request-id", "").strip() or uuid.uuid4().hex
         request.state.request_id = request_id
         start = time.monotonic()
-        response = await call_next(request)
+        denied = surface_access_payload(request.url.path, boundary_config=boundary_cfg)
+        if denied is None:
+            response = await call_next(request)
+        else:
+            status_code = int(denied["status_code"])
+            response = JSONResponse(
+                {
+                    "detail": denied["detail"],
+                    "surface_id": denied["surface_id"],
+                    "exposure_mode": denied["exposure_mode"],
+                    "required_exposure_mode": denied["required_exposure_mode"],
+                },
+                status_code=status_code,
+            )
         response.headers["x-request-id"] = request_id
         latency_ms = int((time.monotonic() - start) * 1000)
         if _should_log_request(request.url.path, request.method):
@@ -378,17 +402,17 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
     async def capabilities(request: Request) -> dict[str, object]:
         actor = await _require_actor(request)
         _require_role(actor, ["gateway.snapshot.read"])
-        return await run_in_threadpool(get_capabilities_cached)
+        return await run_in_threadpool(get_capabilities_cached, boundary_cfg)
 
     @app.get("/surfaces")
     async def surfaces(request: Request) -> dict[str, object]:
         actor = await _require_actor(request)
         _require_role(actor, ["gateway.snapshot.read"])
-        caps = await run_in_threadpool(get_capabilities_cached)
+        caps = await run_in_threadpool(get_capabilities_cached, boundary_cfg)
         return {
             "gateway_version": caps.get("gateway_version"),
             "interface_version": caps.get("interface_version"),
-            "surfaces": get_surface_catalog(),
+            "surfaces": get_surface_catalog(boundary_cfg),
         }
 
     @app.get("/intent-template")
@@ -574,7 +598,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
     @app.get("/ui/capabilities", include_in_schema=False)
     async def ui_capabilities() -> JSONResponse:
         """Capabilities proxy for observer UI — no auth."""
-        data = get_capabilities_cached()
+        data = get_capabilities_cached(boundary_cfg)
         return JSONResponse(data, headers={"Cache-Control": "max-age=30"})
 
     @app.get("/ui/snapshot", include_in_schema=False)
@@ -665,7 +689,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         if demo.get("running"):
             return JSONResponse(await _demo_status_payload(app), status_code=409)
 
-        capabilities = get_capabilities_cached()
+        capabilities = get_capabilities_cached(boundary_cfg)
         active = active_provider_model(capabilities)
         if active is None:
             return JSONResponse(
@@ -1500,6 +1524,11 @@ def _maybe_activate_demo_mode() -> None:
         os.environ["GATEWAY_ENABLE_CONTEXT_RESOLUTION"] = "1"
         _LOGGER.info("  context resolution enabled")
 
+    if not os.getenv("DBL_GATEWAY_BOUNDARY_CONFIG", "").strip():
+        demo_boundary = Path(__file__).resolve().parents[2] / "config" / "boundary.demo.json"
+        os.environ["DBL_GATEWAY_BOUNDARY_CONFIG"] = str(demo_boundary)
+        _LOGGER.info("  boundary config: %s", demo_boundary)
+
     stub_mode = os.getenv("STUB_MODE", "echo")
     _LOGGER.info("  stub mode: %s", stub_mode)
     _LOGGER.info("  -> Open http://localhost:8010/ui/")
@@ -2074,6 +2103,7 @@ async def _ingest_envelope(app: FastAPI, envelope: Mapping[str, Any], trace_id: 
                 "observational": {},
             },
             raw_payload=payload_for_shape,
+            boundary_config=app.state.boundary_config,
         )
     except AdmissionFailure as exc:
         return JSONResponse(
@@ -2211,7 +2241,17 @@ def main() -> None:
     browser_host = args.host
     if browser_host in {"0.0.0.0", "::"}:
         browser_host = "localhost"
-    _LOGGER.info('{"message":"startup.surface","observer_ui":"http://%s:%d/ui/"}', browser_host, args.port)
+    boundary = get_boundary_config()
+    _LOGGER.info(
+        '{"message":"startup.boundary","exposure_mode":"%s","boundary_version":"%s","boundary_config_digest":"%s"}',
+        boundary.exposure_mode,
+        boundary.boundary_version,
+        boundary.config_digest,
+    )
+    if boundary.exposure_mode == "demo":
+        _LOGGER.info('{"message":"startup.surface","observer_ui":"http://%s:%d/ui/"}', browser_host, args.port)
+    else:
+        _LOGGER.info('{"message":"startup.surface","ingress":"http://%s:%d/ingress/intent"}', browser_host, args.port)
     uvicorn.run(app, host=args.host, port=args.port, reload=False)
 
 

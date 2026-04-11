@@ -51,6 +51,13 @@ docker compose up
 
 One active provider is enough. See [.env.example](.env.example) for all options.
 
+The default runtime boundary profile is `operator`:
+- `/ingress/intent`, `/capabilities`, `/snapshot`, `/tail`, `/status`, `/surfaces`, and `/intent-template` stay available
+- `/ui/*` is not exposed
+
+The full built-in observer is demo-only unless you explicitly select the demo boundary config.
+In `public`, the boundary also applies deterministic admission limits from the versioned boundary config before any `INTENT` is appended.
+
 ## Install
 
 ```bash
@@ -65,7 +72,7 @@ pip install -e .
 
 ## Reference implementation
 
-`dbl-gateway` instantiates the Deterministic Boundary Layer (DBL) as a runtime
+`dbl-gateway` implements the Deterministic Boundary Layer (DBL) as a runtime
 system.
 
 It realizes the event chain INTENT → DECISION → PROOF → EXECUTION, where
@@ -79,7 +86,7 @@ The gateway enforces the core invariants of the model:
 - deterministic replay under fixed inputs and policy configuration
 
 As such, it serves both as a usable governed gateway and as a reference
-instantiation of the DBL model.
+implementation of the DBL model.
 
 For empirical validation, including replay equivalence and policy variation
 benchmarks, see
@@ -87,7 +94,7 @@ benchmarks, see
 
 ## Observer UI
 
-Open `/ui` to watch the event chain in real time.
+Open `/ui` only when the active boundary profile is `demo`.
 
 The built-in observer includes the event stream, decision replay, chain
 verification, a policy inspector for DECISION events, manual intent

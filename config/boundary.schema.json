@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DBL Gateway Boundary Config",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "boundary_version",
+    "exposure_mode",
+    "admission",
+    "surface_rules"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "boundary_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "exposure_mode": {
+      "type": "string",
+      "enum": ["public", "operator", "demo"]
+    },
+    "admission": {
+      "type": "object",
+      "required": ["public"],
+      "properties": {
+        "public": {
+          "type": "object",
+          "required": [
+            "allow_artifact_handle",
+            "allow_declared_refs",
+            "max_declared_tools",
+            "max_budget"
+          ],
+          "properties": {
+            "allow_artifact_handle": {
+              "type": "boolean"
+            },
+            "allow_declared_refs": {
+              "type": "boolean"
+            },
+            "max_declared_tools": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max_budget": {
+              "type": "object",
+              "required": ["max_tokens", "max_duration_ms"],
+              "properties": {
+                "max_tokens": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "max_duration_ms": {
+                  "type": "integer",
+                  "minimum": 1000
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "surface_rules": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["public", "operator", "demo"]
+      }
+    }
+  },
+  "additionalProperties": false
+}

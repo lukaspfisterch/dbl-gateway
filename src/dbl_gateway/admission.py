@@ -12,8 +12,14 @@ from dbl_ingress import (
     ADMISSION_SECRETS_PRESENT,
 )
 
+from .config import BoundaryConfig
+
 
 SECRET_KEYS = {"api_key", "authorization", "token", "secret", "bearer"}
+ADMISSION_INTENT_TYPE_DENIED = "admission.intent_type_denied"
+ADMISSION_CONTEXT_REFS_DENIED = "admission.context_refs_denied"
+ADMISSION_DECLARED_TOOLS_DENIED = "admission.declared_tools_denied"
+ADMISSION_BUDGET_EXCEEDS_PUBLIC_LIMIT = "admission.budget_exceeds_public_limit"
 
 
 @dataclass(frozen=True)
@@ -22,7 +28,12 @@ class AdmissionFailure(Exception):
     detail: str
 
 
-def admit_and_shape_intent(payload: Mapping[str, Any], *, raw_payload: Mapping[str, Any] | None = None) -> AdmissionRecord:
+def admit_and_shape_intent(
+    payload: Mapping[str, Any],
+    *,
+    raw_payload: Mapping[str, Any] | None = None,
+    boundary_config: BoundaryConfig | None = None,
+) -> AdmissionRecord:
     if raw_payload is not None and _contains_secrets(raw_payload):
         raise AdmissionFailure(reason_code=ADMISSION_SECRETS_PRESENT, detail="secrets detected in payload")
     if _contains_secrets(payload):
@@ -41,6 +52,12 @@ def admit_and_shape_intent(payload: Mapping[str, Any], *, raw_payload: Mapping[s
 
     deterministic_payload = deterministic.get("payload")
     _require_identity_anchors(deterministic_payload)
+    if boundary_config is not None:
+        _enforce_boundary_admission(
+            deterministic,
+            payload=deterministic_payload,
+            boundary_config=boundary_config,
+        )
 
     try:
         record = shape_input(
@@ -80,3 +97,65 @@ def _require_identity_anchors(payload: object) -> None:
     parent = payload.get("parent_turn_id")
     if parent is not None and not isinstance(parent, str):
         raise AdmissionFailure(reason_code=ADMISSION_INVALID_INPUT, detail="parent_turn_id must be a string when provided")
+
+
+def _enforce_boundary_admission(
+    deterministic: Mapping[str, Any],
+    *,
+    payload: object,
+    boundary_config: BoundaryConfig,
+) -> None:
+    if boundary_config.exposure_mode != "public":
+        return
+    if not isinstance(payload, Mapping):
+        raise AdmissionFailure(reason_code=ADMISSION_INVALID_INPUT, detail="payload must be an object")
+
+    admission = boundary_config.admission
+    raw_intent_type = deterministic.get("intent_type")
+    intent_type = raw_intent_type if isinstance(raw_intent_type, str) else payload.get("intent_type")
+    if (
+        intent_type == "artifact.handle"
+        and not admission.public_allow_artifact_handle
+    ):
+        raise AdmissionFailure(
+            reason_code=ADMISSION_INTENT_TYPE_DENIED,
+            detail="artifact.handle is not admitted in public exposure mode",
+        )
+
+    declared_refs = payload.get("declared_refs")
+    if declared_refs and not admission.public_allow_declared_refs:
+        raise AdmissionFailure(
+            reason_code=ADMISSION_CONTEXT_REFS_DENIED,
+            detail="declared_refs are not admitted in public exposure mode",
+        )
+
+    declared_tools = payload.get("declared_tools")
+    if isinstance(declared_tools, list) and len(declared_tools) > admission.public_max_declared_tools:
+        raise AdmissionFailure(
+            reason_code=ADMISSION_DECLARED_TOOLS_DENIED,
+            detail=(
+                "declared_tools exceed public exposure limit "
+                f"({len(declared_tools)} > {admission.public_max_declared_tools})"
+            ),
+        )
+
+    budget = payload.get("budget")
+    if isinstance(budget, Mapping):
+        max_tokens = budget.get("max_tokens")
+        if isinstance(max_tokens, int) and max_tokens > admission.public_max_budget_tokens:
+            raise AdmissionFailure(
+                reason_code=ADMISSION_BUDGET_EXCEEDS_PUBLIC_LIMIT,
+                detail=(
+                    "budget.max_tokens exceeds public exposure limit "
+                    f"({max_tokens} > {admission.public_max_budget_tokens})"
+                ),
+            )
+        max_duration_ms = budget.get("max_duration_ms")
+        if isinstance(max_duration_ms, int) and max_duration_ms > admission.public_max_budget_duration_ms:
+            raise AdmissionFailure(
+                reason_code=ADMISSION_BUDGET_EXCEEDS_PUBLIC_LIMIT,
+                detail=(
+                    "budget.max_duration_ms exceeds public exposure limit "
+                    f"({max_duration_ms} > {admission.public_max_budget_duration_ms})"
+                ),
+            )

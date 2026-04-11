@@ -120,7 +120,7 @@ class TestDemoModeActivation:
             assert "stub" in PROVIDER_MODULES
 
             # Capabilities should include stub models
-            resp = await client.get("/ui/capabilities")
+            resp = await client.get("/capabilities")
             assert resp.status_code == 200
             data = resp.json()
             stub_providers = [p for p in data["providers"] if p["id"] == "stub"]
@@ -162,7 +162,7 @@ class TestDemoModeActivation:
             app = create_app(start_workers=False)
 
             async def check(client: httpx.AsyncClient) -> None:
-                resp = await client.get("/ui/capabilities")
+                resp = await client.get("/capabilities")
                 assert resp.status_code == 200
                 data = resp.json()
                 stub_providers = [p for p in data["providers"] if p["id"] == "stub"]
