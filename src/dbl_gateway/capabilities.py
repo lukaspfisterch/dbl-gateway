@@ -13,7 +13,12 @@ _LOGGER = logging.getLogger(__name__)
 
 from pydantic import BaseModel
 
-from .config import BoundaryConfig, exposure_mode_allows, get_boundary_config
+from .config import (
+    BoundaryConfig,
+    context_resolution_enabled,
+    exposure_mode_allows,
+    get_boundary_config,
+)
 from .providers import get_provider_capabilities
 from .providers.contract import ProviderCapabilities
 from .wire_contract import (
@@ -91,6 +96,7 @@ class SurfaceDescriptor(BaseModel):
 
 class CapabilitiesIntents(BaseModel):
     supported: list[str]
+    catalog: dict[str, dict[str, Any]]
 
 
 class CapabilitiesDeclaredTools(BaseModel):
@@ -343,6 +349,7 @@ def get_capabilities(boundary_config: BoundaryConfig | None = None) -> dict[str,
     cfg = boundary_config or get_boundary_config()
     checked_at = datetime.now(timezone.utc).isoformat()
     providers: list[dict[str, Any]] = []
+    intent_catalog = get_intent_catalog(cfg)
 
     if _get_openai_key():
         caps = get_provider_capabilities("openai")
@@ -379,7 +386,8 @@ def get_capabilities(boundary_config: BoundaryConfig | None = None) -> dict[str,
             "exposure_mode": cfg.exposure_mode,
         },
         "intents": {
-            "supported": list(CAPABILITIES_INTENT_TYPES),
+            "supported": [intent_id for intent_id, meta in intent_catalog.items() if bool(meta.get("admitted"))],
+            "catalog": intent_catalog,
         },
         "tool_surface": {
             "declared_tools": {
@@ -410,6 +418,40 @@ def get_capabilities(boundary_config: BoundaryConfig | None = None) -> dict[str,
         },
         "surface_catalog": get_surface_catalog(cfg),
     }
+
+
+def get_intent_catalog(boundary_config: BoundaryConfig | None = None) -> dict[str, dict[str, Any]]:
+    cfg = boundary_config or get_boundary_config()
+    context_enabled = context_resolution_enabled()
+
+    catalog: dict[str, dict[str, Any]] = {
+        "chat.message": {
+            "risk_class": "standard",
+            "admitted": True,
+            "requires_context_resolution": False,
+            "available_in_exposure_modes": ["public", "operator", "demo"],
+        },
+    }
+
+    artifact_exposures = ["operator", "demo"]
+    if cfg.admission.public_allow_artifact_handle:
+        artifact_exposures = ["public", *artifact_exposures]
+
+    artifact_visible = any(
+        exposure_mode_allows(cfg.exposure_mode, required_mode)
+        for required_mode in artifact_exposures
+    )
+    if artifact_visible:
+        catalog["artifact.handle"] = {
+            "risk_class": "high_risk_context",
+            "admitted": context_enabled and (
+                cfg.exposure_mode != "public" or cfg.admission.public_allow_artifact_handle
+            ),
+            "requires_context_resolution": True,
+            "available_in_exposure_modes": artifact_exposures,
+        }
+
+    return catalog
 
 
 def get_surface_catalog(boundary_config: BoundaryConfig | None = None) -> list[dict[str, object]]:

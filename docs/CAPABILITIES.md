@@ -25,6 +25,7 @@ unless it affects wire behavior.
   - `boundary_config_digest`
   - `exposure_mode`
 - `surface_catalog` and `GET /surfaces` are filtered by the active exposure mode.
+- Intent discovery is filtered by the active boundary and current context-resolution runtime gate.
 - Built-in profiles:
   - `public` — minimal ingress-oriented surface
   - `operator` — runtime and discovery surfaces without `/ui/*`
@@ -56,10 +57,13 @@ returned observer status/results.
 - `GET /intent-template` publishes valid example envelopes so clients can discover not just where ingress is, but how to speak to it correctly.
 - Template payloads include `interface_version`, `intent_variant`, and `target_endpoint` so agents can bootstrap against the wire contract without guessing.
 - `template_version` and `template_schema_digest` let clients detect when the teaching surface has changed.
+- `intents.catalog` describes each currently visible intent with `risk_class`, `admitted`, and `requires_context_resolution`.
+- `GET /intent-template` only emits example envelopes for intents currently admitted by the active boundary/runtime configuration.
 
 ## Intents
 - `chat.message`: accepts `message` plus optional `inputs`, `declared_refs`, `context_mode/context_n`, `declared_tools`, `tool_scope`, `budget`.
 - `artifact.handle`: metadata-only, does not trigger decision by default; content fetch is gated. Rejected when `GATEWAY_ENABLE_CONTEXT_RESOLUTION` is OFF.
+- `artifact.handle` is treated as `high_risk_context` in discovery metadata and is not advertised in `public` mode by default.
 
 ## Declared Refs & Admission Rules
 - `declared_refs` must be a list of `{ref_type, ref_id, version?}`.

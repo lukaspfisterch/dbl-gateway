@@ -14,6 +14,7 @@ High-level runtime description:
 
 - interface version
 - providers and models
+- intent admission catalog for the current boundary/runtime
 - tool surface
 - budget surface
 - compact surface booleans
@@ -45,9 +46,11 @@ It returns:
 - `template_schema_digest`
 - selected `template`
 - example variants
+- `intent_catalog` for the current boundary/runtime
 
 Each template carries an `intent_variant` so tools can distinguish example
 profiles without string-parsing the route parameters.
+High-risk context examples are emitted only when they are currently admitted.
 
 ## Bootstrapping Flow
 
@@ -65,3 +68,5 @@ In `public` mode, discovery is intentionally minimized. Clients should use:
 
 1. `GET /capabilities`
 2. `POST /ingress/intent`
+
+In that mode, high-risk context intents are not advertised.

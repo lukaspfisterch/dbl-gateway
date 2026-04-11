@@ -57,6 +57,7 @@ The default runtime boundary profile is `operator`:
 
 The full built-in observer is demo-only unless you explicitly select the demo boundary config.
 In `public`, the boundary also applies deterministic admission limits from the versioned boundary config before any `INTENT` is appended.
+High-risk context intents are only advertised in discovery when the active boundary/runtime can actually admit them.
 
 ## Install
 

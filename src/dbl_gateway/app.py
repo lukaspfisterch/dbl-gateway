@@ -25,6 +25,7 @@ from .admission import admit_and_shape_intent, AdmissionFailure
 from .capabilities import (
     CapabilitiesResponse,
     get_capabilities_cached,
+    get_intent_catalog,
     get_surface_catalog,
     resolve_model,
     resolve_provider,
@@ -423,7 +424,11 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
     ) -> dict[str, object]:
         actor = await _require_actor(request)
         _require_role(actor, ["gateway.snapshot.read"])
-        return _intent_template_payload(intent_type=intent_type, example=example)
+        return _intent_template_payload(
+            intent_type=intent_type,
+            example=example,
+            boundary_config=boundary_cfg,
+        )
 
     @app.post("/ingress/intent", response_model=dict[str, object])
     async def ingress_intent(request: Request, body: dict[str, Any] = Body(...)) -> JSONResponse:
@@ -1793,8 +1798,14 @@ def _demo_log(app: FastAPI, message: str, *, level: str = "info") -> None:
         del logs[:-60]
 
 
-def _intent_template_payload(*, intent_type: str, example: str) -> dict[str, object]:
+def _intent_template_payload(
+    *,
+    intent_type: str,
+    example: str,
+    boundary_config=None,
+) -> dict[str, object]:
     template_version = "1"
+    intent_catalog = get_intent_catalog(boundary_config)
 
     def envelope(
         *,
@@ -1883,12 +1894,34 @@ def _intent_template_payload(*, intent_type: str, example: str) -> dict[str, obj
         ("artifact.handle", "minimal"): "artifact-handle",
         ("artifact.handle", "artifact-handle"): "artifact-handle",
     }
+    if selected_intent not in intent_catalog:
+        raise HTTPException(
+            status_code=403,
+            detail="intent_type is not discoverable in the current boundary profile",
+        )
+    if not bool(intent_catalog[selected_intent].get("admitted")):
+        raise HTTPException(
+            status_code=403,
+            detail="intent_type is not currently admitted in the active boundary/runtime configuration",
+        )
     selected_key = key_map.get((selected_intent, selected_example))
     if selected_key is None:
         raise HTTPException(
             status_code=400,
             detail="unsupported intent_type/example combination",
         )
+
+    visible_examples: dict[str, dict[str, dict[str, object]]] = {
+        "chat.message": {
+            "minimal": examples["minimal"],
+            "tools-budget": examples["tools-budget"],
+            "deny-demo": examples["deny-demo"],
+        },
+    }
+    if bool(intent_catalog.get("artifact.handle", {}).get("admitted")):
+        visible_examples["artifact.handle"] = {
+            "minimal": examples["artifact-handle"],
+        }
 
     payload = {
         "path": "/ingress/intent",
@@ -1900,16 +1933,8 @@ def _intent_template_payload(*, intent_type: str, example: str) -> dict[str, obj
         "intent_type": selected_intent,
         "example": selected_example,
         "template": examples[selected_key],
-        "examples": {
-            "chat.message": {
-                "minimal": examples["minimal"],
-                "tools-budget": examples["tools-budget"],
-                "deny-demo": examples["deny-demo"],
-            },
-            "artifact.handle": {
-                "minimal": examples["artifact-handle"],
-            },
-        },
+        "examples": visible_examples,
+        "intent_catalog": intent_catalog,
         "notes": [
             "Change correlation_id for each new intent.",
             "Keep thread_id stable across a thread and increment turn_id per turn.",

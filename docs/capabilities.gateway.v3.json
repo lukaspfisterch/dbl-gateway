@@ -1,17 +1,38 @@
 {
   "schema_version": "gateway.capabilities.v1",
-  "gateway_version": "0.8.1",
+  "gateway_version": "0.9.11",
   "interface_version": 3,
   "boundary": {
     "boundary_version": "1",
-    "boundary_config_digest": "sha256:7d89e73e9560311cb8e2e588bbfa2f3489bbcc6845228abdba7c41253ebe7cf3",
+    "boundary_config_digest": "sha256:a487f4029dfb18a4fa8cb36e1b569fcd09f68fca38f1414996d182295ded6897",
     "exposure_mode": "operator"
   },
   "intents": {
     "supported": [
       "chat.message",
       "artifact.handle"
-    ]
+    ],
+    "catalog": {
+      "chat.message": {
+        "risk_class": "standard",
+        "admitted": true,
+        "requires_context_resolution": false,
+        "available_in_exposure_modes": [
+          "public",
+          "operator",
+          "demo"
+        ]
+      },
+      "artifact.handle": {
+        "risk_class": "high_risk_context",
+        "admitted": true,
+        "requires_context_resolution": true,
+        "available_in_exposure_modes": [
+          "operator",
+          "demo"
+        ]
+      }
+    }
   },
   "tool_surface": {
     "declared_tools": {
@@ -147,6 +168,5 @@
       "plane": "execution",
       "description": "External execution submission surface when enabled."
     }
-  ],
-  "generated_at": "2026-04-11T15:30:28.093324+00:00"
+  ]
 }

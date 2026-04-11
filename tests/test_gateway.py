@@ -790,6 +790,7 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_CHAT_MODEL_IDS", "gpt-4o-mini")
+    monkeypatch.setenv("GATEWAY_ENABLE_CONTEXT_RESOLUTION", "true")
     app = create_app(start_workers=True)
     async def scenario(client: httpx.AsyncClient) -> dict[str, object]:
         resp = await client.get("/capabilities")
@@ -806,6 +807,10 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert any(item["id"] == "capabilities" and item["path"] == "/capabilities" for item in catalog)
         assert not any(item["id"].startswith("ui_") for item in catalog)
         assert any(item["id"] == "surfaces" and item["path"] == "/surfaces" for item in catalog)
+        assert "chat.message" in data["intents"]["supported"]
+        assert "artifact.handle" in data["intents"]["supported"]
+        assert data["intents"]["catalog"]["artifact.handle"]["risk_class"] == "high_risk_context"
+        assert data["intents"]["catalog"]["artifact.handle"]["admitted"] is True
         providers = data["providers"]
         assert isinstance(providers, list)
         assert providers and providers[0]["id"] == "openai"
@@ -844,6 +849,7 @@ def test_intent_template_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
     operator_cfg = Path(__file__).resolve().parents[1] / "config" / "boundary.operator.json"
     monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", str(operator_cfg))
+    monkeypatch.setenv("GATEWAY_ENABLE_CONTEXT_RESOLUTION", "true")
     app = create_app(start_workers=True)
 
     async def scenario(client: httpx.AsyncClient) -> None:
@@ -861,6 +867,8 @@ def test_intent_template_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         assert template["intent_variant"] == "minimal"
         assert template["payload"]["intent_type"] == "chat.message"
         assert template["payload"]["payload"]["message"] == "hello gateway"
+        assert data["intent_catalog"]["chat.message"]["risk_class"] == "standard"
+        assert data["intent_catalog"]["artifact.handle"]["risk_class"] == "high_risk_context"
         assert "chat.message" in data["examples"]
         assert "artifact.handle" in data["examples"]
         assert data["examples"]["chat.message"]["tools-budget"]["intent_variant"] == "tools-budget"
@@ -881,6 +889,31 @@ def test_intent_template_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
             params={"intent_type": "artifact.handle", "example": "tools-budget"},
         )
         assert bad.status_code == 400
+
+    run_with_client(app, scenario)
+
+
+def test_intent_template_hides_high_risk_context_when_not_admitted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    operator_cfg = Path(__file__).resolve().parents[1] / "config" / "boundary.operator.json"
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", str(operator_cfg))
+    monkeypatch.delenv("GATEWAY_ENABLE_CONTEXT_RESOLUTION", raising=False)
+    app = create_app(start_workers=True)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        resp = await client.get("/intent-template")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "artifact.handle" not in data["examples"]
+        assert data["intent_catalog"]["artifact.handle"]["admitted"] is False
+
+        artifact = await client.get(
+            "/intent-template",
+            params={"intent_type": "artifact.handle", "example": "minimal"},
+        )
+        assert artifact.status_code == 403
 
     run_with_client(app, scenario)
 

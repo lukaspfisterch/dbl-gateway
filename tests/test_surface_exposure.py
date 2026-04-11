@@ -60,6 +60,8 @@ def test_public_capabilities_hide_non_public_surfaces(monkeypatch: pytest.Monkey
         ids = {item["id"] for item in data["surface_catalog"]}
         assert data["boundary"]["exposure_mode"] == "public"
         assert ids == {"healthz", "capabilities", "ingress_intent"}
+        assert data["intents"]["supported"] == ["chat.message"]
+        assert "artifact.handle" not in data["intents"]["catalog"]
 
     import asyncio
 
@@ -88,6 +90,7 @@ def test_operator_mode_exposes_operator_surfaces_but_not_ui(monkeypatch: pytest.
 
 def test_demo_mode_exposes_ui(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", _boundary_path("boundary.demo.json"))
+    monkeypatch.setenv("GATEWAY_ENABLE_CONTEXT_RESOLUTION", "true")
     app = create_app(start_workers=False)
 
     async def scenario(client: httpx.AsyncClient) -> None:
@@ -96,9 +99,12 @@ def test_demo_mode_exposes_ui(monkeypatch: pytest.MonkeyPatch) -> None:
 
         caps = await client.get("/capabilities")
         assert caps.status_code == 200
-        ids = {item["id"] for item in caps.json()["surface_catalog"]}
+        caps_data = caps.json()
+        ids = {item["id"] for item in caps_data["surface_catalog"]}
         assert "ui_root" in ids
         assert "ui_demo_start" in ids
+        assert "artifact.handle" in caps_data["intents"]["supported"]
+        assert caps_data["intents"]["catalog"]["artifact.handle"]["risk_class"] == "high_risk_context"
 
     import asyncio
 

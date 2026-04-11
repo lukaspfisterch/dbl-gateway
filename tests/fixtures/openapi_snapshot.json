@@ -124,6 +124,14 @@
       },
       "CapabilitiesIntents": {
         "properties": {
+          "catalog": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Catalog",
+            "type": "object"
+          },
           "supported": {
             "items": {
               "type": "string"
@@ -133,7 +141,8 @@
           }
         },
         "required": [
-          "supported"
+          "supported",
+          "catalog"
         ],
         "title": "CapabilitiesIntents",
         "type": "object"

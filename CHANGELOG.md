@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.14 — High-Risk Context Discovery
+
+**High-risk context intents are now advertised only where the active boundary/runtime can actually admit them.**
+- Filter `GET /capabilities` intent discovery by the active boundary profile so `public` no longer advertises `artifact.handle`.
+- Add intent metadata in capabilities describing current admission and risk class, keeping high-risk context visible to trusted operators without teaching it to public clients.
+- Tighten `GET /intent-template` so example envelopes are only emitted for intents currently admitted by the active boundary/runtime configuration.
+- Add focused tests for public capability minimization and operator/demo high-risk context discovery.
+
 ## v0.9.13 — Deterministic Public Admission
 
 **Public exposure can now deny expensive or high-risk intent shapes before any `INTENT` is written.**
