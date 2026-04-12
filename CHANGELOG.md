@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.9.34 — README Focus
+
+**The README now stays on product entry and leaves active boundary topics to the jump page.**
+- Remove the `Active Boundary Topics` section from the gateway README so the repo surface stays focused on what the runtime is, how it runs, and where the integration docs live.
+- Keep the concrete boundary detail linked from the contract docs instead of summarizing the same runtime topics twice.
+
 ## v0.9.33 — OIDC Identity Seam
 
 **OIDC identity mapping is now documented and hashed at the right layer instead of drifting with raw token noise.**
