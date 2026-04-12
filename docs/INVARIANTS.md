@@ -8,11 +8,13 @@ These invariants enforce the formal axioms from the DBL paper. They are the foun
 
 **I-STREAM-1** (A1): The event stream V is append-only. Once an event is persisted, it MUST NOT be modified or removed. The only allowed mutation is `append(e_new)`. Enforced via SQLite triggers that block UPDATE and DELETE on the events table.
 
+**I-STREAM-2** (A1): Each stored event carries `prev_event_digest`, linking it to the immediately preceding event digest. This chain is verifiable independently of the backing database engine.
+
 **I-ORDER-1** (A5): For each turn, `t(DECISION) < t(EXECUTION)`. An EXECUTION event MUST NOT be appended unless a DECISION event already exists for the same turn. Enforced in the store layer before insertion.
 
 **I-GOV-INPUT-1** (A3/A4): Governance input MUST be derived exclusively from authoritative inputs I_L. Observational data O_obs (provider responses, execution results, timing, traces) MUST NOT be present in the input to `PolicyPort.decide()`. Enforced by key-set validation before every policy call. Allowed keys: `stream_id`, `lane`, `actor`, `intent_type`, `correlation_id`, `payload`, `tenant_id`.
 
-**I-STREAM-2** (A1): Events are cryptographically linked. The stream digest `v_digest` is updated on every append via `v_digest_step(prev_digest, index, event_digest)`. A replayer can recompute the full digest from the event sequence and verify stream integrity.
+**I-STREAM-3** (A1): Events are cryptographically linked. The stream digest `v_digest` is updated on every append via `v_digest_step(prev_digest, index, event_digest)`. A replayer can recompute the full digest from the event sequence and verify stream integrity.
 
 **I-NORM-1** (A2): Only DECISION events are normative. `V_norm = { e in V | kind(e) = DECISION }`. INTENT, EXECUTION, and PROOF events are observational and carry no normative authority. The `is_authoritative` field is set exclusively for DECISION events.
 
@@ -60,7 +62,7 @@ These invariants enforce the formal axioms from the DBL paper. They are the foun
 
 **I-CHAIN-1**: Every DECISION event contains `intent_index` linking to its originating INTENT event index.
 
-**I-CHAIN-2**: When the release guard is enabled, a PROOF event with `proof_type: "context_release_guard"` is emitted between DECISION and EXECUTION.
+**I-CHAIN-2**: In `operator` and `public` boundary modes, the release guard MUST stay enabled. An ALLOW path therefore emits a PROOF event with `proof_type: "context_release_guard"` before any execution can be recorded.
 
 **I-CHAIN-3**: `EXECUTION.release_digest` matches the preceding `PROOF.payload_digest`. A replayer can verify that the executed payload matches what was recorded before execution.
 

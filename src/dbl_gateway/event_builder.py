@@ -30,6 +30,7 @@ def make_event(
     return {
         "index": -1,
         "kind": kind,
+        "prev_event_digest": "",
         "thread_id": thread_id,
         "turn_id": turn_id,
         "parent_turn_id": parent_turn_id,

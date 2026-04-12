@@ -84,7 +84,7 @@ enforced_budget).
 This creates an auditable link: the EXECUTION event carries `release_digest`
 which must match the PROOF event's `payload_digest`.
 
-The release guard is feature-gated via `GATEWAY_ENABLE_RELEASE_GUARD` (default ON).
+The release guard defaults to ON. In `operator` and `public` boundary modes it is treated as required startup policy; only `demo` may disable it deliberately.
 
 Outputs:
 - PROOF event (proof_type: `context_release_guard`)

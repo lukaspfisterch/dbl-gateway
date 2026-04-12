@@ -6,6 +6,7 @@ from typing import Any, TypedDict
 class EventRecord(TypedDict):
     index: int
     kind: str
+    prev_event_digest: str
     thread_id: str
     turn_id: str
     parent_turn_id: str | None

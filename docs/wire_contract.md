@@ -415,8 +415,8 @@ Before execution, the gateway emits a PROOF event capturing a digest of the full
 
 The digest covers the canonical JSON of: `messages`, `model_id`, `provider`, `permitted_tools`, `enforced_budget`.
 
-Feature-gated via `GATEWAY_ENABLE_RELEASE_GUARD` (default ON).
+`GATEWAY_ENABLE_RELEASE_GUARD` defaults to ON. In `operator` and `public` boundary modes it is treated as required startup policy, not an optional convenience flag.
 
 ## EXECUTION Lineage (v0.9.0)
 
-EXECUTION events include `release_digest` which must match the preceding PROOF event's `payload_digest`. This creates a verifiable chain: INTENT -> DECISION -> PROOF -> EXECUTION.
+EXECUTION events include `release_digest` which must match the preceding PROOF event's `payload_digest`. In external execution mode, `/execution/event` rejects writes that do not carry the recorded digest. This creates a verifiable chain: INTENT -> DECISION -> PROOF -> EXECUTION.

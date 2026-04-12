@@ -68,5 +68,8 @@ class SQLiteStoreAdapter(StorePort):
     def recompute_v_digest(self) -> str:
         return self._store.recompute_v_digest()
 
+    def verify_event_chain(self) -> list[dict[str, object]]:
+        return self._store.verify_event_chain()
+
     def close(self) -> None:
         self._store.close()

@@ -21,6 +21,8 @@ class OrderViolationError(RuntimeError):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
+
+
 from ..event_builder import make_event
 
 from ..models import EventRecord, Snapshot
@@ -60,6 +62,7 @@ class SQLiteStore:
                 CREATE TABLE IF NOT EXISTS events (
                     idx INTEGER PRIMARY KEY AUTOINCREMENT,
                     kind TEXT NOT NULL,
+                    prev_event_digest TEXT NOT NULL DEFAULT '',
                     lane TEXT NOT NULL,
                     thread_id TEXT NOT NULL DEFAULT '',
                     turn_id TEXT NOT NULL DEFAULT '',
@@ -75,6 +78,7 @@ class SQLiteStore:
                 )
                 """
             )
+            self._ensure_column("events", "prev_event_digest", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column("events", "lane", "TEXT NOT NULL DEFAULT 'unknown'")
             self._ensure_column("events", "thread_id", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column("events", "turn_id", "TEXT NOT NULL DEFAULT ''")
@@ -108,6 +112,7 @@ class SQLiteStore:
                 END
                 """
             )
+            self._backfill_prev_event_digests()
             self._conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS v_state (
@@ -167,11 +172,13 @@ class SQLiteStore:
             allow_nan=False,
         )
         created_at = datetime.now(timezone.utc).isoformat()
+        prev_event_digest = self._get_last_event_digest()
         with self._conn:
             self._conn.execute(
                 """
                 INSERT INTO events (
                     kind,
+                    prev_event_digest,
                     lane,
                     thread_id,
                     turn_id,
@@ -185,10 +192,11 @@ class SQLiteStore:
                     canon_len,
                     created_at_utc
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     kind,
+                    prev_event_digest,
                     lane,
                     thread_id,
                     turn_id,
@@ -214,12 +222,14 @@ class SQLiteStore:
                 (next_digest, index, "current"),
             )
         event["index"] = index
+        event["prev_event_digest"] = prev_event_digest
         return event
 
     def timeline(self, *, thread_id: str, include_payload: bool = False) -> list[EventRecord]:
         columns = [
             "idx",
             "kind",
+            "prev_event_digest",
             "lane",
             "thread_id",
             "turn_id",
@@ -254,6 +264,7 @@ class SQLiteStore:
             event: EventRecord = {
                 "index": max(0, int(row["idx"]) - 1),
                 "kind": str(row["kind"]),
+                "prev_event_digest": str(row["prev_event_digest"]),
                 "lane": str(row["lane"]),
                 "thread_id": str(row["thread_id"]),
                 "turn_id": str(row["turn_id"]),
@@ -346,6 +357,7 @@ class SQLiteStore:
         columns = [
             "idx",
             "kind",
+            "prev_event_digest",
             "lane",
             "thread_id",
             "turn_id",
@@ -390,6 +402,7 @@ class SQLiteStore:
                 {
                     "index": max(0, int(row["idx"]) - 1),
                     "kind": str(row["kind"]),
+                    "prev_event_digest": str(row["prev_event_digest"]),
                     "lane": str(row["lane"]),
                     "thread_id": str(row["thread_id"]),
                     "turn_id": str(row["turn_id"]),
@@ -423,6 +436,38 @@ class SQLiteStore:
             ("current", digest, last_index),
         )
 
+    def _backfill_prev_event_digests(self) -> None:
+        rows = self._conn.execute(
+            "SELECT idx, prev_event_digest, digest FROM events ORDER BY idx ASC"
+        ).fetchall()
+        needs_backfill = any(str(row["prev_event_digest"] or "") != "" for row in rows) or any(
+            str(row["prev_event_digest"] or "") != (v_digest([]) if index == 0 else str(rows[index - 1]["digest"]))
+            for index, row in enumerate(rows)
+        )
+        if not needs_backfill:
+            return
+        self._conn.execute("DROP TRIGGER IF EXISTS events_no_update")
+        try:
+            expected_prev = v_digest([])
+            for row in rows:
+                current_prev = str(row["prev_event_digest"] or "")
+                if current_prev != expected_prev:
+                    self._conn.execute(
+                        "UPDATE events SET prev_event_digest = ? WHERE idx = ?",
+                        (expected_prev, int(row["idx"])),
+                    )
+                expected_prev = str(row["digest"])
+        finally:
+            self._conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS events_no_update
+                BEFORE UPDATE ON events
+                BEGIN
+                    SELECT RAISE(ABORT, 'I-STREAM-1: events are immutable once appended');
+                END
+                """
+            )
+
     def _get_v_state(self) -> tuple[str, int]:
         row = self._conn.execute(
             "SELECT v_digest, last_index FROM v_state WHERE id = ?", ("current",)
@@ -435,3 +480,31 @@ class SQLiteStore:
         rows = self._conn.execute("SELECT idx, digest FROM events ORDER BY idx ASC").fetchall()
         indexed = [(max(0, int(idx) - 1), str(digest)) for idx, digest in rows]
         return v_digest(indexed)
+
+    def verify_event_chain(self) -> list[dict[str, object]]:
+        rows = self._conn.execute(
+            "SELECT idx, digest, prev_event_digest FROM events ORDER BY idx ASC"
+        ).fetchall()
+        issues: list[dict[str, object]] = []
+        expected_prev = v_digest([])
+        for row in rows:
+            actual_prev = str(row["prev_event_digest"])
+            if actual_prev != expected_prev:
+                issues.append(
+                    {
+                        "index": max(0, int(row["idx"]) - 1),
+                        "expected_prev_event_digest": expected_prev,
+                        "actual_prev_event_digest": actual_prev,
+                        "digest": str(row["digest"]),
+                    }
+                )
+            expected_prev = str(row["digest"])
+        return issues
+
+    def _get_last_event_digest(self) -> str:
+        row = self._conn.execute(
+            "SELECT digest FROM events ORDER BY idx DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return v_digest([])
+        return str(row["digest"])

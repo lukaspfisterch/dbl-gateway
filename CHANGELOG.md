@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.1 — Proof And Event Chain Hardening
+
+**The stable core now hardens the proof seam and the append-only chain without widening the gateway surface.**
+- Treat the release guard as required policy in `operator` and `public` boundary modes, and reject external execution writes whose `release_digest` does not match the recorded release proof.
+- Emit the release-guard PROOF on external ALLOW paths as well, so external executors dock onto the same deterministic `INTENT → DECISION → PROOF → EXECUTION` chain instead of falling through a weaker seam.
+- Add `prev_event_digest` to each stored event plus chain verification in `/ui/verify-chain`, so append-only integrity remains checkable even outside the SQLite trigger layer.
+- Keep reject-visibility out of the core event model for now, but note the future path explicitly as a separate observational admission-audit layer.
+
 ## v1.0.0 — Stable Core Contract
 
 **`dbl-gateway` now declares its core boundary-to-decision contract stable.**

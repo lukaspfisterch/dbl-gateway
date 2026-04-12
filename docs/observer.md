@@ -46,7 +46,7 @@ In demo mode, the observer uses auth-free proxy routes:
 
 - `GET /ui/snapshot`
 - `GET /ui/policy-structure`
-- `GET /ui/verify-chain`
+- `GET /ui/verify-chain` — compares rolling vs recomputed `v_digest` and reports any `prev_event_digest` chain breaks
 - `GET /ui/replay`
 
 The browser never recomputes digests itself. It only triggers and renders

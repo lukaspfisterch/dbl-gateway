@@ -34,7 +34,7 @@ Compare digests across systems to assert normative equivalence.
 For gateway-local operational checks, the built-in observer at `/ui` exposes
 two auth-free verification routes:
 
-- `GET /ui/verify-chain` recomputes the full event-chain `v_digest` and compares it to the rolling store digest.
+- `GET /ui/verify-chain` recomputes the full event-chain `v_digest`, compares it to the rolling store digest, and reports whether the stored `prev_event_digest` links still form an unbroken chain.
 - `GET /ui/replay?thread_id=...&turn_id=...` replays one decision turn and compares recomputed vs stored DECISION digests.
 
 These routes are operational diagnostics for the gateway itself. `ensdg` remains

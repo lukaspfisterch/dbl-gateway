@@ -39,6 +39,7 @@ from .adapters.policy_adapter_dbl_policy import DblPolicyAdapter, ObserverPolicy
 from .context_builder import build_context_with_refs, RefResolutionError
 from .config import (
     allowed_tool_families_for_mode,
+    BoundaryConfig,
     economic_policy_rule_for_mode,
     get_boundary_config,
     get_context_config,
@@ -371,6 +372,7 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
     _maybe_activate_demo_mode()
     reset_boundary_config_cache()
     boundary_cfg = get_boundary_config()
+    _assert_release_guard_policy(boundary_cfg)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -633,6 +635,15 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
             raise HTTPException(status_code=400, detail="lane, actor, intent_type, stream_id required")
         if not _decision_allows_execution(app, correlation_id):
             raise HTTPException(status_code=409, detail="no ALLOW decision for correlation_id")
+        if _release_guard_enabled():
+            expected_release_digest = _expected_release_digest(app, correlation_id)
+            actual_release_digest = str(payload.get("release_digest", "")).strip()
+            if not expected_release_digest:
+                raise HTTPException(status_code=409, detail="no release guard proof for correlation_id")
+            if not actual_release_digest:
+                raise HTTPException(status_code=409, detail="release_digest required when release guard is enabled")
+            if actual_release_digest != expected_release_digest:
+                raise HTTPException(status_code=409, detail="release_digest does not match release guard proof")
         p = dict(payload)
         trace_value = p.get("trace")
         if isinstance(trace_value, Mapping):
@@ -724,10 +735,13 @@ def create_app(*, start_workers: bool = True) -> FastAPI:
         rolling = snap.get("v_digest", "")
         event_count = snap.get("length", 0)
         recomputed = store.recompute_v_digest()
+        event_chain_issues = store.verify_event_chain()
         return {
             "rolling_digest": rolling,
             "recomputed_digest": recomputed,
             "match": rolling == recomputed,
+            "event_chain_match": len(event_chain_issues) == 0,
+            "event_chain_issues": event_chain_issues,
             "event_count": event_count,
             "warning": "large event store" if event_count > 10000 else None,
         }
@@ -1299,7 +1313,7 @@ async def _process_intent(
         )
         decision_emitted = True
 
-        if decision.decision != "ALLOW" or _get_exec_mode() != "embedded":
+        if decision.decision != "ALLOW":
             return
 
         try:
@@ -1360,6 +1374,9 @@ async def _process_intent(
                         "_obs": {"trace_id": trace_id},
                     },
                 )
+
+            if _get_exec_mode() != "embedded":
+                return
 
             result = await app.state.execution.run(
                 intent_event,
@@ -1675,6 +1692,23 @@ def _decision_allows_execution(app: FastAPI, correlation_id: str) -> bool:
     return False
 
 
+def _expected_release_digest(app: FastAPI, correlation_id: str) -> str | None:
+    snap = app.state.store.snapshot(limit=2000, offset=0)
+    events = [e for e in snap["events"] if e["correlation_id"] == correlation_id]
+    for event in reversed(events):
+        if event["kind"] != "PROOF":
+            continue
+        payload = event.get("payload")
+        if not isinstance(payload, Mapping):
+            continue
+        if payload.get("proof_type") != "context_release_guard":
+            continue
+        digest = payload.get("payload_digest")
+        if isinstance(digest, str) and digest.strip():
+            return digest.strip()
+    return None
+
+
 def _normalize_optional_str(value: str | None, name: str) -> str | None:
     if value is None:
         return None
@@ -1685,6 +1719,20 @@ def _normalize_optional_str(value: str | None, name: str) -> str | None:
 
 def _release_guard_enabled() -> bool:
     return os.getenv("GATEWAY_ENABLE_RELEASE_GUARD", "1").strip().lower() not in ("0", "false", "no")
+
+
+def _release_guard_required(exposure_mode: str) -> bool:
+    return exposure_mode in {"operator", "public"}
+
+
+def _assert_release_guard_policy(boundary_cfg: BoundaryConfig) -> None:
+    if not _release_guard_required(boundary_cfg.exposure_mode):
+        return
+    if _release_guard_enabled():
+        return
+    raise RuntimeError(
+        "release guard must stay enabled for operator/public boundary modes"
+    )
 
 
 def _get_exec_mode() -> str:

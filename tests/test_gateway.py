@@ -159,6 +159,81 @@ def test_minimal_intent_envelope_is_admitted(tmp_path: Path, monkeypatch: pytest
     run_with_client(app, scenario)
 
 
+def test_release_guard_required_in_operator_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    monkeypatch.setenv("GATEWAY_ENABLE_RELEASE_GUARD", "0")
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", _boundary_path("boundary.operator.json"))
+    with pytest.raises(RuntimeError, match="release guard must stay enabled"):
+        create_app(start_workers=True)
+
+
+def test_release_guard_optional_in_demo_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    monkeypatch.setenv("GATEWAY_ENABLE_RELEASE_GUARD", "0")
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", _boundary_path("boundary.demo.json"))
+    app = create_app(start_workers=True)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        resp = await client.post("/ingress/intent", json=_intent_envelope("hello"))
+        assert resp.status_code == 202
+
+    run_with_client(app, scenario)
+
+
+def test_external_execution_requires_matching_release_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", _boundary_path("boundary.demo.json"))
+    monkeypatch.setenv("GATEWAY_EXEC_MODE", "external")
+    app = create_app(start_workers=True)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        resp = await client.post("/ingress/intent", json=_intent_envelope("hello external"))
+        assert resp.status_code == 202
+        snap = await _wait_for_decision(client, correlation_id="c-1")
+        proof = next(
+            event for event in snap["events"]
+            if event["correlation_id"] == "c-1" and event["kind"] == "PROOF"
+        )
+        expected_release_digest = proof["payload"]["payload_digest"]
+        body = {
+            "correlation_id": "c-1",
+            "lane": "user_chat",
+            "actor": "executor",
+            "intent_type": "chat.message",
+            "stream_id": "default",
+            "payload": {
+                "thread_id": "thread-1",
+                "turn_id": "turn-1",
+                "parent_turn_id": None,
+                "output_text": "ok",
+                "release_digest": "sha256:wrong",
+            },
+        }
+        denied = await client.post(
+            "/execution/event",
+            json=body,
+            headers={"x-dev-roles": "gateway.execution.write"},
+        )
+        assert denied.status_code == 409
+        assert denied.json()["detail"] == "release_digest does not match release guard proof"
+        body["payload"]["release_digest"] = expected_release_digest
+        allowed = await client.post(
+            "/execution/event",
+            json=body,
+            headers={"x-dev-roles": "gateway.execution.write"},
+        )
+        assert allowed.status_code == 200
+        post = (await client.get("/snapshot")).json()
+        assert any(
+            event["kind"] == "EXECUTION" and event["correlation_id"] == "c-1"
+            for event in post["events"]
+        )
+
+    run_with_client(app, scenario)
+
+
 def test_admission_rejects_secrets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
     app = create_app(start_workers=True)
@@ -750,7 +825,8 @@ def test_snapshot_v_digest_is_paging_invariant(tmp_path: Path, monkeypatch: pyte
         snap_all = (await client.get("/snapshot", params={"limit": 2000, "offset": 0})).json()
 
         assert snap_a["v_digest"] == snap_b["v_digest"] == snap_all["v_digest"]
-        assert snap_all["length"] == 2
+        assert snap_all["length"] == 3
+        assert [event["kind"] for event in snap_all["events"]] == ["INTENT", "DECISION", "PROOF"]
 
     run_with_client(app, scenario)
 

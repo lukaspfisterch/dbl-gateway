@@ -30,3 +30,5 @@ The request-policy seam also records:
 - `enforced_budget.source` as `client`, `boundary_default`, or `boundary_cap`
 
 This keeps deny vs clamp distinct in the normative record instead of inferring them later from execution behavior.
+
+If tenant/backpressure rejection visibility is added later, it should live in a separate observational admission-audit surface, not as a new DBL event type in `V`.

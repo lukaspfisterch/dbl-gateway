@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from dbl_gateway.contracts import canonical_json_bytes
+from dbl_gateway.digest import v_digest
 from dbl_gateway.decision_builder import build_normative_decision
 from dbl_gateway.digest import compute_release_digest
 from dbl_gateway.ports.policy_port import DecisionResult
@@ -192,6 +193,58 @@ class TestStreamAppendOnly:
         e = _append_event(store, "INTENT")
         assert e["kind"] == "INTENT"
         assert isinstance(e["index"], int)
+
+    def test_prev_event_digest_links_chain(self) -> None:
+        store = _make_store()
+        first = _append_event(store, "INTENT", correlation_id="c1", turn_id="turn1")
+        second = _append_event(store, "DECISION", correlation_id="c1", turn_id="turn1", payload={
+            "policy": {"policy_id": "p1", "policy_version": "1", "policy_config_digest": None},
+            "assembly_digest": None,
+            "context_digest": None,
+            "result": "ALLOW",
+            "reasons": [],
+            "transforms": [],
+            "permitted_tools": None,
+            "enforced_budget": None,
+            "_obs": {"trace_id": "t1"},
+        })
+        assert first["prev_event_digest"] == v_digest([])
+        assert second["prev_event_digest"] == first["digest"]
+        assert store.verify_event_chain() == []
+
+    def test_verify_event_chain_detects_corruption(self) -> None:
+        store = _make_store()
+        _append_event(store, "INTENT", correlation_id="c1", turn_id="turn1")
+        _append_event(store, "DECISION", correlation_id="c1", turn_id="turn1", payload={
+            "policy": {"policy_id": "p1", "policy_version": "1", "policy_config_digest": None},
+            "assembly_digest": None,
+            "context_digest": None,
+            "result": "ALLOW",
+            "reasons": [],
+            "transforms": [],
+            "permitted_tools": None,
+            "enforced_budget": None,
+            "_obs": {"trace_id": "t1"},
+        })
+        with store._conn:
+            store._conn.execute("DROP TRIGGER IF EXISTS events_no_update")
+            store._conn.execute(
+                "UPDATE events SET prev_event_digest = ? WHERE idx = 2",
+                ("sha256:broken",),
+            )
+            store._conn.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS events_no_update
+                BEFORE UPDATE ON events
+                BEGIN
+                    SELECT RAISE(ABORT, 'I-STREAM-1: events are immutable once appended');
+                END
+                """
+            )
+        issues = store.verify_event_chain()
+        assert len(issues) == 1
+        assert issues[0]["index"] == 1
+        assert issues[0]["actual_prev_event_digest"] == "sha256:broken"
 
 
 class TestDecisionPrecedesExecution:

@@ -379,6 +379,8 @@ class TestUiVerificationProxy:
             assert verify.status_code == 200
             data = verify.json()
             assert data["match"] is True
+            assert data["event_chain_match"] is True
+            assert data["event_chain_issues"] == []
             assert data["rolling_digest"] == data["recomputed_digest"]
             assert data["event_count"] >= 4
 
