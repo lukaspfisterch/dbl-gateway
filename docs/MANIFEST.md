@@ -11,7 +11,6 @@
 | [CAPABILITIES.md](CAPABILITIES.md) | Runtime capability introspection |
 | [INVARIANTS.md](INVARIANTS.md) | Machine-checkable invariant list |
 | [CONTEXT.md](CONTEXT.md) | Context resolution and ref classification |
-| [HOOKS.md](HOOKS.md) | Pre-commit boundary enforcement |
 | [VALIDATION.md](VALIDATION.md) | ensdg validation workflow and gateway-side verification |
 | [EMPIRICAL_VALIDATION.md](EMPIRICAL_VALIDATION.md) | Replay equivalence bench and policy-diff results |
 | [DEPENDENCY_SURFACE.md](DEPENDENCY_SURFACE.md) | Component binding points |

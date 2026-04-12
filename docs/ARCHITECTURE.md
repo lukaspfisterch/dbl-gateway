@@ -167,8 +167,6 @@ functionality that belongs to another component.
 | Providers | LLM execution, capabilities | call `execute()` / `get_capabilities()` via `ProviderProtocol` |
 | dbl-ingress | Wire contract parsing, admission | call `parse_intent_envelope`, never parse envelopes |
 
-The pre-commit hook enforces these boundaries. See [HOOKS.md](HOOKS.md).
-
 ---
 
 ## What the Gateway Does Not Do

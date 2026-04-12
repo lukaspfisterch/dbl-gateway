@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install .[dev] -c constraints-ci.txt
+        pip install .[dev] -c .github/constraints-ci.txt
     - name: Run tests
       run: |
         pytest

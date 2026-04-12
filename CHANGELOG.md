@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.27 — Repo Hygiene
+
+**Root workflow clutter is reduced, and CI-only files now live closer to CI.**
+- Move `run_demo.ps1` out of the repo root into `tools/windows/` so the root stays focused on product and build entry points.
+- Move `constraints-ci.txt` into `.github/constraints-ci.txt` and update the GitHub Actions workflow to install against the new path.
+- Remove the unused DBL hook installer and hook documentation so the repo no longer suggests a maintained pre-commit enforcement path that is not part of the current workflow.
+- Refresh manifest and architecture docs to match the cleaned public/documented surface.
+
 ## v0.9.26 — Boundary Tenant Mapping
 
 **Tenant derivation now follows the same hashed boundary contract as trust derivation, instead of hiding in auth env defaults.**
