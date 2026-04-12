@@ -1,1 +1,3 @@
-__all__ = ["app"]
+from .client import GatewayClient
+
+__all__ = ["app", "GatewayClient"]

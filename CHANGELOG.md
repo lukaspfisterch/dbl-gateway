@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9.30 — Minimal Client
+
+**The gateway now ships a tiny client that removes typing friction without hiding the raw model.**
+- Add `dbl_gateway.client.GatewayClient` with only three methods: `send_intent()`, `get_snapshot()`, and `replay()`.
+- Keep the client deliberately thin: it does not build envelopes, apply hidden defaults, or abstract away `DECISION`.
+- Extend the integration-slice docs with an optional client example built on the same raw send → inspect → replay path.
+
 ## v0.9.29 — Integration Slice
 
 **The gateway now has a single raw integration path that shows where an external client actually docks.**

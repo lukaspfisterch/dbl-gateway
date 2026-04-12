@@ -86,6 +86,9 @@ Or from source:
 pip install -e .
 ```
 
+For a minimal Python helper over the raw HTTP surfaces, use
+`dbl_gateway.client.GatewayClient`.
+
 ## Reference implementation
 
 `dbl-gateway` implements the Deterministic Boundary Layer (DBL) as a runtime

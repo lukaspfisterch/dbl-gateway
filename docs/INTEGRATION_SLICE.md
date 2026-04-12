@@ -131,6 +131,46 @@ This slice proves the core integration seam:
 - the gateway records what was allowed before execution
 - the decision can be replayed without re-running execution
 
+## 5. Optional tiny client
+
+If you want less typing without hiding the model, the package now exposes
+`dbl_gateway.client.GatewayClient`.
+
+It only wraps the same three surfaces:
+
+- `send_intent(...)`
+- `get_snapshot(...)`
+- `replay(...)`
+
+Example:
+
+```python
+from dbl_gateway.client import GatewayClient
+
+envelope = {
+    "interface_version": 3,
+    "correlation_id": "slice-1",
+    "payload": {
+        "stream_id": "default",
+        "lane": "user_chat",
+        "actor": "user",
+        "intent_type": "chat.message",
+        "thread_id": "slice-thread-1",
+        "turn_id": "slice-turn-1",
+        "parent_turn_id": None,
+        "requested_model_id": "stub-echo",
+        "payload": {"message": "Hello"},
+    },
+}
+
+with GatewayClient("http://127.0.0.1:8010") as client:
+    ack = client.send_intent(envelope)
+    snapshot = client.get_snapshot(limit=20)
+    replay = client.replay(thread_id="slice-thread-1", turn_id="slice-turn-1")
+```
+
+It does not build intents for you and it does not abstract `DECISION`.
+
 ## Next
 
 - [CONTRACT_BOUNDARY.md](CONTRACT_BOUNDARY.md) for the stable-core boundary
