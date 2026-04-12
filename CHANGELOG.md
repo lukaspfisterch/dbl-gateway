@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.0 — Stable Core Contract
+
+**`dbl-gateway` now declares its core boundary-to-decision contract stable.**
+- Mark the stable core explicitly at `1.0.0`: the `INTENT → DECISION → PROOF → EXECUTION` chain, DECISION as the only normative event, hashed boundary artifacts, and deterministic replay guarantees are now the contract surface integrators can rely on.
+- Keep the evolving surface explicit rather than pretending the runtime is feature-complete: capability payload detail, provider integrations, and expanding policy dimensions still move around the stable core.
+- Promote the package metadata to a stable release and align the README/contract docs with the new `1.x` meaning.
+
 ## v0.9.34 — README Focus
 
 **The README now stays on product entry and leaves active boundary topics to the jump page.**

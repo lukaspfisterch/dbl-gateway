@@ -961,6 +961,9 @@ def test_capabilities_response_shape(tmp_path: Path, monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_CHAT_MODEL_IDS", "gpt-4o-mini")
     monkeypatch.setenv("GATEWAY_ENABLE_CONTEXT_RESOLUTION", "true")
+    monkeypatch.delenv("GATEWAY_DEMO_MODE", raising=False)
+    operator_cfg = Path(__file__).resolve().parents[1] / "config" / "boundary.operator.json"
+    monkeypatch.setenv("DBL_GATEWAY_BOUNDARY_CONFIG", str(operator_cfg))
     app = create_app(start_workers=True)
     async def scenario(client: httpx.AsyncClient) -> dict[str, object]:
         resp = await client.get("/capabilities")

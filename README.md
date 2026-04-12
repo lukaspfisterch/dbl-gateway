@@ -13,6 +13,8 @@ INTENT → DECISION → PROOF → EXECUTION
 Execution stays non-normative.
 The full chain is replayable.
 
+`1.0.0` marks the core boundary-to-decision contract as stable.
+
 For the architecture entry point, see
 [deterministic-boundary-layer](https://github.com/lukaspfisterch/deterministic-boundary-layer).
 

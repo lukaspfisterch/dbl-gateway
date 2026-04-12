@@ -1,7 +1,7 @@
 # Contract Boundary
 
-This document defines what `dbl-gateway` treats as stable enough for a `1.0`
-contract and what still remains an evolving surface.
+This document defines the `1.x` contract of `dbl-gateway` and what still
+remains an evolving surface around it.
 
 It is not a capability list.
 It is the boundary between:
@@ -11,8 +11,8 @@ It is the boundary between:
 
 ## Stable
 
-These are the parts of `dbl-gateway` that should remain stable across the
-`1.x` line unless a deliberate breaking change is called out.
+These are the parts of `dbl-gateway` that remain stable across the `1.x` line
+unless a deliberate breaking change is called out.
 
 ### Event chain
 
@@ -102,11 +102,11 @@ Provider support, adapter polish, and execution ergonomics remain evolving
 product seams. They are important, but they are not the same thing as the
 stable decision contract.
 
-## What 1.0 should mean
+## What 1.0 means
 
-`1.0` should not mean "feature complete".
+`1.0` does not mean "feature complete".
 
-It should mean:
+It means:
 
 - the core boundary-to-decision contract is stable
 - integrators can rely on the event chain and replay guarantees
