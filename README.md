@@ -86,37 +86,15 @@ For a minimal Python helper over the raw HTTP surfaces, use
 
 ## Reference implementation
 
-`dbl-gateway` implements the Deterministic Boundary Layer (DBL) as a runtime
-system.
+`dbl-gateway` is the DBL runtime reference implementation.
 
-It realizes the event chain INTENT → DECISION → PROOF → EXECUTION, where
-DECISION events are recorded before any execution and remain the only
-normative layer. Execution outputs are treated as non-normative observations.
+```text
+INTENT → DECISION → PROOF → EXECUTION
+```
 
-The gateway enforces the core invariants of the model:
-- append-only event stream
-- strict ordering of DECISION before EXECUTION
-- governance input purity (authoritative inputs only)
-- deterministic replay under fixed inputs and policy configuration
-
-As such, it serves both as a usable governed gateway and as a reference
-implementation of the DBL model.
-
-For the stable-core versus evolving-surface split, see
-[CONTRACT_BOUNDARY.md](docs/CONTRACT_BOUNDARY.md).
-
-For the shortest practical start path, see
-[FIRST_INTEGRATION.md](docs/FIRST_INTEGRATION.md).
-
-For the raw 5-minute send → decision → replay path, see
-[INTEGRATION_SLICE.md](docs/INTEGRATION_SLICE.md).
-
-For token-based identity docking, including a concrete Entra example, see
-[OIDC_INTEGRATION.md](docs/OIDC_INTEGRATION.md).
-
-For empirical validation, including replay equivalence and policy variation
-benchmarks, see
-[EMPIRICAL_VALIDATION.md](docs/EMPIRICAL_VALIDATION.md).
+`DECISION` is normative.
+Execution is observational.
+Replay is deterministic under fixed inputs and policy.
 
 ## Observer UI
 
