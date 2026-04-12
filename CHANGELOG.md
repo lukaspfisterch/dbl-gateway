@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9.33 — OIDC Identity Seam
+
+**OIDC identity mapping is now documented and hashed at the right layer instead of drifting with raw token noise.**
+- Derive `claims_digest` from the mapped identity line (`actor_id`, `tenant_id`, `client_id`, `roles`, `issuer`) rather than the full raw token payload, so extra claims do not perturb replay/audit state.
+- Add focused auth regression coverage proving that irrelevant OIDC claims and role ordering do not change the mapped digest.
+- Add `docs/OIDC_INTEGRATION.md` with a concrete Entra `identity_policy` example and a strict statement of the gateway boundary: token verification and claim mapping only, no Graph/session/identity-platform creep.
+
 ## v0.9.32 — Minimal Ingress Snippets
 
 **The demo UI now shows a truly minimal request shape instead of only a full envelope dump.**

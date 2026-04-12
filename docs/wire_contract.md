@@ -239,7 +239,7 @@ Tool names must match `^[a-z][a-z0-9_.]{0,63}$`.
 | `identity_issuer` | Identity source / issuer recorded for replay and audit. |
 | `identity_verified` | Whether the identity input was verified before trust derivation. |
 | `identity_source` | Identity adapter source such as `dev`, `oidc`, or `synthetic`. |
-| `claims_digest` | Stable SHA-256 over the mapped identity claims for audit/replay without copying raw claims into DECISION. |
+| `claims_digest` | Stable SHA-256 over the mapped identity line (`actor_id`, `tenant_id`, `client_id`, `roles`, `issuer`) for audit/replay without copying raw claims into DECISION. |
 | `slot_class` | Deterministic execution slot requirement: `none`, `shared`, or `reserved`. |
 | `cost_class` | Deterministic economic class: `low`, `bounded`, or `capped`. |
 | `reservation_required` | Whether the request requires a reserved execution class before runtime dispatch. |

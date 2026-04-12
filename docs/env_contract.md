@@ -35,6 +35,7 @@ Secrets never appear in event payloads.
 
 Identity stays stateless inside the gateway. The request is verified, mapped into `gateway_auth`, and reduced to a deterministic `trust_class`. No session store or gateway-owned user database is required.
 OIDC verification uses cached JWKS only. The gateway does not call online token introspection endpoints or maintain server-side sessions.
+Identity input must be fully contained in the presented token plus the configured boundary mapping. The gateway does not call Graph-style directory APIs or dynamic group-resolution services while deriving `gateway_auth`.
 
 ## Boundary Identity Policy
 
@@ -51,6 +52,7 @@ Each boundary artifact now contains `identity_policy`:
 - `role_map`
 
 This makes the effective identity mapping part of the hashed boundary contract instead of a hidden runtime detail.
+`claims_digest` is derived from the mapped identity line (`actor_id`, `tenant_id`, `client_id`, `roles`, `issuer`), not from the entire raw token payload.
 Operator discovery reuses that same boundary truth:
 - `/capabilities.auth.claim_mapping` shows only the configured claim field names
 - `/capabilities.auth.tenant_mapping` shows only the configured source/fallback plus allowlist shape

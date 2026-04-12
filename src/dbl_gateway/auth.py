@@ -409,15 +409,22 @@ def _authorize_oidc_claims(claims: Mapping[str, Any], cfg: AuthConfig) -> Actor:
     client_id = _pick_first_str(claims, ["azp", "appid"], default="unknown")
     roles = _extract_roles(claims, cfg.role_claims)
     roles = _apply_role_map(roles, cfg.role_map)
+    issuer = _pick_first_str(claims, [cfg.issuer_claim], default="oidc")
     return Actor(
         actor_id=actor_id,
         tenant_id=tenant_id,
         client_id=client_id,
         roles=roles,
-        issuer=_pick_first_str(claims, [cfg.issuer_claim], default="oidc"),
+        issuer=issuer,
         verified=True,
         identity_source="oidc",
-        claims_digest=_claims_digest(claims),
+        claims_digest=_mapped_identity_digest(
+            actor_id=actor_id,
+            tenant_id=tenant_id,
+            client_id=client_id,
+            roles=roles,
+            issuer=issuer,
+        ),
         raw_claims=dict(claims),
     )
 
@@ -443,6 +450,26 @@ def _validate_oidc_claims(claims: Mapping[str, Any], cfg: AuthConfig) -> None:
 def _claims_digest(claims: Mapping[str, Any]) -> str:
     canonical = json.dumps(claims, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return f"sha256:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
+
+
+def _mapped_identity_digest(
+    *,
+    actor_id: str,
+    tenant_id: str,
+    client_id: str,
+    roles: Sequence[str],
+    issuer: str,
+) -> str:
+    canonical_roles = sorted({role.strip() for role in roles if isinstance(role, str) and role.strip()})
+    return _claims_digest(
+        {
+            "actor_id": actor_id.strip(),
+            "tenant_id": tenant_id.strip(),
+            "client_id": client_id.strip(),
+            "roles": canonical_roles,
+            "issuer": issuer.strip(),
+        }
+    )
 
 
 def _extract_roles(claims: Mapping[str, Any], claim_names: Sequence[str]) -> tuple[str, ...]:

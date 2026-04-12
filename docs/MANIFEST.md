@@ -8,6 +8,7 @@
 | [CONTRACT_BOUNDARY.md](CONTRACT_BOUNDARY.md) | Stable core contract vs evolving surface |
 | [FIRST_INTEGRATION.md](FIRST_INTEGRATION.md) | Shortest practical integration path |
 | [INTEGRATION_SLICE.md](INTEGRATION_SLICE.md) | Smallest raw send → decision → replay path |
+| [OIDC_INTEGRATION.md](OIDC_INTEGRATION.md) | Token-to-decision identity mapping with a concrete Entra example |
 | [QUICKSTART.md](QUICKSTART.md) | Setup, first request, reading events, UI verification |
 | [wire_contract.md](wire_contract.md) | Envelope format, tool gating, budget, refs |
 | [env_contract.md](env_contract.md) | All environment variables |

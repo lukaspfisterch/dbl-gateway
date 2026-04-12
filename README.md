@@ -116,6 +116,9 @@ For the shortest practical start path, see
 For the raw 5-minute send → decision → replay path, see
 [INTEGRATION_SLICE.md](docs/INTEGRATION_SLICE.md).
 
+For token-based identity docking, including a concrete Entra example, see
+[OIDC_INTEGRATION.md](docs/OIDC_INTEGRATION.md).
+
 For empirical validation, including replay equivalence and policy variation
 benchmarks, see
 [EMPIRICAL_VALIDATION.md](docs/EMPIRICAL_VALIDATION.md).
@@ -135,6 +138,7 @@ submission, and the integrated demo controller.
 - [CONTRACT_BOUNDARY.md](docs/CONTRACT_BOUNDARY.md) — stable core contract vs evolving surface
 - [FIRST_INTEGRATION.md](docs/FIRST_INTEGRATION.md) — start gateway, send one request, read decision, verify replay
 - [INTEGRATION_SLICE.md](docs/INTEGRATION_SLICE.md) — raw send, decision inspection, and replay path
+- [OIDC_INTEGRATION.md](docs/OIDC_INTEGRATION.md) — OIDC token mapping and concrete Entra example
 - [EMPIRICAL_VALIDATION.md](docs/EMPIRICAL_VALIDATION.md) — optional replay bench and policy-diff notes
 - [wire_contract.md](docs/wire_contract.md) — envelope format, tool gating, budget, refs
 - [env_contract.md](docs/env_contract.md) — all environment variables

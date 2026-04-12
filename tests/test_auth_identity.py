@@ -12,6 +12,7 @@ from dbl_gateway.auth import (
     AuthError,
     _authorize_oidc_claims,
     _claims_digest,
+    _mapped_identity_digest,
     _get_jwks,
     identity_fields_for_actor,
     load_auth_config_with_identity_policy,
@@ -124,7 +125,13 @@ def test_authorize_oidc_claims_maps_roles_and_digest() -> None:
     assert actor.issuer == "https://issuer.example"
     assert actor.verified is True
     assert actor.identity_source == "oidc"
-    assert actor.claims_digest == _claims_digest(claims)
+    assert actor.claims_digest == _mapped_identity_digest(
+        actor_id="user-123",
+        tenant_id="tenant-123",
+        client_id="client-123",
+        roles=("gateway.operator",),
+        issuer="https://issuer.example",
+    )
     assert trust_class_for_actor(actor) == "operator"
 
 
@@ -137,6 +144,49 @@ def test_authorize_oidc_claims_uses_tenant_fallback_when_claim_missing() -> None
     }
     actor = _authorize_oidc_claims(claims, _oidc_config())
     assert actor.tenant_id == "tenant-default"
+
+
+def test_authorize_oidc_claims_digest_ignores_irrelevant_claims_and_claim_order() -> None:
+    cfg = _oidc_config()
+    base_claims = {
+        "sub": "user-123",
+        "tid": "tenant-123",
+        "azp": "client-123",
+        "iss": "https://issuer.example",
+        "roles": ["group:admins"],
+    }
+    noisy_claims = {
+        "roles": ["group:admins"],
+        "iss": "https://issuer.example",
+        "azp": "client-123",
+        "sub": "user-123",
+        "tid": "tenant-123",
+        "nonce": "ignored",
+        "name": "Ignored Name",
+        "preferred_username": "ignored@example.com",
+    }
+    assert _authorize_oidc_claims(base_claims, cfg).claims_digest == _authorize_oidc_claims(
+        noisy_claims,
+        cfg,
+    ).claims_digest
+
+
+def test_mapped_identity_digest_sorts_roles_for_stability() -> None:
+    digest_a = _mapped_identity_digest(
+        actor_id="user-123",
+        tenant_id="tenant-123",
+        client_id="client-123",
+        roles=("gateway.operator", "gateway.snapshot.read"),
+        issuer="https://issuer.example",
+    )
+    digest_b = _mapped_identity_digest(
+        actor_id="user-123",
+        tenant_id="tenant-123",
+        client_id="client-123",
+        roles=("gateway.snapshot.read", "gateway.operator"),
+        issuer="https://issuer.example",
+    )
+    assert digest_a == digest_b
 
 
 def test_authorize_oidc_claims_requires_allowed_issuer() -> None:

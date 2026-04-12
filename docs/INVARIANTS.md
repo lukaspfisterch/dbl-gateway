@@ -52,6 +52,10 @@ These invariants enforce the formal axioms from the DBL paper. They are the foun
 
 **I-AUTH-3**: OIDC identity verification depends only on the presented token, configured issuer/audience allowlists, and cached JWKS material. The gateway MUST NOT depend on online introspection or session lookups to derive `gateway_auth`.
 
+**I-AUTH-4**: Identity input MUST be fully contained in the presented token plus the configured boundary mapping. The gateway MUST NOT call external directory APIs or dynamic group-resolution services while deriving `gateway_auth`.
+
+**I-AUTH-5**: `claims_digest` MUST be derived from the mapped identity line (`actor_id`, `tenant_id`, `client_id`, `roles`, `issuer`) rather than the full raw token payload.
+
 ## Chain-of-Record (v0.9.0)
 
 **I-CHAIN-1**: Every DECISION event contains `intent_index` linking to its originating INTENT event index.
