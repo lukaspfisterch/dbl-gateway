@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9.29 — Integration Slice
+
+**The gateway now has a single raw integration path that shows where an external client actually docks.**
+- Add `docs/INTEGRATION_SLICE.md` as the smallest send → inspect → replay path, using the canonical `/ingress/intent` write surface and the built-in replay helper routes only for read-side verification.
+- Keep the slice intentionally narrow: one minimal `chat.message` intent, one acknowledgement, one recorded turn, one replay check.
+- Link the slice from the README and documentation manifest so the next client/integration work can build on a concrete connection point instead of a broader quickstart.
+
 ## v0.9.28 — Contract Boundary
 
 **The gateway now states its stable core contract explicitly instead of leaving 1.0 readiness implicit.**

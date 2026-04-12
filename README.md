@@ -107,6 +107,9 @@ implementation of the DBL model.
 For the stable-core versus evolving-surface split, see
 [CONTRACT_BOUNDARY.md](docs/CONTRACT_BOUNDARY.md).
 
+For the raw 5-minute send → decision → replay path, see
+[INTEGRATION_SLICE.md](docs/INTEGRATION_SLICE.md).
+
 For empirical validation, including replay equivalence and policy variation
 benchmarks, see
 [EMPIRICAL_VALIDATION.md](docs/EMPIRICAL_VALIDATION.md).
@@ -124,6 +127,7 @@ submission, and the integrated demo controller.
 - [QUICKSTART.md](docs/QUICKSTART.md) — first request, reading events, UI verification
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) — surfaces, component ownership, invariants
 - [CONTRACT_BOUNDARY.md](docs/CONTRACT_BOUNDARY.md) — stable core contract vs evolving surface
+- [INTEGRATION_SLICE.md](docs/INTEGRATION_SLICE.md) — raw send, decision inspection, and replay path
 - [EMPIRICAL_VALIDATION.md](docs/EMPIRICAL_VALIDATION.md) — optional replay bench and policy-diff notes
 - [wire_contract.md](docs/wire_contract.md) — envelope format, tool gating, budget, refs
 - [env_contract.md](docs/env_contract.md) — all environment variables

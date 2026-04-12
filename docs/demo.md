@@ -9,7 +9,7 @@ Run the full governance pipeline without any API keys:
 
 ```bash
 # Docker
-docker compose --profile demo up --build
+docker compose --profile demo up --build demo
 
 # Local
 GATEWAY_DEMO_MODE=1 dbl-gateway serve

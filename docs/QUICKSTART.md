@@ -129,7 +129,7 @@ For the full browser observer and one-click demo flow, run with the demo boundar
 The Docker demo profile already does this for you:
 
 ```bash
-docker compose --profile demo up
+docker compose --profile demo up demo
 ```
 
 If at least one provider is active in `GET /capabilities`, the simplest demo is then one click:

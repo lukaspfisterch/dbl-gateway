@@ -6,6 +6,7 @@
 |----------|---------|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Three-surface model, component ownership, invariants |
 | [CONTRACT_BOUNDARY.md](CONTRACT_BOUNDARY.md) | Stable core contract vs evolving surface |
+| [INTEGRATION_SLICE.md](INTEGRATION_SLICE.md) | Smallest raw send → decision → replay path |
 | [QUICKSTART.md](QUICKSTART.md) | Setup, first request, reading events, UI verification |
 | [wire_contract.md](wire_contract.md) | Envelope format, tool gating, budget, refs |
 | [env_contract.md](env_contract.md) | All environment variables |
