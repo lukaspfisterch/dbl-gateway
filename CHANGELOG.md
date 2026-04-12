@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9.31 — First Integration Guide
+
+**The gateway now has a direct integration guide that sits between the raw slice and the broader quickstart.**
+- Add `docs/FIRST_INTEGRATION.md` covering one practical path: start gateway, send one request, read the resulting `DECISION`, and verify replay.
+- Keep the guide narrow and integrator-facing: raw HTTP and tiny-client examples only, no extra feature tour.
+- Link the new guide from the README, manifest, and integration slice so the connection path is now visible without reading the broader runtime docs first.
+
 ## v0.9.30 — Minimal Client
 
 **The gateway now ships a tiny client that removes typing friction without hiding the raw model.**

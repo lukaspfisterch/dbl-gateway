@@ -173,6 +173,7 @@ It does not build intents for you and it does not abstract `DECISION`.
 
 ## Next
 
+- [FIRST_INTEGRATION.md](FIRST_INTEGRATION.md) for the shortest practical integration path
 - [CONTRACT_BOUNDARY.md](CONTRACT_BOUNDARY.md) for the stable-core boundary
 - [QUICKSTART.md](QUICKSTART.md) for the broader runtime setup
 - [wire_contract.md](wire_contract.md) for the full envelope contract
