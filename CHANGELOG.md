@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9.28 — Contract Boundary
+
+**The gateway now states its stable core contract explicitly instead of leaving 1.0 readiness implicit.**
+- Add `docs/CONTRACT_BOUNDARY.md` defining the stable boundary-to-decision contract versus the evolving capability surface.
+- Link the new contract-boundary split from the README and documentation manifest so later client and integration work can build on a named, fixed base.
+- Keep the statement narrow: event chain, DECISION role, hashed boundary artifact, and replay guarantees are the stable core; capability payload detail, provider seams, and expanding policy dimensions remain evolving.
+
 ## v0.9.27 — Repo Hygiene
 
 **Root workflow clutter is reduced, and CI-only files now live closer to CI.**

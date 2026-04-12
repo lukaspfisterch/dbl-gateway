@@ -5,6 +5,7 @@
 | Document | Purpose |
 |----------|---------|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Three-surface model, component ownership, invariants |
+| [CONTRACT_BOUNDARY.md](CONTRACT_BOUNDARY.md) | Stable core contract vs evolving surface |
 | [QUICKSTART.md](QUICKSTART.md) | Setup, first request, reading events, UI verification |
 | [wire_contract.md](wire_contract.md) | Envelope format, tool gating, budget, refs |
 | [env_contract.md](env_contract.md) | All environment variables |
