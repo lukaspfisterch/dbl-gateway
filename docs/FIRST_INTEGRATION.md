@@ -33,17 +33,8 @@ curl -X POST http://127.0.0.1:8010/ingress/intent \
     "interface_version": 3,
     "correlation_id": "integration-1",
     "payload": {
-      "stream_id": "default",
-      "lane": "user_chat",
-      "actor": "user",
       "intent_type": "chat.message",
-      "thread_id": "integration-thread-1",
-      "turn_id": "integration-turn-1",
-      "parent_turn_id": null,
-      "requested_model_id": "stub-echo",
-      "payload": {
-        "message": "Hello"
-      }
+      "payload": { "message": "Hello" }
     }
   }'
 ```
@@ -88,6 +79,9 @@ Expected acknowledgement shape:
 
 This is only the write acknowledgement.
 It is not the execution result.
+
+Everything else in the fuller envelope is optional here or derived
+deterministically by the gateway.
 
 ## 3. Read the resulting decision
 

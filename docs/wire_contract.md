@@ -39,6 +39,36 @@ Clients sending `interface_version: 2` will be rejected at ingress.
 }
 ```
 
+## Minimal Accepted Shape
+
+`POST /ingress/intent` also accepts a reduced request shape for the common
+`chat.message` case:
+
+```json
+{
+  "interface_version": 3,
+  "correlation_id": "unique-request-id",
+  "payload": {
+    "intent_type": "chat.message",
+    "payload": {
+      "message": "Hello, world!"
+    }
+  }
+}
+```
+
+The gateway derives the remaining structural fields deterministically:
+
+- `stream_id` → `"default"`
+- `lane` → `"user_chat"`
+- `actor` → `"user"`
+- `thread_id` → `correlation_id`
+- `turn_id` → `correlation_id`
+- `parent_turn_id` → `null`
+
+If you need explicit thread continuity, actor identity, budgets, tool
+declarations, or refs, send the full envelope shape instead.
+
 ## Declared Refs (v0.4.0+)
 
 The `declared_refs` field allows clients to request specific events as context.

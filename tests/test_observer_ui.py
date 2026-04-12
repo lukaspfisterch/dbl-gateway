@@ -532,6 +532,8 @@ class TestObserverHtml:
             assert "text/html" in resp.headers.get("content-type", "")
             assert "Event Observer" in resp.text
             assert "Manual Intent" in resp.text
+            assert "Snippet Mode" in resp.text
+            assert "Full envelope" in resp.text
             assert 'data-tab="policy"' in resp.text
 
         asyncio.run(_with_client(app, check))

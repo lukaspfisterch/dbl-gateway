@@ -57,7 +57,7 @@ server-side verification results.
 The `Manual Intent` panel can:
 
 - send a valid minimal envelope through `POST /ui/intent`
-- generate a valid `curl` example
-- generate a valid PowerShell example
+- generate valid `curl` and PowerShell examples
+- switch between `Minimal` and `Full envelope` snippet views for `/ingress/intent`
 
 This turns the observer into a small execution playground, not just a viewer.

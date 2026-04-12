@@ -185,6 +185,25 @@ def test_envelope_without_new_fields():
     assert result["payload"]["budget"] is None
 
 
+def test_envelope_minimal_defaults_structural_fields():
+    env = {
+        "interface_version": 3,
+        "correlation_id": "c-min",
+        "payload": {
+            "intent_type": "chat.message",
+            "payload": {"message": "hello"},
+        },
+    }
+    result = parse_intent_envelope(env)
+    assert result["payload"]["stream_id"] == "default"
+    assert result["payload"]["lane"] == "user_chat"
+    assert result["payload"]["actor"] == "user"
+    assert result["payload"]["thread_id"] == "c-min"
+    assert result["payload"]["turn_id"] == "c-min"
+    assert result["payload"]["payload"]["thread_id"] == "c-min"
+    assert result["payload"]["payload"]["turn_id"] == "c-min"
+
+
 def test_capabilities_doc_matches_interface_version():
     docs_path = Path(__file__).resolve().parents[1] / "docs" / f"capabilities.gateway.v{INTERFACE_VERSION}.json"
     data = json.loads(docs_path.read_text(encoding="utf-8"))

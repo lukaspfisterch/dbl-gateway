@@ -37,17 +37,8 @@ curl -X POST http://127.0.0.1:8010/ingress/intent \
     "interface_version": 3,
     "correlation_id": "slice-1",
     "payload": {
-      "stream_id": "default",
-      "lane": "user_chat",
-      "actor": "user",
       "intent_type": "chat.message",
-      "thread_id": "slice-thread-1",
-      "turn_id": "slice-turn-1",
-      "parent_turn_id": null,
-      "requested_model_id": "stub-echo",
-      "payload": {
-        "message": "Hello"
-      }
+      "payload": { "message": "Hello" }
     }
   }'
 ```
@@ -66,6 +57,9 @@ Expected response:
 
 This is only an acknowledgement.
 It is not execution output.
+
+Everything else in the fuller envelope is optional here or derived
+deterministically by the gateway.
 
 ## 2. Inspect the recorded chain
 

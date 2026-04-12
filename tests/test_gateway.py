@@ -132,6 +132,33 @@ def test_admission_reject_does_not_append_intent(tmp_path: Path, monkeypatch: py
     run_with_client(app, scenario)
 
 
+def test_minimal_intent_envelope_is_admitted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
+    monkeypatch.setenv("GATEWAY_DEMO_MODE", "1")
+    app = create_app(start_workers=True)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        resp = await client.post(
+            "/ingress/intent",
+            json={
+                "interface_version": INTERFACE_VERSION,
+                "correlation_id": "c-min",
+                "payload": {
+                    "intent_type": "chat.message",
+                    "payload": {"message": "hello"},
+                },
+            },
+        )
+        assert resp.status_code == 202
+        snap = await _wait_for_decision(client, correlation_id="c-min")
+        events = [event for event in snap["events"] if event["correlation_id"] == "c-min"]
+        assert [event["kind"] for event in events][:2] == ["INTENT", "DECISION"]
+        assert events[0]["thread_id"] == "c-min"
+        assert events[0]["turn_id"] == "c-min"
+
+    run_with_client(app, scenario)
+
+
 def test_admission_rejects_secrets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DBL_GATEWAY_DB", str(tmp_path / "trail.sqlite"))
     app = create_app(start_workers=True)

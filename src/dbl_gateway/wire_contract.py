@@ -147,30 +147,21 @@ def parse_intent_envelope(body: Mapping[str, Any]) -> IntentEnvelope:
     correlation_id = body.get("correlation_id")
     if not isinstance(correlation_id, str) or correlation_id.strip() == "":
         raise ValueError("correlation_id must be a non-empty string")
+    correlation_id_value = correlation_id.strip()
     payload = body.get("payload")
     if not isinstance(payload, Mapping):
         raise ValueError("payload must be an object")
-    stream_id = payload.get("stream_id")
-    lane = payload.get("lane")
-    actor = payload.get("actor")
+    stream_id = _default_string(payload.get("stream_id"), "default", "payload.stream_id")
+    lane = _default_string(payload.get("lane"), "user_chat", "payload.lane")
+    actor = _default_string(payload.get("actor"), "user", "payload.actor")
     intent_type = payload.get("intent_type")
-    thread_id = payload.get("thread_id")
-    turn_id = payload.get("turn_id")
+    thread_id = _default_string(payload.get("thread_id"), correlation_id_value, "payload.thread_id")
+    turn_id = _default_string(payload.get("turn_id"), correlation_id_value, "payload.turn_id")
     parent_turn_id = payload.get("parent_turn_id")
     inner_payload = payload.get("payload")
     inputs = payload.get("inputs")
-    if not isinstance(stream_id, str) or stream_id.strip() == "":
-        raise ValueError("payload.stream_id must be a non-empty string")
-    if not isinstance(lane, str) or lane.strip() == "":
-        raise ValueError("payload.lane must be a non-empty string")
-    if not isinstance(actor, str) or actor.strip() == "":
-        raise ValueError("payload.actor must be a non-empty string")
     if not isinstance(intent_type, str) or intent_type.strip() == "":
         raise ValueError("payload.intent_type must be a non-empty string")
-    if not isinstance(thread_id, str) or thread_id.strip() == "":
-        raise ValueError("payload.thread_id must be a non-empty string")
-    if not isinstance(turn_id, str) or turn_id.strip() == "":
-        raise ValueError("payload.turn_id must be a non-empty string")
     if parent_turn_id is not None and not isinstance(parent_turn_id, str):
         raise ValueError("payload.parent_turn_id must be a string")
     if not isinstance(inner_payload, Mapping):
@@ -184,18 +175,22 @@ def parse_intent_envelope(body: Mapping[str, Any]) -> IntentEnvelope:
     declared_tools = _parse_declared_tools(payload.get("declared_tools"))
     tool_scope = _parse_tool_scope(payload.get("tool_scope"))
     budget = _parse_budget(payload.get("budget"))
+    normalized_payload = dict(inner_payload)
+    normalized_payload.setdefault("thread_id", thread_id)
+    normalized_payload.setdefault("turn_id", turn_id)
+    normalized_payload.setdefault("parent_turn_id", parent_turn_id.strip() if isinstance(parent_turn_id, str) else None)
     return {
         "interface_version": interface_version,
-        "correlation_id": correlation_id.strip(),
+        "correlation_id": correlation_id_value,
         "payload": {
-            "stream_id": stream_id.strip(),
-            "lane": lane.strip(),
-            "actor": actor.strip(),
+            "stream_id": stream_id,
+            "lane": lane,
+            "actor": actor,
             "intent_type": intent_type.strip(),
-            "thread_id": thread_id.strip(),
-            "turn_id": turn_id.strip(),
+            "thread_id": thread_id,
+            "turn_id": turn_id,
             "parent_turn_id": parent_turn_id.strip() if isinstance(parent_turn_id, str) else None,
-            "payload": dict(inner_payload),
+            "payload": normalized_payload,
             "requested_model_id": requested_model_id.strip() if isinstance(requested_model_id, str) else None,
             "inputs": dict(inputs) if isinstance(inputs, Mapping) else None,
             "declared_refs": declared_refs,
@@ -204,6 +199,14 @@ def parse_intent_envelope(body: Mapping[str, Any]) -> IntentEnvelope:
             "budget": budget,
         },
     }
+
+
+def _default_string(value: Any, default: str, field_name: str) -> str:
+    if value is None:
+        return default
+    if not isinstance(value, str) or value.strip() == "":
+        raise ValueError(f"{field_name} must be a non-empty string")
+    return value.strip()
 
 
 def _parse_declared_refs(raw: Any) -> list[dict[str, Any]] | None:

@@ -84,6 +84,12 @@ header h1 {
   font-size: 12px;
   line-height: 1.5;
 }
+.panel-help {
+  margin-top: 6px;
+  color: #8f8fb4;
+  font-size: 11px;
+  line-height: 1.45;
+}
 .demo-status-line {
   display: flex;
   justify-content: space-between;
@@ -715,6 +721,14 @@ button:hover { background: #3a3a5a; }
     <div class="demo-lead">Send a valid intent yourself or copy a command snippet for your own terminal.</div>
     <div class="manual-form">
       <div>
+        <label class="field-label" for="manual-snippet-mode">Snippet Mode</label>
+        <select class="field-input" id="manual-snippet-mode">
+          <option value="minimal" selected>Minimal</option>
+          <option value="full">Full envelope</option>
+        </select>
+        <div class="panel-help" id="manual-snippet-help">Minimal keeps only the required request plus deterministic gateway defaults.</div>
+      </div>
+      <div>
         <label class="field-label" for="manual-message">Message</label>
         <textarea class="field-textarea" id="manual-message">Hello from the observer UI.</textarea>
       </div>
@@ -823,6 +837,8 @@ button:hover { background: #3a3a5a; }
   var manualMessage = document.getElementById("manual-message");
   var manualActor = document.getElementById("manual-actor");
   var manualThread = document.getElementById("manual-thread");
+  var manualSnippetMode = document.getElementById("manual-snippet-mode");
+  var manualSnippetHelp = document.getElementById("manual-snippet-help");
   var manualSend = document.getElementById("manual-send");
   var manualCopyCurl = document.getElementById("manual-copy-curl");
   var manualCopyPowershell = document.getElementById("manual-copy-powershell");
@@ -1011,9 +1027,10 @@ button:hover { background: #3a3a5a; }
     var actor = (manualActor.value || "").trim() || "observer-user";
     var threadId = (manualThread.value || "").trim() || "observer-thread";
     var message = (manualMessage.value || "").trim() || "Hello from the observer UI.";
+    var correlationId = "observer-" + Date.now();
     return {
       interface_version: 3,
-      correlation_id: "observer-" + Date.now(),
+      correlation_id: correlationId,
       payload: {
         stream_id: "default",
         lane: "observer",
@@ -1022,7 +1039,7 @@ button:hover { background: #3a3a5a; }
         thread_id: threadId,
         turn_id: "turn-" + Date.now(),
         parent_turn_id: null,
-        requested_model_id: "gpt-4o-mini",
+        requested_model_id: "stub-echo",
         payload: {
           message: message
         }
@@ -1030,11 +1047,31 @@ button:hover { background: #3a3a5a; }
     };
   }
 
-  function manualCommands() {
-    var envelope = manualEnvelope();
-    var payload = JSON.stringify(envelope);
+  function minimalManualEnvelope(fullEnvelope) {
     return {
-      envelope: envelope,
+      interface_version: fullEnvelope.interface_version,
+      correlation_id: fullEnvelope.correlation_id,
+      payload: {
+        intent_type: fullEnvelope.payload.intent_type,
+        payload: {
+          message: ((fullEnvelope.payload.payload || {}).message || "")
+        }
+      }
+    };
+  }
+
+  function manualCommands() {
+    var fullEnvelope = manualEnvelope();
+    var mode = (manualSnippetMode && manualSnippetMode.value) || "minimal";
+    var envelope = mode === "full" ? fullEnvelope : minimalManualEnvelope(fullEnvelope);
+    var payload = JSON.stringify(envelope);
+    if (manualSnippetHelp) {
+      manualSnippetHelp.textContent = mode === "full"
+        ? "Full envelope shows the complete structural shape sent to /ingress/intent."
+        : "Minimal keeps only the required request plus deterministic gateway defaults.";
+    }
+    return {
+      envelope: fullEnvelope,
       curl: "curl -X POST " + window.location.origin + "/ingress/intent \\\n"
         + "  -H \"Content-Type: application/json\" \\\n"
         + "  -d '" + shellSingleQuote(payload) + "'",
@@ -1757,6 +1794,9 @@ button:hover { background: #3a3a5a; }
   manualMessage.addEventListener("input", renderManualIntent);
   manualActor.addEventListener("input", renderManualIntent);
   manualThread.addEventListener("input", renderManualIntent);
+  if (manualSnippetMode) {
+    manualSnippetMode.addEventListener("change", renderManualIntent);
+  }
   for (var i = 0; i < inspectorTabs.length; i++) {
     inspectorTabs[i].addEventListener("click", function () {
       setInspectorTab(this.getAttribute("data-tab"));

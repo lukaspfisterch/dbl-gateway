@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.32 — Minimal Ingress Snippets
+
+**The demo UI now shows a truly minimal request shape instead of only a full envelope dump.**
+- Allow `/ingress/intent` to derive a small set of structural fields deterministically when a client sends only `correlation_id`, `intent_type`, and the inner payload.
+- Update the Manual Intent panel to switch between `Minimal` and `Full envelope` copyable `curl` / PowerShell snippets, with `Minimal` as the default view.
+- Keep the send button on the full envelope path so the observer playground still shows the complete structural request it actually emits.
+- Update the integration docs to show the reduced raw request shape and call out that the omitted structure is derived by the gateway.
+
 ## v0.9.31 — First Integration Guide
 
 **The gateway now has a direct integration guide that sits between the raw slice and the broader quickstart.**
