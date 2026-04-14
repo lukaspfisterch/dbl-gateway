@@ -1,10 +1,29 @@
-# dbl-gateway: Deterministic AI Governance Gateway
+# dbl-gateway: Deterministic Governance Gateway
 
-Most LLM runtimes can tell you what the model produced, but not what the system explicitly allowed before execution.
-That is a governance problem: execution is probabilistic, logs are partial, and approval logic often disappears into application code.
-If you cannot replay the decision independent of the model run, you cannot audit or defend the boundary.
+`dbl-gateway` is a deterministic governance gateway for non-deterministic
+backends. It puts an explicit `DECISION` event in front of any system whose
+execution cannot be trusted to be reproducible — LLMs and AI agents today,
+but the same shape applies to market-facing calls, human-in-the-loop
+approvals, physical actuators, or any stochastic backend that needs to be
+governed before it runs.
 
-`dbl-gateway` is for platform teams running LLM agents in regulated or policy-constrained environments where what was allowed must be explicit before a provider call.
+Most such runtimes can tell you what the backend produced, but not what the
+system explicitly allowed before execution. That is a governance problem:
+execution is probabilistic, logs are partial, and approval logic often
+disappears into application code. If you cannot replay the decision
+independent of the backend run, you cannot audit or defend the boundary.
+
+The default configuration in this repository is pitched at LLM and agent
+traffic — that is the most visible instance in 2026, and the demo, the
+examples, and the OIDC mapping all assume that shape. The core contract
+(`INTENT → DECISION → PROOF → EXECUTION`) does not care what sits behind
+the boundary. For the broader pattern — why deterministic governance and
+non-deterministic execution are a general problem, not only an AI one —
+see [deterministic-boundary-layer](https://github.com/lukaspfisterch/deterministic-boundary-layer).
+
+`dbl-gateway` is for platform teams running probabilistic backends in
+regulated or policy-constrained environments where what was allowed must be
+explicit before the call.
 
 Every request is recorded as:
 
@@ -13,19 +32,16 @@ INTENT → DECISION → PROOF → EXECUTION
 ```
 
 `DECISION` is the only normative event.
-`PROOF` binds what will be released to the provider.
+`PROOF` binds what will be released to the backend.
 `EXECUTION` records what happened and remains observational.
 The chain is tamper-evident: events are cryptographically linked via a rolling
 `v_digest` that can be recomputed end-to-end to verify the stored stream.
 Identity is mapped from an OIDC bearer token (Entra example included) into the
 `DECISION` event, so `who was allowed` is part of the normative record.
 
-`dbl-gateway` is the runtime boundary between non-deterministic LLM execution and deterministic governance evidence.
+`dbl-gateway` is the runtime boundary between non-deterministic execution and deterministic governance evidence.
 
 `1.0.0` marks the core boundary-to-decision contract as stable.
-
-For the architectural map above this runtime, see
-[deterministic-boundary-layer](https://github.com/lukaspfisterch/deterministic-boundary-layer).
 
 [![pytest](https://github.com/lukaspfisterch/dbl-gateway/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lukaspfisterch/dbl-gateway/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/dbl-gateway.svg)](https://pypi.org/project/dbl-gateway/)
