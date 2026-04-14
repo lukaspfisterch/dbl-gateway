@@ -15,7 +15,10 @@ INTENT → DECISION → PROOF → EXECUTION
 `DECISION` is the only normative event.
 `PROOF` binds what will be released to the provider.
 `EXECUTION` records what happened and remains observational.
-The chain is replayable and auditable under fixed inputs and policy.
+The chain is tamper-evident: events are cryptographically linked via a rolling
+`v_digest` that can be recomputed end-to-end to verify the stored stream.
+Identity is mapped from an OIDC bearer token (Entra example included) into the
+`DECISION` event, so `who was allowed` is part of the normative record.
 
 `dbl-gateway` is the runtime boundary between non-deterministic LLM execution and deterministic governance evidence.
 
@@ -42,18 +45,56 @@ Use **Manual Intent** in the observer to submit your own requests after that; th
 
 ![Observer UI](pictures/demorun.png)
 
-## How it works
+## A minimal request
 
-Every request passes through the same deterministic chain:
+Send an intent:
 
-    INTENT  →  DECISION  →  PROOF  →  EXECUTION
+```bash
+curl -X POST http://127.0.0.1:8010/ingress/intent \
+  -H "Content-Type: application/json" \
+  -d '{
+    "interface_version": 3,
+    "correlation_id": "c-1",
+    "payload": {
+      "stream_id": "default",
+      "lane": "user",
+      "actor": "user@example.com",
+      "intent_type": "chat.message",
+      "thread_id": "t-1",
+      "turn_id": "turn-1",
+      "parent_turn_id": null,
+      "payload": {
+        "message": "hello",
+        "thread_id": "t-1",
+        "turn_id": "turn-1",
+        "declared_tools": ["web.search"],
+        "tool_scope": "strict",
+        "budget": { "max_tokens": 1024 }
+      }
+    }
+  }'
+```
 
-**INTENT** records what was asked.
-**DECISION** records what policy allowed — the only normative event.
-**PROOF** records what will be sent to the provider.
-**EXECUTION** records what happened.
+Read the event stream:
 
-Execution output never feeds back into policy.
+```bash
+curl "http://127.0.0.1:8010/tail?stream_id=default&since=0"
+```
+
+Four events are produced for every intent:
+
+1. **INTENT** — the request as received, immutable
+2. **DECISION** — policy verdict (`ALLOW` / `DENY`), permitted tools, enforced budget, identity line — the only normative event
+3. **PROOF** — `payload_digest` of what is released to the provider
+4. **EXECUTION** — model output, tool calls, usage — observational, never feeds back into policy
+
+Verify the full chain:
+
+```bash
+curl http://127.0.0.1:8010/ui/verify-chain
+```
+
+Recomputes `v_digest` from the stored events and reports any break.
 
 Part of the [Deterministic Boundary Layer](https://github.com/lukaspfisterch/deterministic-boundary-layer) architecture.
 
@@ -88,10 +129,6 @@ pip install -e .
 For a minimal Python helper over the raw HTTP surfaces, use
 `dbl_gateway.client.GatewayClient`.
 
-## Reference implementation
-
-`dbl-gateway` is the DBL runtime reference implementation, with normative `DECISION`, release-bound `PROOF`, and observational `EXECUTION` under replayable fixed inputs and policy.
-
 ## Observer UI
 
 Open `/ui` only when the active boundary profile is `demo`.
@@ -102,15 +139,23 @@ submission, and the integrated demo controller.
 
 ## Documentation
 
+Start here:
+
 - [QUICKSTART.md](docs/QUICKSTART.md) — first request, reading events, UI verification
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — surfaces, component ownership, invariants
-- [CONTRACT_BOUNDARY.md](docs/CONTRACT_BOUNDARY.md) — stable core contract vs evolving surface
 - [FIRST_INTEGRATION.md](docs/FIRST_INTEGRATION.md) — start gateway, send one request, read decision, verify replay
+
+Integrating:
+
+- [CONTRACT_BOUNDARY.md](docs/CONTRACT_BOUNDARY.md) — stable core contract vs evolving surface
 - [INTEGRATION_SLICE.md](docs/INTEGRATION_SLICE.md) — raw send, decision inspection, and replay path
 - [OIDC_INTEGRATION.md](docs/OIDC_INTEGRATION.md) — OIDC token mapping and concrete Entra example
-- [EMPIRICAL_VALIDATION.md](docs/EMPIRICAL_VALIDATION.md) — optional replay bench and policy-diff notes
 - [wire_contract.md](docs/wire_contract.md) — envelope format, tool gating, budget, refs
 - [env_contract.md](docs/env_contract.md) — all environment variables
+
+Evaluating:
+
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — surfaces, component ownership, invariants
+- [EMPIRICAL_VALIDATION.md](docs/EMPIRICAL_VALIDATION.md) — optional replay bench and policy-diff notes
 - [observer.md](docs/observer.md) — UI layout and verification routes
 - [demo.md](docs/demo.md) — demo modes and scenario definition
 - [Full manifest](docs/MANIFEST.md)
