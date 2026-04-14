@@ -1,40 +1,44 @@
-# dbl-gateway
+# dbl-gateway: Deterministic AI Governance Gateway
 
-Records what was allowed before anything runs.
+Most LLM runtimes can tell you what the model produced, but not what the system explicitly allowed before execution.
+That is a governance problem: execution is probabilistic, logs are partial, and approval logic often disappears into application code.
+If you cannot replay the decision independent of the model run, you cannot audit or defend the boundary.
 
-`dbl-gateway` puts a deterministic decision layer in front of non-deterministic execution.
+`dbl-gateway` is for platform teams running LLM agents in regulated or policy-constrained environments where what was allowed must be explicit before a provider call.
+
 Every request is recorded as:
 
 ```text
 INTENT → DECISION → PROOF → EXECUTION
 ```
 
-`DECISION` happens first.
-Execution stays non-normative.
-The full chain is replayable.
+`DECISION` is the only normative event.
+`PROOF` binds what will be released to the provider.
+`EXECUTION` records what happened and remains observational.
+The chain is replayable and auditable under fixed inputs and policy.
+
+`dbl-gateway` is the runtime boundary between non-deterministic LLM execution and deterministic governance evidence.
 
 `1.0.0` marks the core boundary-to-decision contract as stable.
 
-For the architecture entry point, see
+For the architectural map above this runtime, see
 [deterministic-boundary-layer](https://github.com/lukaspfisterch/deterministic-boundary-layer).
 
 [![pytest](https://github.com/lukaspfisterch/dbl-gateway/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lukaspfisterch/dbl-gateway/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/dbl-gateway.svg)](https://pypi.org/project/dbl-gateway/)
 [![Python >=3.11](https://img.shields.io/badge/python-%3E%3D3.11-3776AB.svg)](https://pypi.org/project/dbl-gateway/)
 
-Run it in 1 minute with Docker, or install the package and connect your own provider.
-
-No API keys required:
+Fastest way to inspect the full boundary end to end:
 
 ```bash
 docker compose --profile demo up demo
 ```
 
+No API keys are required for the demo profile.
 Open [http://localhost:8010/ui](http://localhost:8010/ui) and click **Start Demo**.
 
-The demo runs scripted scenarios through the full governance pipeline.
-Use **Manual Intent** in the observer to submit your own requests —
-the gateway is a working runtime, not just a demo harness.
+The Docker demo runs scripted intents through the same deterministic governance chain the runtime uses normally.
+Use **Manual Intent** in the observer to submit your own requests after that; the demo is an entry path into the runtime, not a separate architecture.
 
 ![Observer UI](pictures/demorun.png)
 
@@ -86,15 +90,7 @@ For a minimal Python helper over the raw HTTP surfaces, use
 
 ## Reference implementation
 
-`dbl-gateway` is the DBL runtime reference implementation.
-
-```text
-INTENT → DECISION → PROOF → EXECUTION
-```
-
-`DECISION` is normative.
-Execution is observational.
-Replay is deterministic under fixed inputs and policy.
+`dbl-gateway` is the DBL runtime reference implementation, with normative `DECISION`, release-bound `PROOF`, and observational `EXECUTION` under replayable fixed inputs and policy.
 
 ## Observer UI
 
