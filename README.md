@@ -1,5 +1,12 @@
 # dbl-gateway: Deterministic Governance Gateway
 
+[![DBL DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19600832.svg)](https://doi.org/10.5281/zenodo.19600832)
+[![Execution Without Normativity DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19600773.svg)](https://doi.org/10.5281/zenodo.19600773)
+
+Companion papers:
+[Deterministic Boundary Layers](https://doi.org/10.5281/zenodo.19600832) ·
+[Execution Without Normativity](https://doi.org/10.5281/zenodo.19600773)
+
 `dbl-gateway` is a deterministic governance gateway for non-deterministic
 backends. It puts an explicit `DECISION` event in front of any system whose
 execution cannot be trusted to be reproducible — LLMs and AI agents today,
