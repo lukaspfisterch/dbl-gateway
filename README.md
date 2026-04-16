@@ -8,29 +8,16 @@ Companion papers:
 [Execution Without Normativity](https://doi.org/10.5281/zenodo.19600773)
 
 `dbl-gateway` is a deterministic governance gateway for non-deterministic
-backends. It puts an explicit `DECISION` event in front of any system whose
-execution cannot be trusted to be reproducible — LLMs and AI agents today,
-but the same shape applies to market-facing calls, human-in-the-loop
-approvals, physical actuators, or any stochastic backend that needs to be
-governed before it runs.
+systems.
 
-Most such runtimes can tell you what the backend produced, but not what the
-system explicitly allowed before execution. That is a governance problem:
-execution is probabilistic, logs are partial, and approval logic often
-disappears into application code. If you cannot replay the decision
-independent of the backend run, you cannot audit or defend the boundary.
+It introduces an explicit `DECISION` event in front of execution.
 
-The default configuration in this repository is pitched at LLM and agent
-traffic — that is the most visible instance in 2026, and the demo, the
-examples, and the OIDC mapping all assume that shape. The core contract
-(`INTENT → DECISION → PROOF → EXECUTION`) does not care what sits behind
-the boundary. For the broader pattern — why deterministic governance and
-non-deterministic execution are a general problem, not only an AI one —
-see [deterministic-boundary-layer](https://github.com/lukaspfisterch/deterministic-boundary-layer).
+Execution can be stochastic.
+Logs are partial.
+But what was allowed must be deterministic and replayable.
 
-`dbl-gateway` is for platform teams running probabilistic backends in
-regulated or policy-constrained environments where what was allowed must be
-explicit before the call.
+Most systems record what happened after execution.
+`dbl-gateway` records what was explicitly allowed before execution.
 
 Every request is recorded as:
 
@@ -39,14 +26,26 @@ INTENT → DECISION → PROOF → EXECUTION
 ```
 
 `DECISION` is the only normative event.
-`PROOF` binds what will be released to the backend.
-`EXECUTION` records what happened and remains observational.
+`PROOF` binds what is released to the backend.
+`EXECUTION` remains observational.
+
+> **If the decision cannot be replayed independently of the backend run, the
+> boundary cannot be audited or defended.**
+
+This repository ships that boundary in an LLM-facing form: external policy
+evaluation, boundary-configured exposure, proof-bound provider release,
+append-only event storage, and a read-side observer/demo UI.
+The contract does not depend on LLMs; they are simply the most visible
+runtime here.
+
+`dbl-gateway` is for platform teams running probabilistic backends in
+regulated or policy-constrained environments where what was allowed must be
+explicit before the call.
+
 The chain is tamper-evident: events are cryptographically linked via a rolling
 `v_digest` that can be recomputed end-to-end to verify the stored stream.
 Identity is mapped from an OIDC bearer token (Entra example included) into the
 `DECISION` event, so `who was allowed` is part of the normative record.
-
-`dbl-gateway` is the runtime boundary between non-deterministic execution and deterministic governance evidence.
 
 `1.0.0` marks the core boundary-to-decision contract as stable.
 
